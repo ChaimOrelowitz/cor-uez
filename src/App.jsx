@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { checkUezEligibility } from './eligibility';
+import React, { useEffect, useMemo, useState } from 'react';
+import { checkUezEligibility, suggestNjAddresses } from './eligibility';
 import { createApplication, getMyApplications, saveBusiness, saveOwners, signInApplicant, signUpApplicant } from './api';
 
 const steps = ['Eligibility', 'Account', 'Business', 'Owners', 'BRC', 'Review'];
@@ -13,6 +13,9 @@ function App() {
   const [applicationId, setApplicationId] = useState(null);
   const [ownerError, setOwnerError] = useState('');
   const [signInMode, setSignInMode] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [addressMagicKey, setAddressMagicKey] = useState(null);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [form, setForm] = useState({
     address: '', email: '', password: '', businessName: '', businessDescription: '', ein: '', yearFounded: '',
     isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '',
@@ -29,10 +32,57 @@ function App() {
     setOwnerError('');
   };
 
+  useEffect(() => {
+    if (step !== 0 || addressMagicKey || form.address.trim().length < 3) {
+      setAddressSuggestions([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const suggestions = await suggestNjAddresses(form.address);
+        if (!cancelled) {
+          setAddressSuggestions(suggestions);
+          setShowAddressSuggestions(suggestions.length > 0);
+        }
+      } catch (_) {
+        if (!cancelled) setAddressSuggestions([]);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [form.address, addressMagicKey, step]);
+
+  function updateAddress(e) {
+    const value = e.target.value;
+    setForm((old) => ({ ...old, address: value }));
+    setAddressMagicKey(null);
+    setEligibility(null);
+    setShowAddressSuggestions(true);
+    setMessage('');
+  }
+
+  function selectAddressSuggestion(suggestion) {
+    setForm((old) => ({ ...old, address: suggestion.text }));
+    setAddressMagicKey(suggestion.magicKey || null);
+    setAddressSuggestions([]);
+    setShowAddressSuggestions(false);
+    setEligibility(null);
+    setMessage('');
+  }
+
   async function runAddressCheck(e) {
     e.preventDefault();
-    setBusy(true); setMessage('');
-    try { setEligibility(await checkUezEligibility(form.address.trim())); }
+    setBusy(true); setMessage(''); setShowAddressSuggestions(false);
+    try {
+      const result = await checkUezEligibility(form.address.trim(), addressMagicKey);
+      setEligibility(result);
+      if (result?.matchedAddress) setForm((old) => ({ ...old, address: result.matchedAddress }));
+    }
     catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   }
@@ -164,14 +214,20 @@ function App() {
 
           {step === 0 && <div className="content-block">
             <form onSubmit={runAddressCheck}>
-              <div className="intro-copy"><h3>Is your business in a UEZ?</h3><p>Enter the registered business address. We’ll determine the municipality and UEZ zone automatically.</p></div>
-              <label>Registered business address</label><input value={form.address} onChange={update('address')} placeholder="123 Main Street, Lakewood, NJ 08701" required />
+              <div className="intro-copy"><h3>Is your business in a UEZ?</h3><p>Start typing the registered business address and choose the matching New Jersey address.</p></div>
+              <label>Registered business address</label>
+              <div className="address-autocomplete">
+                <input value={form.address} onChange={updateAddress} onFocus={() => setShowAddressSuggestions(addressSuggestions.length > 0)} autoComplete="off" placeholder="Start typing an NJ business address" required />
+                {showAddressSuggestions && addressSuggestions.length > 0 && <div className="address-suggestions">
+                  {addressSuggestions.map((suggestion) => <button key={`${suggestion.text}-${suggestion.magicKey || ''}`} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectAddressSuggestion(suggestion)}>{suggestion.text}</button>)}
+                </div>}
+              </div>
               <button className="primary" disabled={busy}>{busy ? 'Checking…' : 'Check my address'}</button>
             </form>
             {eligibility?.mapUrl && <div className="map-card">
               <iframe title="NJ UEZ map" src={eligibility.mapUrl} className="uez-map" loading="lazy" />
               <div className="result-strip"><div className={`result-icon ${eligibility.eligible ? 'good' : 'bad'}`}>{eligibility.eligible ? '✓' : '!'}</div><div>
-                <h4>{eligibility.eligible ? `Your business is inside the ${eligibility.zoneName}` : 'This address is not inside a UEZ'}</h4>
+                <h4>{eligibility.eligible ? `Your business is inside the ${eligibility.zoneName}.` : 'This address is not inside a UEZ.'}</h4>
                 <p>{eligibility.matchedAddress}</p>
                 {eligibility.programs?.length > 0 && <span className="grant-pill">Lakewood Technology Grant available</span>}
                 {eligibility.eligible && eligibility.programs?.length === 0 && <span className="neutral-pill">UEZ enrollment available · no COR local grant currently configured</span>}
