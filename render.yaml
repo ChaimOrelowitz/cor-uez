@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: cor-uez-api
+    runtime: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: UEZ_FRONTEND_URL
+        value: https://cor-uez.vercel.app
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: UEZ_ENCRYPTION_KEY
+        sync: false
