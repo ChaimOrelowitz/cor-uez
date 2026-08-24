@@ -26,6 +26,12 @@ async function request(path, options = {}) {
   return data;
 }
 
+export async function getApplicantSession() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session;
+}
+
 export async function signUpApplicant(email, password) {
   const { data, error } = await supabase.auth.signUp({
     email,
