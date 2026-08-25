@@ -40,6 +40,17 @@
     return btoa(binary);
   };
 
+  const navigateLink = (link) => {
+    if (!link) return;
+    link.removeAttribute('target');
+    link.target = '_self';
+    if (link.href && !link.getAttribute('onclick')) {
+      location.href = link.href;
+    } else {
+      link.click();
+    }
+  };
+
   async function runOnce() {
     const response = await send({ type: 'COR_NJ_GET_JOB' });
     const job = response?.job;
@@ -172,7 +183,7 @@
           sessionStorage.setItem(centerKey, '1');
           notice('COR is opening Tax & Revenue Center.');
           await send({ type: 'COR_NJ_STATUS', status: 'opening_tax_revenue_center' });
-          taxLink.click();
+          navigateLink(taxLink);
         }
         return;
       }
@@ -185,7 +196,7 @@
           sessionStorage.setItem(loginLinkKey, '1');
           notice('COR is opening the MyNJ login.');
           await send({ type: 'COR_NJ_STATUS', status: 'opening_mynj_login' });
-          loginLink.click();
+          navigateLink(loginLink);
         }
         return;
       }
