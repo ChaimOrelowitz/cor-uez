@@ -7,6 +7,7 @@ import {
   getApplication,
   getDocumentUrl,
   getMyApplications,
+  getMyNjCredentials,
   saveBusiness,
   saveOwners,
   signInApplicant,
@@ -50,10 +51,20 @@ function documentLabel(type) {
 function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
+  const [myNjCredentials, setMyNjCredentials] = useState(null);
+  const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const app = bundle.application;
   const needsBrc = ['not_found', 'missing', 'required'].includes(app.brc_status) || app.status === 'waiting_for_brc';
   const brcUploaded = app.brc_status === 'uploaded' || app.status === 'brc_uploaded';
   const brcConfirmed = app.brc_status === 'found' || app.status === 'brc_confirmed';
+
+  useEffect(() => {
+    let active = true;
+    getMyNjCredentials(app.id).then((result) => {
+      if (active) setMyNjCredentials(result.exists ? result.credentials : null);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [app.id]);
 
   async function uploadBrc(file) {
     if (!file) return;
@@ -137,6 +148,18 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
             </button>)}
           </div>
         </section>
+
+        {myNjCredentials && <section className="wizard-card portal-card portal-wide mynj-card">
+          <div className="portal-section-head"><h3>MyNJ / PBS account information</h3><span>✓</span></div>
+          <div className="credential-grid applicant-credential-grid">
+            <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong></div>
+            <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong></div>
+            <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong></div>
+            <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong></div>
+          </div>
+          <button className="secondary portal-secret-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
+          <p className="muted credential-note">Keep this information private. COR can also access it while completing your PBS account.</p>
+        </section>}
 
         <section className="wizard-card portal-card portal-wide">
           <div className="portal-section-head"><h3>Updates</h3></div>

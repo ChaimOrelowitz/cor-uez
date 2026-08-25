@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  createAdminMyNjCredentials,
   getAdminApplication,
   getAdminApplications,
   getApplicantSession,
   getDocumentUrl,
+  getMyNjCredentials,
   deleteAdminApplication,
   markAdminBrcFound,
   markAdminBrcNotFound,
@@ -175,6 +177,8 @@ export default function AdminPage() {
   const [editMode, setEditMode] = useState(false);
   const [applicationDraft, setApplicationDraft] = useState(null);
   const [ownerDrafts, setOwnerDrafts] = useState([]);
+  const [myNjCredentials, setMyNjCredentials] = useState(null);
+  const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [brcForm, setBrcForm] = useState({
     registeredBusinessName: '',
     tradeName: '',
@@ -220,6 +224,9 @@ export default function AdminPage() {
     try {
       const data = await getAdminApplication(id);
       setDetail(data);
+      const myNj = await getMyNjCredentials(id).catch(() => ({ exists: false, credentials: null }));
+      setMyNjCredentials(myNj.exists ? myNj.credentials : null);
+      setShowMyNjSecrets(false);
       const app = data.application;
       setApplicationDraft(applicationDraftFrom(app));
       setOwnerDrafts((data.owners || []).map(ownerDraftFrom));
@@ -412,6 +419,31 @@ export default function AdminPage() {
       setMessage(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createMyNjCredentials() {
+    setBusy(true);
+    setMessage('Creating encrypted MyNJ account information…');
+    try {
+      const result = await createAdminMyNjCredentials(detail.application.id);
+      await refreshList(detail.application.id);
+      setMyNjCredentials(result.credentials);
+      setShowMyNjSecrets(true);
+      setMessage('MyNJ account information is ready for the admin and applicant.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyCredential(value, label) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage(`${label} copied.`);
+    } catch (_) {
+      setMessage(`Could not copy ${label.toLowerCase()}. Select it manually.`);
     }
   }
 
@@ -610,6 +642,28 @@ export default function AdminPage() {
               </div>
 
               {detail.application.status === 'waiting_for_brc' && <a className="secondary admin-email-button" href={emailApplicantHref}>Email applicant BRC instructions</a>}
+            </section>
+
+            <section className="admin-card mynj-card">
+              <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{myNjCredentials ? 'READY' : 'NOT CREATED'}</span></div>
+              {myNjCredentials ? <>
+                <div className="credential-grid">
+                  <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong><button onClick={() => copyCredential(myNjCredentials.username, 'Username')}>Copy</button></div>
+                  <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.password, 'Password')}>Copy</button></div>
+                  <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong><button onClick={() => copyCredential(myNjCredentials.challengeQuestion, 'Challenge question')}>Copy</button></div>
+                  <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.challengeAnswer, 'Challenge answer')}>Copy</button></div>
+                </div>
+                <button className="secondary admin-full-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
+                <p className="admin-help">Stored encrypted in the UEZ application. The applicant sees the same MyNJ information in their portal.</p>
+              </> : <>
+                <p className="admin-help mynj-intro">Create the MyNJ information needed for the PBS account using the verified business and primary-owner information.</p>
+                <button
+                  className="primary admin-full-button"
+                  onClick={createMyNjCredentials}
+                  disabled={busy || (detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed')}
+                >Create MyNJ account information</button>
+                {detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed' && <p className="admin-help">The BRC must be confirmed first.</p>}
+              </>}
             </section>
 
             <section className="admin-card admin-wide">

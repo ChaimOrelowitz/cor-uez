@@ -116,6 +116,10 @@ export function getApplication(applicationId) {
   return request(`/api/uez/applications/${applicationId}`);
 }
 
+export function getMyNjCredentials(applicationId) {
+  return request(`/api/uez/applications/${applicationId}/credentials/mynj`);
+}
+
 export function getAdminApplications() {
   return request('/api/uez/admin/applications');
 }
@@ -134,6 +138,12 @@ export function updateAdminApplication(applicationId, payload) {
 export function deleteAdminApplication(applicationId) {
   return request(`/api/uez/admin/applications/${applicationId}`, {
     method: 'DELETE'
+  });
+}
+
+export function createAdminMyNjCredentials(applicationId) {
+  return request(`/api/uez/admin/applications/${applicationId}/credentials/mynj`, {
+    method: 'POST'
   });
 }
 

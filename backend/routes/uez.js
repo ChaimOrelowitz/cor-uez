@@ -26,6 +26,36 @@ function normalizeEin(value) {
   return String(value || '').replace(/\D/g, '').slice(0, 9);
 }
 
+function buildMyNjUsername(companyName, phone) {
+  const company = String(companyName || '').replace(/ /g, '_').slice(0, 4);
+  const phoneDigits = String(phone || '').replace(/\D/g, '');
+  if (!company || phoneDigits.length < 4) throw new Error('Business name and primary owner phone are required to create the MyNJ login.');
+  const companyPrefix = `${company.slice(0, 1).toUpperCase()}${company.slice(1)}`;
+  return `${companyPrefix}${phoneDigits.slice(-4)}`.replace(/[^A-Za-z0-9@._-]/g, '_');
+}
+
+function buildMyNjPassword(lastName, ssn) {
+  const name = String(lastName || '').trim();
+  const ssnDigits = String(ssn || '').replace(/\D/g, '');
+  if (!name || ssnDigits.length !== 9) throw new Error('Primary owner last name and SSN are required to create the MyNJ password.');
+  const namePrefix = `${name.slice(0, 1).toUpperCase()}${name.slice(1, 3).toLowerCase()}`;
+  return `${namePrefix}${ssnDigits.slice(-4)}^`;
+}
+
+function decryptCredential(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    provider: row.provider,
+    username: decryptText(row.username_enc),
+    password: decryptText(row.password_enc),
+    challengeQuestion: decryptText(row.challenge_question_enc),
+    challengeAnswer: decryptText(row.challenge_answer_enc),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 function assertOwnership(owners) {
   if (!Array.isArray(owners) || owners.length === 0) throw new Error('At least one owner is required');
   const total = owners.reduce((sum, owner) => sum + (Number(owner.ownershipPercent) || 0), 0);
@@ -370,6 +400,94 @@ router.get('/applications/:id', async (req, res) => {
     res.json(await getApplicationBundle(application, req.user));
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/applications/:id/credentials/mynj', async (req, res) => {
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+
+    const { data, error } = await supabase.from('uez_credentials')
+      .select('*')
+      .eq('application_id', application.id)
+      .eq('provider', 'mynj')
+      .maybeSingle();
+    if (error) throw error;
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(data ? { exists: true, credentials: decryptCredential(data) } : { exists: false, credentials: null });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/admin/applications/:id/credentials/mynj', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+    if (application.brc_status !== 'found' && application.status !== 'brc_confirmed') {
+      return res.status(400).json({ error: 'Confirm the BRC before creating MyNJ credentials.' });
+    }
+
+    const { data: existing, error: existingError } = await supabase.from('uez_credentials')
+      .select('*')
+      .eq('application_id', application.id)
+      .eq('provider', 'mynj')
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json({ exists: true, credentials: decryptCredential(existing) });
+    }
+
+    const { data: primaryOwner, error: ownerError } = await supabase.from('uez_owners')
+      .select('*')
+      .eq('application_id', application.id)
+      .order('owner_order')
+      .limit(1)
+      .maybeSingle();
+    if (ownerError) throw ownerError;
+    if (!primaryOwner) return res.status(400).json({ error: 'A primary owner is required.' });
+
+    const legalBusinessName = application.registered_business_name || application.brc_registered_name || application.business_name_input;
+    const username = buildMyNjUsername(legalBusinessName, primaryOwner.phone);
+    const password = buildMyNjPassword(primaryOwner.last_name, decryptText(primaryOwner.ssn_enc));
+    const challengeQuestion = 'how many mitzvot';
+    const challengeAnswer = "Tarya'g";
+    const now = new Date().toISOString();
+
+    const { data, error } = await supabase.from('uez_credentials').insert({
+      application_id: application.id,
+      provider: 'mynj',
+      username_enc: encryptText(username),
+      password_enc: encryptText(password),
+      challenge_question_enc: encryptText(challengeQuestion),
+      challenge_answer_enc: encryptText(challengeAnswer),
+      updated_at: now
+    }).select('*').single();
+    if (error) throw error;
+
+    await supabase.from('uez_applications').update({
+      pbs_status: 'mynj_credentials_created',
+      updated_at: now
+    }).eq('id', application.id);
+
+    await addStatusEvent(
+      application.id,
+      'mynj_credentials_created',
+      'MyNJ account information ready',
+      'Your MyNJ account information is available securely in your UEZ application.',
+      req.user.id,
+      true
+    );
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(201).json({ exists: true, credentials: decryptCredential(data) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

@@ -138,6 +138,17 @@
 .lookup-values strong { color: #323a52; margin-left: 4px; letter-spacing: .04em; }
 .admin-primary { width: 100%; margin-top: 14px; }
 .admin-help { color: #858b9d; font-size: 11px; line-height: 1.5; margin: 9px 0 0; }
+.mynj-intro { margin: 16px 0 0; }
+.credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+.credential-grid > div { position: relative; min-width: 0; padding: 12px; border: 1px solid #e5e7f0; border-radius: 12px; background: #f9faff; }
+.credential-grid span, .credential-grid strong { display: block; }
+.credential-grid span { color: #858b9d; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.credential-grid strong { margin-top: 5px; padding-right: 45px; color: #283047; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.credential-grid button { position: absolute; top: 9px; right: 8px; border: 0; background: transparent; color: #626bd7; font-size: 9px; font-weight: 800; }
+.applicant-credential-grid { padding: 0 24px; }
+.applicant-credential-grid strong { padding-right: 0; }
+.portal-secret-button { margin: 14px 24px 0; }
+.credential-note { margin: 12px 24px 22px; }
 .brc-result-form { margin-top: 15px; padding-top: 5px; border-top: 1px solid #eef0f5; }
 .brc-result-form label { margin-top: 12px; font-size: 10px; }
 .brc-result-form input { padding: 10px 11px; border-radius: 10px; }
@@ -192,6 +203,7 @@
   .admin-edit-actions { justify-content: stretch; flex-direction: column; }
   .admin-edit-actions button { width: 100%; }
   .admin-edit-grid, .owner-edit-grid { grid-template-columns: 1fr; }
+  .credential-grid { grid-template-columns: 1fr; }
   .admin-edit-wide { grid-column: auto; }
   .admin-top-actions a { display: none; }
   .admin-detail-header h1 { font-size: 25px; }
