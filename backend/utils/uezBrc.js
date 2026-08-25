@@ -1,3 +1,5 @@
+const { chromium } = require('playwright');
+
 const BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const BRC_REFERER = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
 
@@ -20,15 +22,30 @@ function buildNameControl(businessName) {
 function brcLookupDescriptor(application) {
   if (!application) throw new Error('Application is required');
   const businessName = application.registered_business_name || application.business_name_input || null;
-  return { businessName, nameControl: buildNameControl(businessName), ein: normalizeEin(application.ein), njTaxId: buildNjTaxId(application.ein) };
+  return {
+    businessName,
+    nameControl: buildNameControl(businessName),
+    ein: normalizeEin(application.ein),
+    njTaxId: buildNjTaxId(application.ein)
+  };
 }
 
 function decodeEntities(value) {
-  return String(value || '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+  return String(value || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
 }
 
 function htmlToText(html) {
-  return decodeEntities(html).replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return decodeEntities(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function between(text, startLabel, endLabel) {
@@ -41,10 +58,19 @@ function between(text, startLabel, endLabel) {
 
 function parseBrcCertificateHtml(html) {
   const raw = String(html || '');
-  if (/Request unsuccessful\. Incapsula incident ID/i.test(raw) || /_Incapsula_Resource/i.test(raw) || /hcaptcha/i.test(raw)) return { status: 'challenge_required' };
+  if (
+    /Request unsuccessful\. Incapsula incident ID/i.test(raw) ||
+    /_Incapsula_Resource/i.test(raw) ||
+    /hcaptcha/i.test(raw) ||
+    /captcha/i.test(raw)
+  ) return { status: 'challenge_required' };
+
   const text = htmlToText(raw);
   if (/There was no match on the fields entered\./i.test(text)) return { status: 'not_found' };
-  if (!/BUSINESS REGISTRATION CERTIFICATE/i.test(text) || !/Certificate Number:/i.test(text)) return { status: 'unrecognized_response', text: text.slice(0, 1000) };
+  if (!/BUSINESS REGISTRATION CERTIFICATE/i.test(text) || !/Certificate Number:/i.test(text)) {
+    return { status: 'unrecognized_response', text: text.slice(0, 1000) };
+  }
+
   return {
     status: 'found',
     taxpayerName: between(text, 'Taxpayer Name:', 'Trade Name:'),
@@ -56,58 +82,109 @@ function parseBrcCertificateHtml(html) {
   };
 }
 
-function responseCookies(response) {
-  let setCookies = [];
-  if (typeof response.headers.getSetCookie === 'function') setCookies = response.headers.getSetCookie();
-  if (!setCookies.length) {
-    const fallback = response.headers.get('set-cookie');
-    if (fallback) setCookies = [fallback];
-  }
-  return setCookies
-    .map((cookie) => String(cookie).split(';')[0].trim())
-    .filter(Boolean)
-    .join('; ');
-}
-
 async function lookupBrc(application) {
   const lookup = brcLookupDescriptor(application);
-  const browserHeaders = {
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
-  };
+  let browser;
 
-  // Load the official form first, just as a normal browser does, and carry its session cookies into the lookup.
-  const landingResponse = await fetch(BRC_REFERER, {
-    method: 'GET',
-    headers: browserHeaders,
-    redirect: 'follow'
-  });
-  await landingResponse.text();
-  const cookies = responseCookies(landingResponse);
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--disable-dev-shm-usage']
+    });
 
-  const body = new URLSearchParams({
-    pinnctl: lookup.nameControl.toLowerCase(),
-    pinidnum: lookup.njTaxId,
-    pincorpid: '',
-    pincasinoid: '',
-    submit: '  Submit  '
-  });
+    const context = await browser.newContext({
+      locale: 'en-US',
+      viewport: { width: 1280, height: 900 }
+    });
+    const page = await context.newPage();
 
-  const response = await fetch(BRC_LOOKUP_URL, {
-    method: 'POST',
-    headers: {
-      ...browserHeaders,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Origin': 'https://www1.state.nj.us',
-      'Referer': BRC_REFERER,
-      ...(cookies ? { Cookie: cookies } : {})
-    },
-    body: body.toString(),
-    redirect: 'follow'
-  });
-  const html = await response.text();
-  return { httpStatus: response.status, lookup, ...parseBrcCertificateHtml(html), html };
+    await page.goto(BRC_REFERER, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+    await page.waitForTimeout(1200);
+
+    let html = await page.content();
+    let parsed = parseBrcCertificateHtml(html);
+    if (parsed.status === 'challenge_required') {
+      return { engine: 'playwright', httpStatus: null, finalUrl: page.url(), lookup, ...parsed, html };
+    }
+
+    const nameInput = page.locator('input[name="pinnctl"]');
+    const idInput = page.locator('input[name="pinidnum"]');
+    if ((await nameInput.count()) === 0 || (await idInput.count()) === 0) {
+      return {
+        engine: 'playwright',
+        httpStatus: null,
+        finalUrl: page.url(),
+        lookup,
+        status: 'unrecognized_response',
+        text: htmlToText(html).slice(0, 1000),
+        html
+      };
+    }
+
+    await nameInput.fill(lookup.nameControl.toLowerCase());
+    await idInput.fill(lookup.njTaxId);
+
+    const corpInput = page.locator('input[name="pincorpid"]');
+    const casinoInput = page.locator('input[name="pincasinoid"]');
+    if (await corpInput.count()) await corpInput.fill('');
+    if (await casinoInput.count()) await casinoInput.fill('');
+
+    const submit = page.locator('input[type="submit"], button[type="submit"]').first();
+    if ((await submit.count()) === 0) throw new Error('NJ BRC submit button was not found.');
+
+    const popupPromise = context.waitForEvent('page', { timeout: 5000 }).catch(() => null);
+    const navigationPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => null);
+    await submit.click();
+
+    const popup = await popupPromise;
+    await navigationPromise;
+    const resultPage = popup || page;
+    await resultPage.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => null);
+    await resultPage.waitForTimeout(1500);
+
+    html = await resultPage.content();
+    parsed = parseBrcCertificateHtml(html);
+
+    let certificatePdfBase64 = null;
+    if (parsed.status === 'found') {
+      const pdf = await resultPage.pdf({
+        format: 'Letter',
+        printBackground: true,
+        margin: { top: '0.35in', right: '0.35in', bottom: '0.35in', left: '0.35in' }
+      });
+      certificatePdfBase64 = pdf.toString('base64');
+    }
+
+    return {
+      engine: 'playwright',
+      httpStatus: null,
+      finalUrl: resultPage.url(),
+      lookup,
+      ...parsed,
+      certificatePdfBase64,
+      html
+    };
+  } catch (error) {
+    return {
+      engine: 'playwright',
+      lookup,
+      status: 'browser_error',
+      text: error.message
+    };
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
 }
 
-module.exports = { BRC_LOOKUP_URL, normalizeEin, buildNjTaxId, buildNameControl, brcLookupDescriptor, parseBrcCertificateHtml, lookupBrc };
+module.exports = {
+  BRC_LOOKUP_URL,
+  normalizeEin,
+  buildNjTaxId,
+  buildNameControl,
+  brcLookupDescriptor,
+  parseBrcCertificateHtml,
+  lookupBrc
+};
