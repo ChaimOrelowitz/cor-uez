@@ -280,7 +280,7 @@ async function runTaxClearanceJob(job) {
           job.status = 'signing_in_to_pbs';
           await username.fill(credentials.username);
           await password.fill(credentials.password);
-          const loginButton = candidate.locator('input[type="submit"], button[type="submit"]').first();
+          const loginButton = candidate.locator('input[name="Login.Submit"], input[type="submit"], button[type="submit"]').first();
           if (!await loginButton.count()) throw new Error('The MyNJ login button could not be found.');
           await loginButton.click();
           loginSubmitted = true;
@@ -336,6 +336,7 @@ async function runTaxClearanceJob(job) {
   } catch (err) {
     job.status = 'error';
     job.error = err.message || 'The tax-clearance download failed.';
+    console.error(`Tax-clearance job failed: ${job.error}`);
   } finally {
     job.accessToken = null;
     if (browser) await browser.close().catch(() => {});
