@@ -147,6 +147,19 @@ export function createAdminMyNjCredentials(applicationId) {
   });
 }
 
+export function updateAdminMyNjCredentials(applicationId, payload) {
+  return request(`/api/uez/admin/applications/${applicationId}/credentials/mynj`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function markAdminPbsAccountCreated(applicationId) {
+  return request(`/api/uez/admin/applications/${applicationId}/pbs-account-created`, {
+    method: 'POST'
+  });
+}
+
 export function markAdminBrcFound(applicationId, payload) {
   return request(`/api/uez/admin/applications/${applicationId}/brc-found`, {
     method: 'POST',

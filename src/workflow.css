@@ -145,6 +145,9 @@
 .credential-grid span { color: #858b9d; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 .credential-grid strong { margin-top: 5px; padding-right: 45px; color: #283047; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
 .credential-grid button { position: absolute; top: 9px; right: 8px; border: 0; background: transparent; color: #626bd7; font-size: 9px; font-weight: 800; }
+.credential-edit-grid { display: grid; gap: 12px; margin-top: 15px; }
+.credential-edit-grid label { color: #6f778b; font-size: 12px; font-weight: 700; }
+.credential-edit-grid input { box-sizing: border-box; margin-top: 6px; width: 100%; border: 1px solid #dfe3ec; border-radius: 8px; padding: 10px 11px; color: #202638; background: #fff; }
 .applicant-credential-grid { padding: 0 24px; }
 .applicant-credential-grid strong { padding-right: 0; }
 .portal-secret-button { margin: 14px 24px 0; }

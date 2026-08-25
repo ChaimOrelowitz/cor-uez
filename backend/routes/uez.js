@@ -3,7 +3,8 @@ const crypto = require('crypto');
 const multer = require('multer');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
-const { encryptText, decryptText } = require('../utils/uezCrypto');
+const { encryptText } = require('../utils/uezCrypto');
+const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
@@ -19,41 +20,12 @@ const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
   'image/png',
-  'image/webp'
+  'image/webp',
+  'message/rfc822'
 ]);
 
 function normalizeEin(value) {
   return String(value || '').replace(/\D/g, '').slice(0, 9);
-}
-
-function buildMyNjUsername(companyName, phone) {
-  const company = String(companyName || '').replace(/ /g, '_').slice(0, 4);
-  const phoneDigits = String(phone || '').replace(/\D/g, '');
-  if (!company || phoneDigits.length < 4) throw new Error('Business name and primary owner phone are required to create the MyNJ login.');
-  const companyPrefix = `${company.slice(0, 1).toUpperCase()}${company.slice(1)}`;
-  return `${companyPrefix}${phoneDigits.slice(-4)}`.replace(/[^A-Za-z0-9@._-]/g, '_');
-}
-
-function buildMyNjPassword(lastName, ssn) {
-  const name = String(lastName || '').trim();
-  const ssnDigits = String(ssn || '').replace(/\D/g, '');
-  if (!name || ssnDigits.length !== 9) throw new Error('Primary owner last name and SSN are required to create the MyNJ password.');
-  const namePrefix = `${name.slice(0, 1).toUpperCase()}${name.slice(1, 3).toLowerCase()}`;
-  return `${namePrefix}${ssnDigits.slice(-4)}^`;
-}
-
-function decryptCredential(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    provider: row.provider,
-    username: decryptText(row.username_enc),
-    password: decryptText(row.password_enc),
-    challengeQuestion: decryptText(row.challenge_question_enc),
-    challengeAnswer: decryptText(row.challenge_answer_enc),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
 }
 
 function assertOwnership(owners) {
@@ -270,11 +242,15 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     const application = await getOwnedApplication(req.params.id, req.user);
     if (!application) return res.status(404).json({ error: 'Application not found' });
     if (!req.file) return res.status(400).json({ error: 'Choose a document to upload.' });
-    if (!ALLOWED_MIME_TYPES.has(req.file.mimetype)) {
-      return res.status(400).json({ error: 'Please upload a PDF, JPG, PNG, or WebP file.' });
+    const isEmailFile = /\.eml$/i.test(req.file.originalname) && ['message/rfc822', 'application/octet-stream'].includes(req.file.mimetype);
+    if (!ALLOWED_MIME_TYPES.has(req.file.mimetype) && !isEmailFile) {
+      return res.status(400).json({ error: 'Please upload a PDF, email file, JPG, PNG, or WebP file.' });
     }
 
     const documentType = String(req.body?.documentType || 'supporting').trim().toLowerCase();
+    if (documentType === 'uez_approval_email' && application.pbs_status !== 'account_created' && application.status !== 'waiting_for_uez_approval') {
+      return res.status(400).json({ error: 'The PBS account must be marked created before uploading the UEZ approval email.' });
+    }
     const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${safeFilename(req.file.originalname)}`;
 
     const { error: storageError } = await supabase.storage.from(DOCUMENT_BUCKET).upload(storagePath, req.file.buffer, {
@@ -312,6 +288,25 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         'brc_uploaded',
         'BRC uploaded',
         'We received your Business Registration Certificate. COR will review it and continue your application.',
+        req.user.id,
+        true
+      );
+    }
+
+    if (documentType === 'uez_approval_email') {
+      const now = new Date().toISOString();
+      const { error: appError } = await supabase.from('uez_applications').update({
+        pbs_status: 'uez_approval_uploaded',
+        status: 'uez_approval_uploaded',
+        updated_at: now
+      }).eq('id', application.id);
+      if (appError) throw appError;
+
+      await addStatusEvent(
+        application.id,
+        'uez_approval_uploaded',
+        'UEZ approval email uploaded',
+        'We received your Notice of Certification Application Approved email. COR will verify it and continue your application.',
         req.user.id,
         true
       );
@@ -432,60 +427,85 @@ router.post('/admin/applications/:id/credentials/mynj', requireUezAdmin, async (
       return res.status(400).json({ error: 'Confirm the BRC before creating MyNJ credentials.' });
     }
 
-    const { data: existing, error: existingError } = await supabase.from('uez_credentials')
-      .select('*')
-      .eq('application_id', application.id)
-      .eq('provider', 'mynj')
-      .maybeSingle();
-    if (existingError) throw existingError;
-    if (existing) {
-      res.setHeader('Cache-Control', 'no-store');
-      return res.json({ exists: true, credentials: decryptCredential(existing) });
+    const result = await ensureMyNjCredentials(application, req.user.id);
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(result.created ? 201 : 200).json({ exists: true, credentials: result.credentials });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/admin/applications/:id/credentials/mynj', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('id')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const body = req.body || {};
+    const username = String(body.username || '').trim();
+    const password = String(body.password || '');
+    const challengeQuestion = String(body.challengeQuestion || '').trim();
+    const challengeAnswer = String(body.challengeAnswer || '');
+    if (!username || !password || !challengeQuestion || !challengeAnswer) {
+      return res.status(400).json({ error: 'Username, password, challenge question, and challenge answer are all required.' });
     }
 
-    const { data: primaryOwner, error: ownerError } = await supabase.from('uez_owners')
-      .select('*')
-      .eq('application_id', application.id)
-      .order('owner_order')
-      .limit(1)
-      .maybeSingle();
-    if (ownerError) throw ownerError;
-    if (!primaryOwner) return res.status(400).json({ error: 'A primary owner is required.' });
-
-    const legalBusinessName = application.registered_business_name || application.brc_registered_name || application.business_name_input;
-    const username = buildMyNjUsername(legalBusinessName, primaryOwner.phone);
-    const password = buildMyNjPassword(primaryOwner.last_name, decryptText(primaryOwner.ssn_enc));
-    const challengeQuestion = 'how many mitzvot';
-    const challengeAnswer = "Tarya'g";
     const now = new Date().toISOString();
-
-    const { data, error } = await supabase.from('uez_credentials').insert({
-      application_id: application.id,
-      provider: 'mynj',
+    const { data, error } = await supabase.from('uez_credentials').update({
       username_enc: encryptText(username),
       password_enc: encryptText(password),
       challenge_question_enc: encryptText(challengeQuestion),
       challenge_answer_enc: encryptText(challengeAnswer),
       updated_at: now
-    }).select('*').single();
-    if (error) throw error;
-
-    await supabase.from('uez_applications').update({
-      pbs_status: 'mynj_credentials_created',
-      updated_at: now
-    }).eq('id', application.id);
-
-    await addStatusEvent(
-      application.id,
-      'mynj_credentials_created',
-      'MyNJ account information ready',
-      'Your MyNJ account information is available securely in your UEZ application.',
-      req.user.id,
-      true
-    );
+    }).eq('application_id', application.id).eq('provider', 'mynj').select('*').single();
+    if (error || !data) throw error || new Error('MyNJ credentials have not been created yet.');
 
     res.setHeader('Cache-Control', 'no-store');
-    res.status(201).json({ exists: true, credentials: decryptCredential(data) });
+    res.json({ exists: true, credentials: decryptCredential(data) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const { data: credential, error: credentialError } = await supabase.from('uez_credentials')
+      .select('id')
+      .eq('application_id', application.id)
+      .eq('provider', 'mynj')
+      .maybeSingle();
+    if (credentialError) throw credentialError;
+    if (!credential) return res.status(400).json({ error: 'MyNJ account information must exist before marking the PBS account created.' });
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase.from('uez_applications').update({
+      pbs_status: 'account_created',
+      status: 'waiting_for_uez_approval',
+      updated_at: now
+    }).eq('id', application.id).select('*').single();
+    if (error) throw error;
+
+    if (application.pbs_status !== 'account_created' && application.status !== 'waiting_for_uez_approval') {
+      await addStatusEvent(
+        application.id,
+        'waiting_for_uez_approval',
+        'PBS account created',
+        "Your PBS account is ready. Upload the 'Notice of Certification Application Approved' email from UEZdonotreply@dca.nj.gov when you receive it.",
+        req.user.id,
+        true
+      );
+    }
+
+    res.json(data);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -703,6 +723,8 @@ router.post('/admin/applications/:id/brc-found', requireUezAdmin, async (req, re
       true
     );
 
+    await ensureMyNjCredentials(data, req.user.id);
+
     res.json(data);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -752,6 +774,10 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
       .eq('id', req.params.id)
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    if (status === 'ready_for_ldc' && application.pbs_status !== 'uez_approval_uploaded') {
+      return res.status(400).json({ error: 'The applicant must upload the UEZ approval email before grant processing can begin.' });
+    }
 
     const { data, error } = await supabase.from('uez_applications').update({
       status,

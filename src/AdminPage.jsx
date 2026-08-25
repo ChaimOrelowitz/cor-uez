@@ -9,10 +9,12 @@ import {
   deleteAdminApplication,
   markAdminBrcFound,
   markAdminBrcNotFound,
+  markAdminPbsAccountCreated,
   saveOwners,
   signInApplicant,
   signOutApplicant,
   updateAdminApplication,
+  updateAdminMyNjCredentials,
   updateAdminApplicationStatus,
   whoAmI
 } from './api';
@@ -29,6 +31,9 @@ function statusLabel(status) {
     waiting_for_brc: 'Waiting for BRC',
     brc_uploaded: 'BRC uploaded',
     brc_confirmed: 'BRC confirmed',
+    pbs_account_pending: 'Creating PBS account',
+    waiting_for_uez_approval: 'Waiting for UEZ approval email',
+    uez_approval_uploaded: 'UEZ approval email uploaded',
     ldc_submitted: 'LDC submitted',
     approved: 'Approved'
   };
@@ -42,6 +47,7 @@ function programLabel(code) {
 function documentLabel(type) {
   if (type === 'formation') return 'Formation document';
   if (type === 'brc') return 'BRC';
+  if (type === 'uez_approval_email') return 'UEZ approval email';
   if (type === 'supporting') return 'Supporting';
   return type;
 }
@@ -178,6 +184,8 @@ export default function AdminPage() {
   const [applicationDraft, setApplicationDraft] = useState(null);
   const [ownerDrafts, setOwnerDrafts] = useState([]);
   const [myNjCredentials, setMyNjCredentials] = useState(null);
+  const [myNjEditMode, setMyNjEditMode] = useState(false);
+  const [myNjDraft, setMyNjDraft] = useState(null);
   const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [brcForm, setBrcForm] = useState({
     registeredBusinessName: '',
@@ -226,6 +234,8 @@ export default function AdminPage() {
       setDetail(data);
       const myNj = await getMyNjCredentials(id).catch(() => ({ exists: false, credentials: null }));
       setMyNjCredentials(myNj.exists ? myNj.credentials : null);
+      setMyNjDraft(myNj.exists ? myNj.credentials : null);
+      setMyNjEditMode(false);
       setShowMyNjSecrets(false);
       const app = data.application;
       setApplicationDraft(applicationDraftFrom(app));
@@ -431,6 +441,37 @@ export default function AdminPage() {
       setMyNjCredentials(result.credentials);
       setShowMyNjSecrets(true);
       setMessage('MyNJ account information is ready for the admin and applicant.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveMyNjCredentials() {
+    setBusy(true);
+    setMessage('Saving encrypted MyNJ account information…');
+    try {
+      const result = await updateAdminMyNjCredentials(detail.application.id, myNjDraft);
+      setMyNjCredentials(result.credentials);
+      setMyNjDraft(result.credentials);
+      setMyNjEditMode(false);
+      setShowMyNjSecrets(true);
+      setMessage('MyNJ / PBS login information was updated for the admin and applicant.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markPbsAccountCreated() {
+    setBusy(true);
+    setMessage('Moving the application to the UEZ approval-email stage…');
+    try {
+      await markAdminPbsAccountCreated(detail.application.id);
+      await refreshList(detail.application.id);
+      setMessage('PBS account marked created. The applicant is now required to upload the UEZ approval email.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -645,23 +686,38 @@ export default function AdminPage() {
             </section>
 
             <section className="admin-card mynj-card">
-              <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{myNjCredentials ? 'READY' : 'NOT CREATED'}</span></div>
+              <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{detail.application.pbs_status === 'account_created' || detail.application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span></div>
               {myNjCredentials ? <>
-                <div className="credential-grid">
-                  <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong><button onClick={() => copyCredential(myNjCredentials.username, 'Username')}>Copy</button></div>
-                  <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.password, 'Password')}>Copy</button></div>
-                  <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong><button onClick={() => copyCredential(myNjCredentials.challengeQuestion, 'Challenge question')}>Copy</button></div>
-                  <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.challengeAnswer, 'Challenge answer')}>Copy</button></div>
-                </div>
-                <button className="secondary admin-full-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
+                {myNjEditMode ? <div className="credential-edit-grid">
+                  <label>MyNJ username <span className="required-star">*</span><input value={myNjDraft?.username || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, username: e.target.value }))} /></label>
+                  <label>MyNJ password <span className="required-star">*</span><input value={myNjDraft?.password || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, password: e.target.value }))} /></label>
+                  <label>Challenge question <span className="required-star">*</span><input value={myNjDraft?.challengeQuestion || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, challengeQuestion: e.target.value }))} /></label>
+                  <label>Challenge answer <span className="required-star">*</span><input value={myNjDraft?.challengeAnswer || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, challengeAnswer: e.target.value }))} /></label>
+                  <div className="admin-action-row">
+                    <button className="primary" onClick={saveMyNjCredentials} disabled={busy}>Save login information</button>
+                    <button className="secondary" onClick={() => { setMyNjDraft(myNjCredentials); setMyNjEditMode(false); }} disabled={busy}>Cancel</button>
+                  </div>
+                </div> : <>
+                  <div className="credential-grid">
+                    <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong><button onClick={() => copyCredential(myNjCredentials.username, 'Username')}>Copy</button></div>
+                    <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.password, 'Password')}>Copy</button></div>
+                    <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong><button onClick={() => copyCredential(myNjCredentials.challengeQuestion, 'Challenge question')}>Copy</button></div>
+                    <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.challengeAnswer, 'Challenge answer')}>Copy</button></div>
+                  </div>
+                  <button className="secondary admin-full-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
+                  <button className="secondary admin-full-button" onClick={() => { setMyNjDraft(myNjCredentials); setMyNjEditMode(true); setShowMyNjSecrets(true); }}>Edit login information</button>
+                </>}
                 <p className="admin-help">Stored encrypted in the UEZ application. The applicant sees the same MyNJ information in their portal.</p>
+                {detail.application.pbs_status !== 'account_created' && detail.application.pbs_status !== 'uez_approval_uploaded' && <button className="success-button admin-full-button" onClick={markPbsAccountCreated} disabled={busy}>✓ PBS account has been created</button>}
+                {(detail.application.pbs_status === 'account_created' || detail.application.status === 'waiting_for_uez_approval') && <p className="admin-help">Waiting for the applicant to upload the required UEZ approval email.</p>}
+                {detail.application.pbs_status === 'uez_approval_uploaded' && <p className="admin-help">The applicant uploaded the UEZ approval email. Open it in Documents below.</p>}
               </> : <>
-                <p className="admin-help mynj-intro">Create the MyNJ information needed for the PBS account using the verified business and primary-owner information.</p>
+                <p className="admin-help mynj-intro">This login is generated automatically as soon as the BRC is confirmed. If an earlier confirmation did not generate it, retry here.</p>
                 <button
                   className="primary admin-full-button"
                   onClick={createMyNjCredentials}
                   disabled={busy || (detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed')}
-                >Create MyNJ account information</button>
+                >Generate missing MyNJ login</button>
                 {detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed' && <p className="admin-help">The BRC must be confirmed first.</p>}
               </>}
             </section>
@@ -716,8 +772,8 @@ export default function AdminPage() {
 
             <section className="admin-card">
               <div className="admin-card-head"><h3>Workflow</h3></div>
-              <button className="secondary admin-full-button" onClick={markReadyForLdc} disabled={busy || detail.application.brc_status !== 'found'}>Mark ready for grant processing</button>
-              <p className="admin-help">This becomes available after the BRC is confirmed.</p>
+              <button className="secondary admin-full-button" onClick={markReadyForLdc} disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded'}>Mark ready for grant processing</button>
+              <p className="admin-help">This becomes available after the applicant uploads the required UEZ approval email.</p>
               <div className="admin-timeline">
                 {[...detail.statusEvents].reverse().slice(0, 6).map((event) => <div key={event.id}><strong>{event.label || statusLabel(event.status)}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>)}
               </div>

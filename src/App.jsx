@@ -33,6 +33,9 @@ function statusLabel(status) {
     brc_confirmed: 'BRC confirmed',
     waiting_for_brc: 'Waiting for your BRC',
     brc_uploaded: 'BRC uploaded — COR review pending',
+    pbs_account_pending: 'COR is creating your PBS account',
+    waiting_for_uez_approval: 'Waiting for your UEZ approval email',
+    uez_approval_uploaded: 'UEZ approval email received',
     ldc_submitted: 'Grant application submitted',
     approved: 'Approved'
   };
@@ -43,6 +46,7 @@ function documentLabel(type) {
   const labels = {
     formation: 'Certificate of Formation / formation document',
     brc: 'Business Registration Certificate',
+    uez_approval_email: 'Notice of Certification Application Approved email',
     supporting: 'Supporting document'
   };
   return labels[type] || type;
@@ -57,6 +61,8 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   const needsBrc = ['not_found', 'missing', 'required'].includes(app.brc_status) || app.status === 'waiting_for_brc';
   const brcUploaded = app.brc_status === 'uploaded' || app.status === 'brc_uploaded';
   const brcConfirmed = app.brc_status === 'found' || app.status === 'brc_confirmed';
+  const approvalUploaded = bundle.documents.some((doc) => doc.document_type === 'uez_approval_email');
+  const needsApprovalEmail = app.pbs_status === 'account_created' || app.status === 'waiting_for_uez_approval';
 
   useEffect(() => {
     let active = true;
@@ -74,6 +80,21 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
       await uploadApplicationDocument(app.id, 'brc', file);
       await onRefresh();
       setMessage('BRC uploaded. COR will review it.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function uploadApprovalEmail(file) {
+    if (!file) return;
+    setUploading(true);
+    setMessage('');
+    try {
+      await uploadApplicationDocument(app.id, 'uez_approval_email', file);
+      await onRefresh();
+      setMessage('Your UEZ approval email was uploaded. COR will verify it.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -133,6 +154,20 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
           {brcConfirmed && <div className="action-panel good-panel">
             <h3>✓ BRC confirmed</h3>
             <p>{app.registered_business_name || app.brc_registered_name || app.business_name_input}</p>
+          </div>}
+
+          {needsApprovalEmail && !approvalUploaded && <div className="action-panel warn-panel">
+            <h3>Upload your UEZ approval email <span className="required-star">*</span></h3>
+            <p>Upload the “Notice of Certification Application Approved” email you received from UEZdonotreply@dca.nj.gov as proof that the business is registered in the program.</p>
+            <label className="primary compact inline-button file-button">
+              {uploading ? 'Uploading…' : 'Upload required approval email'}
+              <input type="file" accept=".pdf,.eml,image/*" disabled={uploading} onChange={(e) => uploadApprovalEmail(e.target.files?.[0])} />
+            </label>
+          </div>}
+
+          {approvalUploaded && <div className="action-panel good-panel">
+            <h3>✓ UEZ approval email received</h3>
+            <p>COR will verify the notice and continue your application.</p>
           </div>}
 
           {message && <div className="form-message portal-message">{message}</div>}

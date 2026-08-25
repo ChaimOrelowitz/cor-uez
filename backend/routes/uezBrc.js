@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, lookupBrc } = require('../utils/uezBrc');
+const { ensureMyNjCredentials } = require('../services/uezMyNj');
 
 const router = express.Router();
 const BRC_FORM_URL = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
@@ -199,6 +200,7 @@ router.post('/:id/request-check', async (req, res) => {
       const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: canonicalName, registered_business_name: canonicalName, brc_data: brcData, brc_last_error: null, status: 'brc_confirmed', updated_at: checkedAt }).eq('id', application.id).select('*').single();
       if (error) throw error;
       await addStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
+      await ensureMyNjCredentials(data, req.user.id);
       return res.json({ application: data, result: brcData, outcome: 'found' });
     }
 
@@ -254,6 +256,7 @@ router.post('/:id/admin/found', requireUezAdmin, async (req, res) => {
     const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: req.body?.registeredBusinessName || application.brc_registered_name, registered_business_name: req.body?.registeredBusinessName || application.registered_business_name, brc_storage_path: req.body?.storagePath || application.brc_storage_path, status: 'brc_confirmed', updated_at: checkedAt }).eq('id', application.id).select('*').single();
     if (error) throw error;
     await addStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
+    await ensureMyNjCredentials(data, req.user.id);
     res.json(data);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
