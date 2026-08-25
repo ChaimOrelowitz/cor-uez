@@ -3,7 +3,7 @@ import { checkUezEligibility, suggestNjAddresses } from './eligibility';
 import UezMap from './UezMap';
 import { createApplication, getMyApplications, saveBusiness, saveOwners, signInApplicant, signUpApplicant } from './api';
 
-const steps = ['Eligibility', 'Account', 'Business', 'Owners', 'BRC', 'Review'];
+const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'BRC', 'Review'];
 const blankOwner = () => ({ firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '' });
 
 function App() {
@@ -25,7 +25,7 @@ function App() {
 
   const progress = useMemo(() => `${step + 1} of ${steps.length}`, [step]);
   const ownershipTotal = useMemo(() => form.owners.reduce((sum, owner) => sum + (Number(owner.ownershipPercent) || 0), 0), [form.owners]);
-  const isLakewoodGrant = eligibility?.programs?.some((program) => program.code === 'lakewood_technology_grant');
+  const eligibleProgramName = eligibility?.programs?.[0]?.name || 'UEZ enrollment';
   const update = (key) => (e) => setForm((old) => ({ ...old, [key]: e.target.value }));
   const updateOwner = (index, key) => (e) => {
     const value = e.target.value;
@@ -83,8 +83,9 @@ function App() {
       const result = await checkUezEligibility(form.address.trim(), addressMagicKey);
       setEligibility(result);
       if (result?.matchedAddress) setForm((old) => ({ ...old, address: result.matchedAddress }));
-    }
-    catch (err) { setMessage(err.message); }
+      if (result?.status === 'address_not_found') setMessage('We could not confidently match that address. Please choose a suggested address or check the spelling.');
+      else if (!result?.eligible) setMessage('This address does not appear to be inside a New Jersey Urban Enterprise Zone.');
+    } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   }
 
@@ -106,7 +107,7 @@ function App() {
         programCode: eligibility?.programs?.[0]?.code || null
       });
       setApplicationId(app.id);
-      setStep(2);
+      setStep(3);
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   }
@@ -136,7 +137,7 @@ function App() {
         partTimeEmployees: latest.part_time_employees ?? old.partTimeEmployees
       }));
       setSignInMode(false);
-      setStep(latest.business_name_input ? 3 : 2);
+      setStep(latest.business_name_input ? 4 : 3);
       setMessage('Welcome back. Your application is loaded.');
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
@@ -156,7 +157,7 @@ function App() {
         partTimeEmployees: form.partTimeEmployees,
         contactPhone: form.owners[0]?.phone || null
       });
-      setStep(3);
+      setStep(4);
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   }
@@ -173,7 +174,7 @@ function App() {
     setBusy(true); setMessage('');
     try {
       await saveOwners(applicationId, form.owners);
-      setStep(4);
+      setStep(5);
     } catch (err) { setOwnerError(err.message); }
     finally { setBusy(false); }
   }
@@ -186,17 +187,24 @@ function App() {
   function addOwner() { setForm((old) => ({ ...old, owners: [...old.owners, blankOwner()] })); }
   function removeOwner(index) { if (index) setForm((old) => ({ ...old, owners: old.owners.filter((_, i) => i !== index) })); }
 
-  function continueFromEligibility() {
+  function continueFromAddress() {
     if (!eligibility) return setMessage('Check your business address first.');
     if (eligibility.status === 'address_not_found') return setMessage('We could not confidently match that address. Please check it and try again.');
     if (!eligibility.eligible) return setMessage('This address does not appear to be inside a New Jersey Urban Enterprise Zone.');
-    setSignInMode(false); setMessage(''); setStep(1);
+    setMessage('');
+    setStep(1);
+  }
+
+  function continueFromOffer() {
+    setSignInMode(false);
+    setMessage('');
+    setStep(2);
   }
 
   function openSignIn() {
     setSignInMode(true);
     setMessage('');
-    setStep(1);
+    setStep(2);
   }
 
   return (
@@ -207,15 +215,15 @@ function App() {
       </header>
 
       <main className="page-wrap">
-        <section className="hero"><div className="eyebrow">NEW JERSEY UEZ SERVICES</div><h1>We’ll guide you through the process.</h1><p>Start with your business address. We’ll identify your UEZ zone, show you what programs are available, and keep everything organized in one place.</p></section>
+        <section className="hero"><div className="eyebrow">NEW JERSEY UEZ SERVICES</div><h1>We’ll guide you through the process.</h1><p>Start with your business address. We’ll identify your UEZ zone and show you which programs are available.</p></section>
 
         <div className="wizard-card">
-          <div className="wizard-head"><div><span className="step-count">Step {progress}</span><h2>{steps[step]}</h2></div>{isLakewoodGrant && <div className="fee-pill">Lakewood service · $500</div>}</div>
-          <div className="progress-row">{steps.map((name, index) => <div key={name} className={`progress-item ${index <= step ? 'active' : ''}`}><span>{index + 1}</span><small>{name}</small></div>)}</div>
+          <div className="wizard-head"><div><span className="step-count">Step {progress}</span><h2>{steps[step]}</h2></div></div>
+          <div className="progress-row seven">{steps.map((name, index) => <div key={name} className={`progress-item ${index <= step ? 'active' : ''}`}><span>{index + 1}</span><small>{name}</small></div>)}</div>
 
           {step === 0 && <div className="content-block">
             <form onSubmit={runAddressCheck}>
-              <div className="intro-copy"><h3>Is your business in a UEZ?</h3><p>Start typing the registered business address and choose the matching New Jersey address.</p></div>
+              <div className="intro-copy"><h3>Find your business</h3><p>Start typing the registered business address and choose the matching New Jersey address.</p></div>
               <label>Registered business address</label>
               <div className="address-autocomplete">
                 <input value={form.address} onChange={updateAddress} onFocus={() => setShowAddressSuggestions(addressSuggestions.length > 0)} autoComplete="off" placeholder="Start typing an NJ business address" required />
@@ -227,25 +235,34 @@ function App() {
             </form>
             {eligibility?.matchedAddress && <div className="map-card">
               <UezMap latitude={eligibility.latitude} longitude={eligibility.longitude} zoneGeometry={eligibility.zoneGeometry} address={eligibility.matchedAddress} />
-              <div className="result-strip"><div className={`result-icon ${eligibility.eligible ? 'good' : 'bad'}`}>{eligibility.eligible ? '✓' : '!'}</div><div>
-                <h4>{eligibility.eligible ? `Your business is inside the ${eligibility.zoneName}.` : 'This address is not inside a UEZ.'}</h4>
-                <p>{eligibility.matchedAddress}</p>
-                {eligibility.programs?.length > 0 && <span className="grant-pill">Lakewood Technology Grant available</span>}
-                {eligibility.eligible && eligibility.programs?.length === 0 && <span className="neutral-pill">UEZ enrollment available · no COR local grant currently configured</span>}
-              </div></div>
+              <div className="address-confirmation"><strong>{eligibility.matchedAddress}</strong><span>Matched business address</span></div>
             </div>}
           </div>}
 
-          {step === 1 && <div className="content-block"><div className="intro-copy"><h3>{signInMode ? 'Sign in to your COR account' : 'Create your COR account'}</h3><p>{signInMode ? 'Use the email and password for your COR account to resume your application.' : 'Your account lets you save progress, upload documents, and see exactly where your application stands.'}</p></div><div className="field-grid"><div><label>Email</label><input type="email" value={form.email} onChange={update('email')} /></div><div><label>Password</label><input type="password" value={form.password} onChange={update('password')} /></div></div>{signInMode && <button type="button" className="signin-link" onClick={() => { setSignInMode(false); setMessage(''); }}>Need an account? Create one</button>}</div>}
+          {step === 1 && <div className="content-block eligibility-offer">
+            <div className="status-icon">✓</div>
+            <div className="eyebrow">ELIGIBLE</div>
+            <h3>Your business is in the {eligibility?.zoneName}.</h3>
+            <p className="offer-lead">This address is eligible for New Jersey UEZ enrollment.</p>
+            {eligibility?.programs?.length > 0 && <div className="program-available"><span>Available program</span><strong>{eligibleProgramName}</strong></div>}
+            <div className="service-offer">
+              <h4>Have COR Solutions handle the application</h4>
+              <p>COR Solutions can enroll your business in the UEZ{eligibility?.programs?.length > 0 ? ` and apply for the ${eligibleProgramName}` : ''} on your behalf.</p>
+              <div className="service-price"><strong>$500</strong><span>to begin</span></div>
+              <p className="refund-copy">If the LDC rejects the grant application, the $500 service fee will be refunded. Once the grant is approved, the fee is non-refundable.</p>
+            </div>
+          </div>}
 
-          {step === 2 && <div className="content-block"><div className="intro-copy"><h3>Tell us about the business</h3><p>We’ll use this information for your UEZ enrollment and grant application.</p></div>
+          {step === 2 && <div className="content-block"><div className="intro-copy"><h3>{signInMode ? 'Sign in to your COR account' : 'Create your COR account'}</h3><p>{signInMode ? 'Use the email and password for your COR account to resume your application.' : 'Create an account so your progress, documents, and application status stay together.'}</p></div><div className="field-grid"><div><label>Email</label><input type="email" value={form.email} onChange={update('email')} /></div><div><label>Password</label><input type="password" value={form.password} onChange={update('password')} /></div></div>{signInMode && <button type="button" className="signin-link" onClick={() => { setSignInMode(false); setMessage(''); }}>Need an account? Create one</button>}</div>}
+
+          {step === 3 && <div className="content-block"><div className="intro-copy"><h3>Tell us about the business</h3><p>We’ll use this information for your UEZ enrollment and grant application.</p></div>
             <label>Business name</label><input value={form.businessName} onChange={update('businessName')} />
             <label>In a few words, what does the business do?</label><textarea value={form.businessDescription} onChange={update('businessDescription')} placeholder="Example: HVAC installation and repair" required />
             <div className="field-grid"><div><label>EIN</label><input value={form.ein} onChange={update('ein')} placeholder="12-3456789" /></div><div><label>Year founded</label><input value={form.yearFounded} onChange={update('yearFounded')} /></div><div><label>Is this business a sole proprietorship?</label><select value={form.isSoleProprietorship} onChange={update('isSoleProprietorship')}><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div><div></div><div><label>Full-time employees</label><input type="number" min="0" value={form.fullTimeEmployees} onChange={update('fullTimeEmployees')} placeholder="0" /></div><div><label>Part-time employees</label><input type="number" min="0" value={form.partTimeEmployees} onChange={update('partTimeEmployees')} placeholder="0" /></div></div>
             <div className="hint">There is no right or wrong employee count. Once the EIN is entered, the system will begin the BRC lookup in the background.</div>
           </div>}
 
-          {step === 3 && <div className="content-block"><div className="intro-copy"><h3>Business ownership</h3><p>List every owner and their percentage. The ownership percentages must add up to exactly 100%.</p></div>
+          {step === 4 && <div className="content-block"><div className="intro-copy"><h3>Business ownership</h3><p>List every owner and their percentage. The ownership percentages must add up to exactly 100%.</p></div>
             <div className="hint"><strong>Why we ask for DOB and SSN:</strong> The LDC application requires this information for each business owner in order to apply. COR collects it only so we can prepare and submit the required application information on your behalf.</div>
             <div className="ownership-summary"><span>Ownership accounted for</span><strong className={Math.abs(ownershipTotal - 100) < 0.001 ? 'ownership-ok' : ''}>{ownershipTotal}% / 100%</strong></div>
             <div className="field-grid"><div><label>Is the primary owner the 100% owner?</label><select value={form.owners.length === 1 && form.owners[0].ownershipPercent === '100' ? 'yes' : 'no'} onChange={(e) => setPrimaryOwnershipMode(e.target.value)}><option value="yes">Yes</option><option value="no">No</option></select></div></div>
@@ -253,17 +270,18 @@ function App() {
             {ownershipTotal < 100 && <button className="secondary add-owner" type="button" onClick={addOwner}>+ Add another owner</button>}{ownerError && <div className="validation-error">{ownerError}</div>}
           </div>}
 
-          {step === 4 && <div className="content-block centered"><div className="status-icon">✓</div><h3>BRC lookup</h3><p>We now have the information needed to check for the New Jersey Business Registration Certificate and continue the application workflow.</p></div>}
-          {step === 5 && <div className="content-block centered"><div className="status-icon">✓</div><h3>Your intake is saved.</h3><p>Your COR account will show each next step, outstanding document, payment status, and application update.</p></div>}
+          {step === 5 && <div className="content-block centered"><div className="status-icon">✓</div><h3>BRC lookup</h3><p>We now have the information needed to check for the New Jersey Business Registration Certificate and continue the application workflow.</p></div>}
+          {step === 6 && <div className="content-block centered"><div className="status-icon">✓</div><h3>Your intake is saved.</h3><p>Your COR account will show each next step, outstanding document, payment status, and application update.</p></div>}
 
           {message && <div className="form-message">{message}</div>}
           <div className="wizard-footer">
             <button className="secondary" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0 || busy}>Back</button>
-            {step === 0 && <button className="primary compact" onClick={continueFromEligibility} disabled={busy}>Continue</button>}
-            {step === 1 && <button className="primary compact" onClick={signInMode ? signInAndResume : createAccountAndCase} disabled={busy}>{busy ? (signInMode ? 'Signing in…' : 'Creating…') : (signInMode ? 'Sign in & continue' : 'Create account & continue')}</button>}
-            {step === 2 && <button className="primary compact" onClick={saveBusinessStep} disabled={busy}>{busy ? 'Saving…' : 'Save & continue'}</button>}
-            {step === 3 && <button className="primary compact" onClick={saveOwnerStep} disabled={busy}>{busy ? 'Saving…' : 'Save owners & continue'}</button>}
-            {step === 4 && <button className="primary compact" onClick={() => setStep(5)}>Continue</button>}
+            {step === 0 && <button className="primary compact" onClick={continueFromAddress} disabled={busy}>Continue</button>}
+            {step === 1 && <button className="primary compact" onClick={continueFromOffer}>Continue</button>}
+            {step === 2 && <button className="primary compact" onClick={signInMode ? signInAndResume : createAccountAndCase} disabled={busy}>{busy ? (signInMode ? 'Signing in…' : 'Creating…') : (signInMode ? 'Sign in & continue' : 'Create account & continue')}</button>}
+            {step === 3 && <button className="primary compact" onClick={saveBusinessStep} disabled={busy}>{busy ? 'Saving…' : 'Save & continue'}</button>}
+            {step === 4 && <button className="primary compact" onClick={saveOwnerStep} disabled={busy}>{busy ? 'Saving…' : 'Save owners & continue'}</button>}
+            {step === 5 && <button className="primary compact" onClick={() => setStep(6)}>Continue</button>}
           </div>
         </div>
         <div className="trust-row"><span>Secure application</span><span>•</span><span>Private document storage</span><span>•</span><span>Progress saved to your account</span></div>
