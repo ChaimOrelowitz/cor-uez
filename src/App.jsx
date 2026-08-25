@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { checkUezEligibility, suggestNjAddresses } from './eligibility';
+import UezMap from './UezMap';
 import { createApplication, getMyApplications, saveBusiness, saveOwners, signInApplicant, signUpApplicant } from './api';
 
 const steps = ['Eligibility', 'Account', 'Business', 'Owners', 'BRC', 'Review'];
@@ -224,8 +225,8 @@ function App() {
               </div>
               <button className="primary" disabled={busy}>{busy ? 'Checking…' : 'Check my address'}</button>
             </form>
-            {eligibility?.mapUrl && <div className="map-card">
-              <iframe title="NJ UEZ map" src={eligibility.mapUrl} className="uez-map" loading="lazy" />
+            {eligibility?.matchedAddress && <div className="map-card">
+              <UezMap latitude={eligibility.latitude} longitude={eligibility.longitude} zoneGeometry={eligibility.zoneGeometry} address={eligibility.matchedAddress} />
               <div className="result-strip"><div className={`result-icon ${eligibility.eligible ? 'good' : 'bad'}`}>{eligibility.eligible ? '✓' : '!'}</div><div>
                 <h4>{eligibility.eligible ? `Your business is inside the ${eligibility.zoneName}.` : 'This address is not inside a UEZ.'}</h4>
                 <p>{eligibility.matchedAddress}</p>
