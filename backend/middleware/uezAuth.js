@@ -10,7 +10,7 @@ async function requireUezAuth(req, res, next) {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, role, email, full_name')
+    .select('id, role, email, first_name, last_name, phone')
     .eq('id', user.id)
     .single();
 
