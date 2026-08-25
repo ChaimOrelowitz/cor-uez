@@ -355,6 +355,38 @@ router.get('/applications/:id/documents/:documentId/url', async (req, res) => {
   }
 });
 
+router.delete('/applications/:id/documents/:documentId', async (req, res) => {
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+
+    const { data: doc, error: docError } = await supabase.from('uez_documents')
+      .select('*')
+      .eq('id', req.params.documentId)
+      .eq('application_id', application.id)
+      .single();
+    if (docError || !doc) return res.status(404).json({ error: 'Document not found' });
+
+    if (doc.storage_path) {
+      await supabase.storage.from(DOCUMENT_BUCKET).remove([doc.storage_path]).catch(() => {});
+    }
+
+    const { error: deleteError } = await supabase.from('uez_documents').delete().eq('id', doc.id);
+    if (deleteError) throw deleteError;
+
+    if (doc.document_type === 'brc' && req.user.role === 'admin') {
+      await supabase.from('uez_applications').update({
+        brc_status: 'pending',
+        updated_at: new Date().toISOString()
+      }).eq('id', application.id);
+    }
+
+    res.json({ ok: true, id: doc.id });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/applications/:id/submit', async (req, res) => {
   try {
     const application = await getOwnedApplication(req.params.id, req.user);

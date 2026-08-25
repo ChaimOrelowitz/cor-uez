@@ -104,6 +104,12 @@ export function getDocumentUrl(applicationId, documentId) {
   return request(`/api/uez/applications/${applicationId}/documents/${documentId}/url`);
 }
 
+export function deleteDocument(applicationId, documentId) {
+  return request(`/api/uez/applications/${applicationId}/documents/${documentId}`, {
+    method: 'DELETE'
+  });
+}
+
 export function submitApplication(applicationId) {
   return request(`/api/uez/applications/${applicationId}/submit`, { method: 'POST' });
 }

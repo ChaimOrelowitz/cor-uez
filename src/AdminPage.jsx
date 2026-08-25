@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
 import {
   createAdminMyNjCredentials,
+  deleteDocument,
   getAdminApplication,
   getAdminApplications,
   getApplicantSession,
@@ -280,6 +280,21 @@ export default function AdminPage() {
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setMessage(err.message);
+    }
+  }
+
+  async function handleDeleteDoc(doc) {
+    if (!window.confirm(`Permanently delete "${doc.filename}"?`)) return;
+    setBusy(true);
+    setMessage(`Deleting ${doc.filename}…`);
+    try {
+      await deleteDocument(detail.application.id, doc.id);
+      await refreshList(detail.application.id);
+      setMessage(`Deleted ${doc.filename}.`);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -814,7 +829,17 @@ export default function AdminPage() {
             <section className="admin-card">
               <div className="admin-card-head"><h3>Documents</h3><span>{detail.documents.length}</span></div>
               <div className="admin-document-list">
-                {detail.documents.map((doc) => <button key={doc.id} onClick={() => openDoc(doc)}><span><strong>{documentLabel(doc.document_type)}</strong><small>{doc.filename}</small></span><b>Open</b></button>)}
+                {detail.documents.map((doc) => (
+                  <div key={doc.id} className="admin-doc-row">
+                    <button type="button" className="admin-doc-open-btn" onClick={() => openDoc(doc)}>
+                      <span><strong>{documentLabel(doc.document_type)}</strong><small>{doc.filename}</small></span>
+                      <b>Open</b>
+                    </button>
+                    <button type="button" className="admin-doc-delete-btn" onClick={() => handleDeleteDoc(doc)} disabled={busy} title="Delete document">
+                      Delete
+                    </button>
+                  </div>
+                ))}
                 {detail.documents.length === 0 && <p className="muted">No documents uploaded.</p>}
               </div>
             </section>
