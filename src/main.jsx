@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import BrcLiveTestPage from './BrcLiveTestPage';
 import './styles.css';
+import './brcLive.css';
 
 const Root = window.location.pathname === '/brc-test' ? BrcLiveTestPage : App;
 
