@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
-const { encryptText } = require('../utils/uezCrypto');
+const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 
 const router = express.Router();
