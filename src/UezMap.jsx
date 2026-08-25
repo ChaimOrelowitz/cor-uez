@@ -14,44 +14,48 @@ export default function UezMap({ latitude, longitude, zoneGeometry, address }) {
       mapRef.current = null;
     }
 
+    const point = [latitude, longitude];
     const map = L.map(mapNode.current, {
       zoomControl: true,
       attributionControl: false,
       scrollWheelZoom: false
-    });
+    }).setView(point, 18);
     mapRef.current = map;
 
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 20
     }).addTo(map);
 
-    const point = [latitude, longitude];
-    const marker = L.circleMarker(point, {
-      radius: 9,
-      weight: 4,
-      fillOpacity: 1
-    }).addTo(map);
-    marker.bindTooltip(address || 'Selected business address', { direction: 'top', offset: [0, -8] });
-
-    let zoneLayer = null;
     if (zoneGeometry) {
-      zoneLayer = L.geoJSON(zoneGeometry, {
+      L.geoJSON(zoneGeometry, {
         style: {
-          weight: 3,
-          fillOpacity: 0.18
-        }
+          color: '#6f63d9',
+          weight: 2,
+          opacity: 0.75,
+          fillColor: '#8d84ea',
+          fillOpacity: 0.1
+        },
+        interactive: false
       }).addTo(map);
     }
 
-    if (zoneLayer && zoneLayer.getBounds().isValid()) {
-      const bounds = zoneLayer.getBounds();
-      bounds.extend(point);
-      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 17 });
-    } else {
-      map.setView(point, 17);
-    }
+    const marker = L.circleMarker(point, {
+      radius: 10,
+      color: '#ffffff',
+      weight: 4,
+      fillColor: '#5f67d6',
+      fillOpacity: 1
+    }).addTo(map);
+    marker.bindTooltip(address || 'Selected business address', {
+      permanent: false,
+      direction: 'top',
+      offset: [0, -10]
+    });
 
-    setTimeout(() => map.invalidateSize(), 0);
+    setTimeout(() => {
+      map.invalidateSize();
+      map.setView(point, 18, { animate: false });
+    }, 0);
 
     return () => {
       map.remove();
