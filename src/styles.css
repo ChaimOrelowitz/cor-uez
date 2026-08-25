@@ -26,9 +26,10 @@ button { cursor: pointer; }
 .wizard-head h2 { margin: 4px 0 0; font-size: 26px; }
 .progress-row { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; padding: 0 32px 26px; border-bottom: 1px solid #edf0f6; }
 .progress-row.seven { grid-template-columns: repeat(7,1fr); }
-.progress-item { display: flex; align-items: center; gap: 7px; color: #a4a9b9; font-size: 11px; }
-.progress-item span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #f2f3f7; font-size: 11px; font-weight: 800; }
-.progress-item.active { color: #5f67d6; font-weight: 700; }
+.progress-item { display: flex; align-items: center; gap: 8px; color: #9ca2b3; font-size: 13px; font-weight: 400; }
+.progress-item span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #f2f3f7; font-size: 11px; font-weight: 800; flex: 0 0 24px; }
+.progress-item small { font-size: 13px; font-weight: 400; }
+.progress-item.active { color: #5f67d6; font-weight: 400; }
 .progress-item.active span { background: #676fe0; color: white; }
 .content-block { padding: 34px 32px 28px; min-height: 330px; }
 .intro-copy { margin-bottom: 24px; }
@@ -59,24 +60,21 @@ textarea { min-height: 94px; resize: vertical; }
 
 .map-card { margin-top: 24px; border: 1px solid #e4e7f2; border-radius: 22px; overflow: hidden; background: white; box-shadow: 0 18px 45px rgba(48,54,111,.10); }
 .uez-map { width: 100%; height: 360px; border: 0; display: block; background: #eef1f7; }
-.address-confirmation { display: flex; flex-direction: column; gap: 3px; padding: 15px 18px 17px; border-top: 1px solid #edf0f6; }
-.address-confirmation strong { font-size: 14px; }
-.address-confirmation span { color: #8b91a4; font-size: 12px; }
+.result-strip { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px 20px; border-top: 1px solid #edf0f6; background: #fff; }
+.result-strip h4 { margin: 1px 0 5px; font-size: 18px; line-height: 1.35; }
+.result-strip p { margin: 0; color: #7b8296; font-size: 13px; }
+.result-icon { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 12px; display: grid; place-items: center; font-weight: 900; font-size: 18px; }
+.result-icon.good { background: #eaf7ef; color: #258a52; }
+.result-icon.bad { background: #fff1f0; color: #c95850; }
+.grant-pill { display: inline-block; margin-top: 10px; padding: 7px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; background: #eff1ff; color: #5d65d7; }
 
-.eligibility-offer { max-width: 760px; margin: 0 auto; text-align: center; }
-.eligibility-offer .status-icon { margin: 0 auto 14px; background: #eaf7ef; color: #258a52; }
-.eligibility-offer h3 { margin: 2px auto 10px; font-size: 29px; letter-spacing: -.025em; max-width: 680px; }
-.offer-lead { margin: 0 auto; color: #70788e; font-size: 16px; line-height: 1.6; }
-.program-available { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 26px auto 0; max-width: 620px; text-align: left; padding: 16px 18px; border: 1px solid #e1e4f2; border-radius: 16px; background: #f8f9ff; }
-.program-available span { color: #7b8297; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-.program-available strong { font-size: 16px; }
-.service-offer { max-width: 620px; margin: 20px auto 0; padding: 22px 24px; border: 1px solid #e4e7f2; border-radius: 20px; background: white; text-align: left; box-shadow: 0 14px 36px rgba(48,54,111,.07); }
-.service-offer h4 { margin: 0 0 8px; font-size: 19px; }
-.service-offer p { margin: 0; color: #6f7690; line-height: 1.6; }
-.service-price { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 10px; }
-.service-price strong { font-size: 32px; letter-spacing: -.03em; }
-.service-price span { color: #7b8297; font-size: 13px; font-weight: 700; }
-.refund-copy { font-size: 12px; color: #8a90a3 !important; }
+.eligibility-offer { max-width: 760px; margin: 0 auto; }
+.compact-offer { text-align: left; }
+.compact-offer h3 { margin: 0 0 22px; font-size: 26px; }
+.offer-row { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: baseline; padding: 15px 0; border-bottom: 1px solid #edf0f6; }
+.offer-row span { color: #7b8297; font-size: 13px; }
+.offer-row strong { font-size: 15px; }
+.offer-description { margin: 22px 0 0; max-width: 700px; color: #636b82; line-height: 1.65; font-size: 14px; }
 
 .ownership-summary { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; margin: 20px 0 4px; border-radius: 14px; background: #fafbff; border: 1px solid #e7e9f4; color: #666e87; font-size: 13px; }
 .ownership-summary strong { color: #c45c56; }
@@ -88,6 +86,14 @@ textarea { min-height: 94px; resize: vertical; }
 .validation-error, .form-message { margin: 18px 32px 0; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
 .validation-error { margin-left: 0; margin-right: 0; color: #a14646; background: #fff2f2; border: 1px solid #f1d2d2; }
 .form-message { color: #5f667d; background: #f5f6fb; border: 1px solid #e4e7f0; }
+
+.brc-test-wrap { max-width: 760px; }
+.brc-test-result { margin-top: 24px; padding: 18px; border-radius: 16px; border: 1px solid #e3e6f0; background: #fafbff; }
+.brc-test-result.found { background: #eff9f3; border-color: #cfe8d8; }
+.brc-test-result.not_found { background: #fff9ef; border-color: #eddfbf; }
+.brc-test-result.manual_verification_required { background: #f6f4ff; border-color: #ded8f2; }
+.brc-test-result strong { font-size: 18px; }
+.brc-test-result p { margin: 9px 0 0; color: #616980; line-height: 1.5; }
 
 @media (max-width: 760px) {
   .topbar { padding: 0 18px; }
@@ -103,7 +109,6 @@ textarea { min-height: 94px; resize: vertical; }
   .progress-item small { display: none; }
   .field-grid { grid-template-columns: 1fr; }
   .uez-map { height: 300px; }
-  .program-available { align-items: flex-start; flex-direction: column; gap: 5px; }
-  .eligibility-offer h3 { font-size: 24px; }
+  .offer-row { grid-template-columns: 1fr; gap: 5px; }
   .validation-error, .form-message { margin-left: 20px; margin-right: 20px; }
 }
