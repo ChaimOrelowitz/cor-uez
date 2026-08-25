@@ -1,0 +1,131 @@
+name: Add LDC JotForm workflow
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-ldc-jotform.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch extension and UEZ admin
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f'{label} anchor not found in {path}')
+              p.write_text(s.replace(old, new, 1))
+
+          # Extension manifest: JotForm hosts and helper script.
+          replace_once('brc-helper-extension/manifest.json',
+              '"version": "1.1.2",\n  "description": "Runs BRC and tax-clearance retrieval when started from the COR UEZ admin app.",',
+              '"version": "1.2.0",\n  "description": "Runs BRC, tax-clearance, and Lakewood LDC application workflows from the COR UEZ admin app.",',
+              'manifest version')
+
+          replace_once('brc-helper-extension/manifest.json',
+              '    "https://my.nj.gov/*"\n  ],',
+              '    "https://my.nj.gov/*",\n    "https://form.jotform.com/*",\n    "https://submit.jotform.com/*"\n  ],',
+              'manifest JotForm permissions')
+
+          replace_once('brc-helper-extension/manifest.json',
+              '    {\n      "matches": [\n        "https://*.state.nj.us/*",\n        "https://*.nj.gov/*",\n        "https://my.nj.gov/*"\n      ],\n      "js": ["content.js"],\n      "run_at": "document_idle",\n      "all_frames": true,\n      "match_about_blank": true\n    }\n  ]',
+              '    {\n      "matches": [\n        "https://*.state.nj.us/*",\n        "https://*.nj.gov/*",\n        "https://my.nj.gov/*"\n      ],\n      "js": ["content.js"],\n      "run_at": "document_idle",\n      "all_frames": true,\n      "match_about_blank": true\n    },\n    {\n      "matches": [\n        "https://form.jotform.com/*",\n        "https://submit.jotform.com/*"\n      ],\n      "js": ["jotform.js"],\n      "run_at": "document_idle"\n    }\n  ]',
+              'manifest JotForm content script')
+
+          # Background: add third workflow, data fetch, signed PDF upload, and final status.
+          replace_once('brc-helper-extension/background.js',
+              "async function uploadTaxPdf(job, base64, filename) {\n  const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));\n  const body = new FormData();\n  body.append('documentType', 'tax_clearance');\n  body.append('file', new Blob([bytes], { type: 'application/pdf' }), filename || 'NJ-Tax-Clearance.pdf');\n  await api(job, `/api/uez/applications/${job.applicationId}/documents`, { method: 'POST', body });\n}\n",
+              "async function uploadPdf(job, documentType, base64, filename) {\n  const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));\n  const body = new FormData();\n  body.append('documentType', documentType);\n  body.append('file', new Blob([bytes], { type: 'application/pdf' }), filename);\n  await api(job, `/api/uez/applications/${job.applicationId}/documents`, { method: 'POST', body });\n}\n\nasync function uploadTaxPdf(job, base64, filename) {\n  await uploadPdf(job, 'tax_clearance', base64, filename || 'NJ-Tax-Clearance.pdf');\n}\n\nasync function uploadLdcPdf(job, base64, filename, submissionId) {\n  await uploadPdf(job, 'ldc_application', base64, filename || `Lakewood-LDC-Incentive-Application-${submissionId || 'submitted'}.pdf`);\n  await api(job, `/api/uez/admin/applications/${job.applicationId}/status`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      status: 'ldc_submitted',\n      label: 'LDC application submitted',\n      message: submissionId\n        ? `The Lakewood LDC incentive application was submitted successfully. JotForm submission ID: ${submissionId}.`\n        : 'The Lakewood LDC incentive application was submitted successfully.'\n    })\n  });\n}\n",
+              'background generic PDF upload')
+
+          replace_once('brc-helper-extension/background.js',
+              "  if (!['brc', 'tax_clearance'].includes(message.workflow)) throw new Error('Unknown COR workflow.');",
+              "  if (!['brc', 'tax_clearance', 'ldc_jotform'].includes(message.workflow)) throw new Error('Unknown COR workflow.');",
+              'background workflow allowlist')
+
+          replace_once('brc-helper-extension/background.js',
+              "  const url = job.workflow === 'brc' ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp' : 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp';\n  const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });\n  const tab = popup.tabs?.[0];\n  job = { ...job, tabId: tab?.id || null, windowId: popup.id };\n  await notify(job, job.workflow === 'brc' ? 'opening_brc' : 'opening_pbs');\n  if (tab?.id) await injectNjHelper(tab.id).catch(() => {});",
+              "  const url = job.workflow === 'brc'\n    ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp'\n    : job.workflow === 'tax_clearance'\n      ? 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp'\n      : 'https://form.jotform.com/241936732268060';\n  const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });\n  const tab = popup.tabs?.[0];\n  job = { ...job, tabId: tab?.id || null, windowId: popup.id };\n  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : 'opening_ldc_form';\n  await notify(job, openingStatus);\n  if (tab?.id && job.workflow !== 'ldc_jotform') await injectNjHelper(tab.id).catch(() => {});",
+              'background JotForm popup')
+
+          replace_once('brc-helper-extension/background.js',
+              "    if (message?.type === 'COR_NJ_GET_JOB') return { ok: true, job: { id: job.id, workflow: job.workflow, applicationId: job.applicationId, businessName: job.businessName, ein: job.ein, status: job.status, credentials: job.credentials || null } };\n    if (message?.type === 'COR_NJ_STATUS')",
+              "    if (message?.type === 'COR_NJ_GET_JOB') return { ok: true, job: { id: job.id, workflow: job.workflow, applicationId: job.applicationId, businessName: job.businessName, ein: job.ein, status: job.status, credentials: job.credentials || null } };\n    if (message?.type === 'COR_JOTFORM_GET_DATA') {\n      if (job.workflow !== 'ldc_jotform' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching LDC form workflow is active.' };\n      const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);\n      return { ok: true, detail };\n    }\n    if (message?.type === 'COR_NJ_STATUS')",
+              'background JotForm data bridge')
+
+          replace_once('brc-helper-extension/background.js',
+              "    if (message?.type === 'COR_TAX_PDF') {\n      await notify(job, 'uploading_tax_clearance');\n      try {\n        await uploadTaxPdf(job, message.base64, message.filename);\n        await notify(job, 'complete');\n        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);\n      } catch (err) {\n        await fail(job, err);\n      }\n      await setJob(null);\n      return { ok: true };\n    }\n    if (message?.type === 'COR_NJ_ERROR')",
+              "    if (message?.type === 'COR_TAX_PDF') {\n      await notify(job, 'uploading_tax_clearance');\n      try {\n        await uploadTaxPdf(job, message.base64, message.filename);\n        await notify(job, 'complete');\n        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);\n      } catch (err) {\n        await fail(job, err);\n      }\n      await setJob(null);\n      return { ok: true };\n    }\n    if (message?.type === 'COR_LDC_PDF') {\n      if (job.workflow !== 'ldc_jotform' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching LDC form workflow is active.' };\n      await notify(job, 'uploading_ldc_application');\n      try {\n        await uploadLdcPdf(job, message.base64, message.filename, message.submissionId);\n        await notify(job, 'complete', { submissionId: message.submissionId || null });\n        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);\n      } catch (err) {\n        await fail(job, err);\n      }\n      await setJob(null);\n      return { ok: true };\n    }\n    if (message?.type === 'COR_NJ_ERROR')",
+              'background LDC PDF handler')
+
+          # JotForm helper: leave fax blank and automatically advance signed form to preview.
+          replace_once('brc-helper-extension/jotform.js',
+              "    setField('q8_businessPhone[full]', businessPhone);\n    setField('q9_fax', businessPhone);\n    setField('q74_email', application.contact_email || primary.email || '');",
+              "    setField('q8_businessPhone[full]', businessPhone);\n    setField('q74_email', application.contact_email || primary.email || '');",
+              'JotForm fax handling')
+
+          replace_once('brc-helper-extension/jotform.js',
+              "      if (applicantSigned && coApplicantSigned) {\n        notice('COR filled the application. Review the signed PDF preview and click the final Submit button when ready.');\n        await notifyStatus('waiting_for_final_submit');\n      } else {",
+              "      if (applicantSigned && coApplicantSigned) {\n        const previewKey = `corLdcPreview:${job.id}`;\n        const page = visiblePage();\n        const previewButton = [...(page || document).querySelectorAll('button[type=\"submit\"], input[type=\"submit\"], .form-submit-button')].find((button) => button.offsetParent !== null && !button.disabled);\n        if (previewButton && !sessionStorage.getItem(previewKey)) {\n          sessionStorage.setItem(previewKey, '1');\n          notice('Signatures complete. COR is generating the JotForm PDF preview…');\n          await notifyStatus('generating_ldc_preview');\n          setTimeout(() => previewButton.click(), 250);\n          return;\n        }\n        notice('Review the generated application PDF and click the final Submit button when ready.');\n        await notifyStatus('waiting_for_final_submit');\n      } else {",
+              'JotForm signature to preview')
+
+          # Admin labels and workflow statuses.
+          replace_once('src/AdminPage.jsx',
+              "  if (type === 'tax_clearance') return 'Tax-clearance letter';\n  if (type === 'supporting') return 'Supporting';",
+              "  if (type === 'tax_clearance') return 'Tax-clearance letter';\n  if (type === 'ldc_application') return 'LDC incentive application';\n  if (type === 'supporting') return 'Supporting';",
+              'admin LDC document label')
+
+          replace_once('src/AdminPage.jsx',
+              "      requesting_tax_clearance_pdf: 'Selecting the Department of Community Affairs and requesting the letter…',\n      uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…'",
+              "      requesting_tax_clearance_pdf: 'Selecting the Department of Community Affairs and requesting the letter…',\n      uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…',\n      opening_ldc_form: 'Opening the Lakewood LDC incentive application…',\n      filling_ldc_form: 'COR is filling the Lakewood LDC application…',\n      waiting_for_signature: 'Application filled. Add the required signature in the JotForm popup.',\n      generating_ldc_preview: 'Signature received. Generating the JotForm PDF preview…',\n      waiting_for_final_submit: 'Review the generated application and click the final Submit button in JotForm.',\n      downloading_ldc_pdf: 'Application submitted. Downloading JotForm’s signed PDF…',\n      uploading_ldc_application: 'Saving the signed LDC application PDF to this UEZ file…'",
+              'admin LDC status messages')
+
+          replace_once('src/AdminPage.jsx',
+              "          timer = window.setTimeout(() => finish(new Error('The New Jersey document session timed out. Start it again when ready.')), 25 * 60 * 1000);",
+              "          timer = window.setTimeout(() => finish(new Error('The COR workflow session timed out. Start it again when ready.')), 25 * 60 * 1000);",
+              'admin generic workflow timeout')
+
+          replace_once('src/AdminPage.jsx',
+              "  async function runTaxClearance() {\n    setBusy(true);\n    setMessage('Starting the COR Chrome extension…');\n    try {\n      const currentSession = await getApplicantSession();\n      if (!currentSession?.access_token) throw new Error('Please sign in again before retrieving tax clearance.');\n\n      const outcome = await runExtensionWorkflow('tax_clearance', {\n        applicationId: detail.application.id,\n        businessName: detail.application.registered_business_name || detail.application.business_name_input,\n        accessToken: currentSession.access_token\n      });\n      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');\n      await refreshList(detail.application.id);\n      setMessage('Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');\n    } catch (err) {\n      setMessage(err.message);\n    } finally {\n      setBusy(false);\n    }\n  }",
+              "  async function runTaxClearance() {\n    setBusy(true);\n    setMessage('Starting the COR Chrome extension…');\n    try {\n      const currentSession = await getApplicantSession();\n      if (!currentSession?.access_token) throw new Error('Please sign in again before retrieving tax clearance.');\n\n      const outcome = await runExtensionWorkflow('tax_clearance', {\n        applicationId: detail.application.id,\n        businessName: detail.application.registered_business_name || detail.application.business_name_input,\n        accessToken: currentSession.access_token\n      });\n      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');\n      await refreshList(detail.application.id);\n      setMessage('Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');\n    } catch (err) {\n      setMessage(err.message);\n    } finally {\n      setBusy(false);\n    }\n  }\n\n  async function runLdcJotform() {\n    setBusy(true);\n    setMessage('Starting the COR Chrome extension…');\n    try {\n      const currentSession = await getApplicantSession();\n      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the LDC application.');\n\n      const outcome = await runExtensionWorkflow('ldc_jotform', {\n        applicationId: detail.application.id,\n        businessName: detail.application.registered_business_name || detail.application.business_name_input,\n        accessToken: currentSession.access_token\n      });\n      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The LDC application workflow did not finish.');\n      await refreshList(detail.application.id);\n      setMessage('LDC application submitted. The signed JotForm PDF is saved in this applicant’s Documents.');\n    } catch (err) {\n      setMessage(err.message);\n    } finally {\n      setBusy(false);\n    }\n  }",
+              'admin LDC runner')
+
+          replace_once('src/AdminPage.jsx',
+              "              <button className=\"secondary admin-full-button\" onClick={markReadyForLdc} disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded'}>Mark ready for grant processing</button>\n              <p className=\"admin-help\">This becomes available after the applicant uploads the required UEZ approval email.</p>\n              <div className=\"admin-timeline\">",
+              "              <button className=\"secondary admin-full-button\" onClick={markReadyForLdc} disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded'}>Mark ready for grant processing</button>\n              <p className=\"admin-help\">This becomes available after the applicant uploads the required UEZ approval email.</p>\n              <button\n                className=\"primary admin-full-button\"\n                onClick={runLdcJotform}\n                disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded' || !detail.documents.some((doc) => doc.document_type === 'tax_clearance') || detail.documents.some((doc) => doc.document_type === 'ldc_application')}\n              >{detail.documents.some((doc) => doc.document_type === 'ldc_application') ? '✓ LDC application submitted' : 'Fill & submit LDC application'}</button>\n              <p className=\"admin-help\">COR fills the Lakewood JotForm, pauses for the required signature, then saves JotForm’s completed signed PDF here after final submission.</p>\n              <div className=\"admin-timeline\">",
+              'admin LDC workflow button')
+
+          # Applicant-facing document label for the completed grant application.
+          replace_once('src/App.jsx',
+              "    tax_clearance: 'New Jersey tax-clearance letter',\n    supporting: 'Supporting document'",
+              "    tax_clearance: 'New Jersey tax-clearance letter',\n    ldc_application: 'Lakewood LDC incentive application',\n    supporting: 'Supporting document'",
+              'app LDC document label')
+
+          Path('.github/workflows/add-ldc-jotform.yml').unlink()
+          PY
+
+      - name: Verify code
+        run: |
+          node --check brc-helper-extension/background.js
+          node --check brc-helper-extension/jotform.js
+          node -e "JSON.parse(require('fs').readFileSync('brc-helper-extension/manifest.json','utf8')); console.log('manifest ok')"
+          npm install --ignore-scripts
+          npm run build
+          node --check backend/routes/uez.js
+
+      - name: Commit LDC workflow
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add brc-helper-extension/manifest.json brc-helper-extension/background.js brc-helper-extension/jotform.js src/AdminPage.jsx src/App.jsx .github/workflows/add-ldc-jotform.yml
+          git commit -m "Add Lakewood LDC JotForm submission workflow"
+          git push
