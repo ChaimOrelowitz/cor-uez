@@ -60,33 +60,10 @@
     }
 
     if (job.workflow === 'brc') {
-      if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && /Certificate Number:/i.test(text)) {
-        sent = true;
-        notice('COR found the Business Registration Certificate! Saving to file…');
-        await send({
-          type: 'COR_BRC_FOUND',
-          result: {
-            taxpayerName: between(text, 'Taxpayer Name:', 'Trade Name:') || between(text, 'Taxpayer Name:', 'Address:'),
-            tradeName: between(text, 'Trade Name:', 'Address:') || '',
-            address: between(text, 'Address:', 'Certificate Number:'),
-            certificateNumber: between(text, 'Certificate Number:', 'Effective Date:'),
-            effectiveDate: between(text, 'Effective Date:', 'Date of Issuance:'),
-            issuanceDate: between(text, 'Date of Issuance:', 'For Office Use Only:') || between(text, 'Date of Issuance:', 'State of New Jersey')
-          },
-          html: document.documentElement.outerHTML
-        });
-        return;
-      }
-
-      if (/There was no match on the fields entered/i.test(text)) {
-        sent = true;
-        await send({ type: 'COR_BRC_NOT_FOUND' });
-        return;
-      }
-
       const nameInput = document.querySelector('input[name="pinnctl"]');
       const taxInput = document.querySelector('input[name="pinidnum"]');
 
+      // 1. If we are on the lookup form page, fill and submit!
       if (nameInput && taxInput) {
         const control = job.businessName.replace(/[^a-z0-9]/gi, '').slice(0, 4);
         const digits = job.ein.replace(/\D/g, '').slice(0, 9);
@@ -107,17 +84,45 @@
 
         if (submitBtn && (!sessionStorage.getItem(submissionKey) || filledAny)) {
           sessionStorage.setItem(submissionKey, '1');
-          notice('COR filled the BRC lookup form. Submitting…');
+          notice(`COR filled BRC form (${control.toUpperCase()} / ${fullTaxId}). Submitting…`);
           await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
           submitBtn.click();
         } else {
-          notice('COR filled the BRC lookup form. Complete any CAPTCHA verification if shown.');
+          notice(`COR filled BRC form (${control.toUpperCase()} / ${fullTaxId}). Complete any CAPTCHA if shown.`);
           await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
         }
-      } else {
-        notice('COR is waiting for New Jersey page to load. Complete any security verification if shown.');
-        await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
+        return;
       }
+
+      // 2. If we are on the certificate result page (no search inputs present)
+      if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && /Effective Date:/i.test(text) && /Date of Issuance:/i.test(text)) {
+        sent = true;
+        notice('COR found the official BRC certificate! Saving PDF to file…');
+        await send({
+          type: 'COR_BRC_FOUND',
+          result: {
+            taxpayerName: between(text, 'Taxpayer Name:', 'Trade Name:') || between(text, 'Taxpayer Name:', 'Address:'),
+            tradeName: between(text, 'Trade Name:', 'Address:') || '',
+            address: between(text, 'Address:', 'Certificate Number:'),
+            certificateNumber: between(text, 'Certificate Number:', 'Effective Date:'),
+            effectiveDate: between(text, 'Effective Date:', 'Date of Issuance:'),
+            issuanceDate: between(text, 'Date of Issuance:', 'For Office Use Only:') || between(text, 'Date of Issuance:', 'State of New Jersey')
+          },
+          html: document.documentElement.outerHTML
+        });
+        return;
+      }
+
+      // 3. No match found on NJ database
+      if (/There was no match on the fields entered/i.test(text)) {
+        sent = true;
+        notice('NJ reported no matching BRC found.');
+        await send({ type: 'COR_BRC_NOT_FOUND' });
+        return;
+      }
+
+      notice('COR is waiting for New Jersey page to load. Complete any security verification if shown.');
+      await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
       return;
     }
 
@@ -208,7 +213,6 @@
     try { await runOnce(); } finally { running = false; }
   }
 
-  // Poll every 500ms to catch dynamic Incapsula challenge page resolution
   const pollInterval = setInterval(() => {
     if (sent) { clearInterval(pollInterval); return; }
     run().catch(() => {});
