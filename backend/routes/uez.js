@@ -457,6 +457,91 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
   }
 });
 
+router.patch('/admin/applications/:id', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const body = req.body || {};
+    const ein = normalizeEin(body.ein);
+    const yearFounded = body.yearFounded === '' || body.yearFounded == null ? null : Number(body.yearFounded);
+    const fullTimeEmployees = body.fullTimeEmployees === '' || body.fullTimeEmployees == null ? null : Number(body.fullTimeEmployees);
+    const partTimeEmployees = body.partTimeEmployees === '' || body.partTimeEmployees == null ? null : Number(body.partTimeEmployees);
+
+    if (!String(body.businessName || '').trim()) return res.status(400).json({ error: 'Business name is required.' });
+    if (ein.length !== 9) return res.status(400).json({ error: 'Enter a valid 9-digit EIN.' });
+    if (!String(body.contactEmail || '').trim()) return res.status(400).json({ error: 'Contact email is required.' });
+    if (yearFounded != null && (!Number.isInteger(yearFounded) || yearFounded < 1800 || yearFounded > new Date().getFullYear())) {
+      return res.status(400).json({ error: 'Enter a valid year founded.' });
+    }
+    if (fullTimeEmployees != null && (!Number.isInteger(fullTimeEmployees) || fullTimeEmployees < 0)) {
+      return res.status(400).json({ error: 'Full-time employees must be zero or greater.' });
+    }
+    if (partTimeEmployees != null && (!Number.isInteger(partTimeEmployees) || partTimeEmployees < 0)) {
+      return res.status(400).json({ error: 'Part-time employees must be zero or greater.' });
+    }
+
+    const patch = {
+      contact_email: String(body.contactEmail).trim().toLowerCase(),
+      contact_phone: String(body.contactPhone || '').trim() || null,
+      business_name_input: String(body.businessName).trim(),
+      registered_business_name: String(body.registeredBusinessName || '').trim() || null,
+      ein,
+      business_description: String(body.businessDescription || '').trim() || null,
+      year_founded: yearFounded,
+      is_sole_proprietorship: body.isSoleProprietorship === true,
+      full_time_employees: fullTimeEmployees,
+      part_time_employees: partTimeEmployees,
+      address_line1: String(body.addressLine1 || '').trim() || null,
+      address_line2: String(body.addressLine2 || '').trim() || null,
+      city: String(body.city || '').trim() || null,
+      state: String(body.state || 'NJ').trim().toUpperCase().slice(0, 2) || 'NJ',
+      zip: String(body.zip || '').trim() || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase.from('uez_applications')
+      .update(patch)
+      .eq('id', application.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/admin/applications/:id', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('id, business_name_input')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const { data: documents, error: docsError } = await supabase.from('uez_documents')
+      .select('storage_path')
+      .eq('application_id', application.id);
+    if (docsError) throw docsError;
+
+    const storagePaths = (documents || []).map((doc) => doc.storage_path).filter(Boolean);
+    if (storagePaths.length) {
+      const { error: storageError } = await supabase.storage.from(DOCUMENT_BUCKET).remove(storagePaths);
+      if (storageError) throw storageError;
+    }
+
+    const { error } = await supabase.from('uez_applications').delete().eq('id', application.id);
+    if (error) throw error;
+    res.json({ ok: true, id: application.id });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/admin/applications/:id/brc-found', requireUezAdmin, async (req, res) => {
   try {
     const { data: application, error: appError } = await supabase.from('uez_applications')

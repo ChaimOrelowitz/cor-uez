@@ -111,6 +111,9 @@
 .admin-header-status span { display: inline-block; background: #eef0ff; color: #5f67d6; border-radius: 999px; padding: 8px 11px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .admin-header-status small { display: block; color: #9a9faf; margin-top: 7px; }
 .admin-message { padding: 12px 14px; border-radius: 12px; background: #f0f2ff; color: #5962c9; margin-bottom: 16px; font-size: 12px; }
+.admin-edit-actions { display: flex; justify-content: flex-end; gap: 9px; margin: -4px 0 16px; }
+.admin-edit-actions button { width: auto; min-width: 130px; }
+.admin-delete-button, .owner-remove-button { border: 1px solid #efc6c1; background: #fff5f3; color: #aa493f; border-radius: 10px; padding: 9px 12px; font-weight: 800; }
 .admin-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .admin-card { background: white; border: 1px solid #e4e7f0; border-radius: 18px; padding: 20px; box-shadow: 0 10px 30px rgba(42,49,91,.04); }
 .admin-wide { grid-column: 1 / -1; }
@@ -122,6 +125,14 @@
 .data-wide { grid-column: 1 / -1; }
 .data-grid dt { color: #9499a9; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
 .data-grid dd { margin: 4px 0 0; font-size: 13px; line-height: 1.4; word-break: break-word; }
+.admin-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 15px; }
+.admin-edit-grid label { display: block; margin-bottom: 5px; color: #747b8d; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.required-star { color: #d13f36; }
+.admin-edit-grid input, .admin-edit-grid textarea { width: 100%; padding: 10px 11px; border: 1px solid #dfe2eb; border-radius: 10px; background: white; box-sizing: border-box; }
+.admin-edit-grid textarea { resize: vertical; font: inherit; }
+.admin-edit-wide { grid-column: 1 / -1; }
+.admin-checkbox { display: flex !important; align-items: center; gap: 8px; text-transform: none !important; }
+.admin-checkbox input { width: auto; }
 .lookup-values { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 0; }
 .lookup-values span { background: #f6f7fb; border-radius: 10px; padding: 9px 10px; color: #7b8193; font-size: 10px; }
 .lookup-values strong { color: #323a52; margin-left: 4px; letter-spacing: .04em; }
@@ -142,6 +153,10 @@
 .owner-admin-card { padding: 15px; border: 1px solid #e8eaf2; border-radius: 14px; background: #fbfcff; }
 .owner-admin-title { display: flex; justify-content: space-between; }
 .owner-admin-title span { color: #626bd7; font-weight: 800; font-size: 12px; }
+.owner-admin-title .owner-remove-button { padding: 6px 9px; font-size: 10px; }
+.owner-edit-list { grid-template-columns: 1fr; }
+.owner-edit-grid { grid-template-columns: repeat(3, 1fr); }
+.admin-add-owner { margin-top: 12px; }
 .compact-data > div { padding: 9px 0; }
 .admin-document-list { padding-top: 7px; }
 .admin-document-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; border: 0; border-bottom: 1px solid #eef0f5; background: transparent; padding: 12px 4px; text-align: left; }
@@ -174,6 +189,10 @@
   .admin-header-status { text-align: left; }
   .admin-two-col, .data-grid { grid-template-columns: 1fr; }
   .admin-action-row { grid-template-columns: 1fr; }
+  .admin-edit-actions { justify-content: stretch; flex-direction: column; }
+  .admin-edit-actions button { width: 100%; }
+  .admin-edit-grid, .owner-edit-grid { grid-template-columns: 1fr; }
+  .admin-edit-wide { grid-column: auto; }
   .admin-top-actions a { display: none; }
   .admin-detail-header h1 { font-size: 25px; }
   .uploaded-doc-row { grid-template-columns: 1fr; gap: 3px; }

@@ -124,6 +124,19 @@ export function getAdminApplication(applicationId) {
   return request(`/api/uez/admin/applications/${applicationId}`);
 }
 
+export function updateAdminApplication(applicationId, payload) {
+  return request(`/api/uez/admin/applications/${applicationId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteAdminApplication(applicationId) {
+  return request(`/api/uez/admin/applications/${applicationId}`, {
+    method: 'DELETE'
+  });
+}
+
 export function markAdminBrcFound(applicationId, payload) {
   return request(`/api/uez/admin/applications/${applicationId}/brc-found`, {
     method: 'POST',

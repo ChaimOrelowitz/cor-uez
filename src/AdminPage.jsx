@@ -4,10 +4,13 @@ import {
   getAdminApplications,
   getApplicantSession,
   getDocumentUrl,
+  deleteAdminApplication,
   markAdminBrcFound,
   markAdminBrcNotFound,
+  saveOwners,
   signInApplicant,
   signOutApplicant,
+  updateAdminApplication,
   updateAdminApplicationStatus,
   whoAmI
 } from './api';
@@ -54,6 +57,71 @@ function formatSsn(value) {
   const digits = String(value || '').replace(/\D/g, '');
   if (digits.length !== 9) return value || '—';
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+function formatPhoneInput(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function formatSsnInput(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}
+
+function formatDob(value) {
+  const text = String(value || '').trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[2]}/${iso[3]}/${iso[1]}`;
+  return text;
+}
+
+function formatDobInput(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function applicationDraftFrom(app) {
+  return {
+    contactEmail: app.contact_email || '',
+    contactPhone: formatPhoneInput(app.contact_phone),
+    businessName: app.business_name_input || '',
+    registeredBusinessName: app.registered_business_name || '',
+    ein: app.ein || '',
+    businessDescription: app.business_description || '',
+    yearFounded: app.year_founded ?? '',
+    isSoleProprietorship: app.is_sole_proprietorship === true,
+    fullTimeEmployees: app.full_time_employees ?? '',
+    partTimeEmployees: app.part_time_employees ?? '',
+    addressLine1: app.address_line1 || '',
+    addressLine2: app.address_line2 || '',
+    city: app.city || '',
+    state: app.state || 'NJ',
+    zip: app.zip || ''
+  };
+}
+
+function ownerDraftFrom(owner = {}) {
+  return {
+    firstName: owner.firstName || '',
+    lastName: owner.lastName || '',
+    email: owner.email || '',
+    phone: formatPhoneInput(owner.phone),
+    dob: formatDob(owner.dob),
+    ssn: formatSsnInput(owner.ssn),
+    ownershipPercent: owner.ownershipPercent ?? '',
+    addressLine1: owner.addressLine1 || '',
+    addressLine2: owner.addressLine2 || '',
+    city: owner.city || '',
+    state: owner.state || 'NJ',
+    zip: owner.zip || ''
+  };
 }
 
 function openOfficialBrcLookup(application) {
@@ -104,6 +172,9 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [editMode, setEditMode] = useState(false);
+  const [applicationDraft, setApplicationDraft] = useState(null);
+  const [ownerDrafts, setOwnerDrafts] = useState([]);
   const [brcForm, setBrcForm] = useState({
     registeredBusinessName: '',
     tradeName: '',
@@ -150,6 +221,9 @@ export default function AdminPage() {
       const data = await getAdminApplication(id);
       setDetail(data);
       const app = data.application;
+      setApplicationDraft(applicationDraftFrom(app));
+      setOwnerDrafts((data.owners || []).map(ownerDraftFrom));
+      setEditMode(false);
       const brc = app.brc_data || {};
       setBrcForm({
         registeredBusinessName: app.brc_registered_name || app.registered_business_name || app.business_name_input || '',
@@ -250,6 +324,92 @@ export default function AdminPage() {
       setMessage(connectionProblem
         ? 'The BRC checker is not running on this computer. Start npm run brc-checker in the repository backend folder, then click this button again.'
         : err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateApplicationDraft(field, value) {
+    setApplicationDraft((old) => ({ ...old, [field]: value }));
+  }
+
+  function updateOwnerDraft(index, field, value) {
+    setOwnerDrafts((old) => old.map((owner, ownerIndex) => (
+      ownerIndex === index ? { ...owner, [field]: value } : owner
+    )));
+  }
+
+  function startEditing() {
+    setApplicationDraft(applicationDraftFrom(detail.application));
+    setOwnerDrafts((detail.owners || []).map(ownerDraftFrom));
+    setMessage('');
+    setEditMode(true);
+  }
+
+  function cancelEditing() {
+    setApplicationDraft(applicationDraftFrom(detail.application));
+    setOwnerDrafts((detail.owners || []).map(ownerDraftFrom));
+    setMessage('');
+    setEditMode(false);
+  }
+
+  function addOwner() {
+    setOwnerDrafts((old) => [...old, ownerDraftFrom()]);
+  }
+
+  function removeOwner(index) {
+    if (ownerDrafts.length === 1) {
+      setMessage('An application must keep at least one owner. Delete the application instead if it should be removed entirely.');
+      return;
+    }
+    setOwnerDrafts((old) => old.filter((_, ownerIndex) => ownerIndex !== index));
+  }
+
+  async function saveAdminEdits() {
+    const ownershipTotal = ownerDrafts.reduce((sum, owner) => sum + (Number(owner.ownershipPercent) || 0), 0);
+    if (Math.abs(ownershipTotal - 100) > 0.001) {
+      setMessage(`Ownership percentages must total exactly 100%. They currently total ${ownershipTotal}%.`);
+      return;
+    }
+    if (!applicationDraft.businessName.trim() || !applicationDraft.contactEmail.trim()) {
+      setMessage('Business name and contact email are required.');
+      return;
+    }
+
+    setBusy(true);
+    setMessage('Saving application changes…');
+    try {
+      await saveOwners(detail.application.id, ownerDrafts);
+      await updateAdminApplication(detail.application.id, applicationDraft);
+      await refreshList(detail.application.id);
+      setEditMode(false);
+      setMessage('All applicant and owner changes were saved.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteApplication() {
+    const confirmation = window.prompt(
+      `This permanently deletes ${detail.application.business_name_input}, its owners, documents, and application history. Type DELETE to continue.`
+    );
+    if (confirmation !== 'DELETE') return;
+
+    setBusy(true);
+    setMessage('Deleting the UEZ application…');
+    try {
+      await deleteAdminApplication(detail.application.id);
+      const rows = await getAdminApplications();
+      setApplications(rows || []);
+      setSelectedId(null);
+      setDetail(null);
+      setEditMode(false);
+      if (rows?.[0]?.id) await openApplication(rows[0].id);
+      setMessage('The UEZ application and its documents were permanently deleted. The person’s login was not deleted.');
+    } catch (err) {
+      setMessage(err.message);
     } finally {
       setBusy(false);
     }
@@ -386,18 +546,46 @@ export default function AdminPage() {
 
           {message && <div className="admin-message">{message}</div>}
 
+          <div className="admin-edit-actions">
+            {editMode ? <>
+              <button className="primary" onClick={saveAdminEdits} disabled={busy}>{busy ? 'Saving…' : 'Save all changes'}</button>
+              <button className="secondary" onClick={cancelEditing} disabled={busy}>Cancel</button>
+            </> : <button className="secondary" onClick={startEditing} disabled={busy}>Edit application</button>}
+            <button className="admin-delete-button" onClick={deleteApplication} disabled={busy}>Delete application</button>
+          </div>
+
           <div className="admin-card-grid">
             <section className="admin-card">
               <div className="admin-card-head"><h3>Business</h3><span>{programLabel(detail.application.program_code)}</span></div>
-              <dl className="data-grid">
+              {editMode ? <div className="admin-edit-grid">
+                <div><label>Business name <span className="required-star">*</span></label><input value={applicationDraft.businessName} onChange={(e) => updateApplicationDraft('businessName', e.target.value)} /></div>
+                <div><label>Registered business name</label><input value={applicationDraft.registeredBusinessName} onChange={(e) => updateApplicationDraft('registeredBusinessName', e.target.value)} /></div>
+                <div><label>Contact email <span className="required-star">*</span></label><input type="email" value={applicationDraft.contactEmail} onChange={(e) => updateApplicationDraft('contactEmail', e.target.value)} /></div>
+                <div><label>Contact phone</label><input inputMode="tel" value={applicationDraft.contactPhone} onChange={(e) => updateApplicationDraft('contactPhone', formatPhoneInput(e.target.value))} /></div>
+                <div><label>EIN <span className="required-star">*</span></label><input inputMode="numeric" value={applicationDraft.ein} onChange={(e) => updateApplicationDraft('ein', e.target.value.replace(/\D/g, '').slice(0, 9))} /></div>
+                <div><label>Year founded</label><input type="number" value={applicationDraft.yearFounded} onChange={(e) => updateApplicationDraft('yearFounded', e.target.value)} /></div>
+                <div><label>Full-time employees</label><input type="number" min="0" value={applicationDraft.fullTimeEmployees} onChange={(e) => updateApplicationDraft('fullTimeEmployees', e.target.value)} /></div>
+                <div><label>Part-time employees</label><input type="number" min="0" value={applicationDraft.partTimeEmployees} onChange={(e) => updateApplicationDraft('partTimeEmployees', e.target.value)} /></div>
+                <div className="admin-edit-wide"><label>Address <span className="required-star">*</span></label><input value={applicationDraft.addressLine1} onChange={(e) => updateApplicationDraft('addressLine1', e.target.value)} /></div>
+                <div className="admin-edit-wide"><label>Address line 2</label><input value={applicationDraft.addressLine2} onChange={(e) => updateApplicationDraft('addressLine2', e.target.value)} /></div>
+                <div><label>City</label><input value={applicationDraft.city} onChange={(e) => updateApplicationDraft('city', e.target.value)} /></div>
+                <div><label>State</label><input maxLength="2" value={applicationDraft.state} onChange={(e) => updateApplicationDraft('state', e.target.value.toUpperCase())} /></div>
+                <div><label>ZIP</label><input value={applicationDraft.zip} onChange={(e) => updateApplicationDraft('zip', e.target.value)} /></div>
+                <label className="admin-checkbox"><input type="checkbox" checked={applicationDraft.isSoleProprietorship} onChange={(e) => updateApplicationDraft('isSoleProprietorship', e.target.checked)} /> Sole proprietorship</label>
+                <div className="admin-edit-wide"><label>Business description</label><textarea rows="4" value={applicationDraft.businessDescription} onChange={(e) => updateApplicationDraft('businessDescription', e.target.value)} /></div>
+              </div> : <dl className="data-grid">
                 <div><dt>Business name</dt><dd>{detail.application.business_name_input}</dd></div>
+                <div><dt>Registered name</dt><dd>{detail.application.registered_business_name || '—'}</dd></div>
+                <div><dt>Contact email</dt><dd>{detail.application.contact_email || '—'}</dd></div>
+                <div><dt>Contact phone</dt><dd>{detail.application.contact_phone || '—'}</dd></div>
                 <div><dt>EIN</dt><dd>{detail.application.ein || '—'}</dd></div>
-                <div><dt>Address</dt><dd>{detail.application.address_line1 || '—'}</dd></div>
+                <div><dt>Address</dt><dd>{[detail.application.address_line1, detail.application.address_line2, detail.application.city, detail.application.state, detail.application.zip].filter(Boolean).join(', ') || '—'}</dd></div>
                 <div><dt>UEZ</dt><dd>{detail.application.zone_name || '—'}</dd></div>
                 <div><dt>Founded</dt><dd>{detail.application.year_founded || '—'}</dd></div>
                 <div><dt>Employees</dt><dd>{detail.application.full_time_employees ?? 0} FT · {detail.application.part_time_employees ?? 0} PT</dd></div>
+                <div><dt>Business type</dt><dd>{detail.application.is_sole_proprietorship ? 'Sole proprietorship' : 'Entity'}</dd></div>
                 <div className="data-wide"><dt>Description</dt><dd>{detail.application.business_description || '—'}</dd></div>
-              </dl>
+              </dl>}
             </section>
 
             <section className="admin-card brc-admin-card">
@@ -426,18 +614,43 @@ export default function AdminPage() {
             </section>
 
             <section className="admin-card admin-wide">
-              <div className="admin-card-head"><h3>Owners</h3><span>{detail.owners.length}</span></div>
-              <div className="owner-admin-list">
+              <div className="admin-card-head"><h3>Owners</h3><span>{editMode ? ownerDrafts.length : detail.owners.length}</span></div>
+              {editMode ? <>
+                <div className="owner-admin-list owner-edit-list">
+                  {ownerDrafts.map((owner, index) => <div className="owner-admin-card" key={`owner-edit-${index}`}>
+                    <div className="owner-admin-title">
+                      <strong>Owner {index + 1}</strong>
+                      <button className="owner-remove-button" type="button" onClick={() => removeOwner(index)}>Remove owner</button>
+                    </div>
+                    <div className="admin-edit-grid owner-edit-grid">
+                      <div><label>First name <span className="required-star">*</span></label><input value={owner.firstName} onChange={(e) => updateOwnerDraft(index, 'firstName', e.target.value)} /></div>
+                      <div><label>Last name <span className="required-star">*</span></label><input value={owner.lastName} onChange={(e) => updateOwnerDraft(index, 'lastName', e.target.value)} /></div>
+                      <div><label>Email <span className="required-star">*</span></label><input type="email" value={owner.email} onChange={(e) => updateOwnerDraft(index, 'email', e.target.value)} /></div>
+                      <div><label>Phone <span className="required-star">*</span></label><input inputMode="tel" value={owner.phone} onChange={(e) => updateOwnerDraft(index, 'phone', formatPhoneInput(e.target.value))} /></div>
+                      <div><label>Date of birth (MM/DD/YYYY) <span className="required-star">*</span></label><input inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={(e) => updateOwnerDraft(index, 'dob', formatDobInput(e.target.value))} /></div>
+                      <div><label>SSN <span className="required-star">*</span></label><input inputMode="numeric" placeholder="###-##-####" value={owner.ssn} onChange={(e) => updateOwnerDraft(index, 'ssn', formatSsnInput(e.target.value))} /></div>
+                      <div><label>Ownership percentage <span className="required-star">*</span></label><input type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={(e) => updateOwnerDraft(index, 'ownershipPercent', e.target.value)} /></div>
+                      <div><label>Address <span className="required-star">*</span></label><input value={owner.addressLine1} onChange={(e) => updateOwnerDraft(index, 'addressLine1', e.target.value)} /></div>
+                      <div><label>Address line 2</label><input value={owner.addressLine2} onChange={(e) => updateOwnerDraft(index, 'addressLine2', e.target.value)} /></div>
+                      <div><label>City <span className="required-star">*</span></label><input value={owner.city} onChange={(e) => updateOwnerDraft(index, 'city', e.target.value)} /></div>
+                      <div><label>State <span className="required-star">*</span></label><input maxLength="2" value={owner.state} onChange={(e) => updateOwnerDraft(index, 'state', e.target.value.toUpperCase())} /></div>
+                      <div><label>ZIP <span className="required-star">*</span></label><input value={owner.zip} onChange={(e) => updateOwnerDraft(index, 'zip', e.target.value)} /></div>
+                    </div>
+                  </div>)}
+                </div>
+                <button className="secondary admin-add-owner" type="button" onClick={addOwner}>+ Add owner</button>
+              </> : <div className="owner-admin-list">
                 {detail.owners.map((owner) => <div className="owner-admin-card" key={owner.id}>
                   <div className="owner-admin-title"><strong>{owner.firstName} {owner.lastName}</strong><span>{owner.ownershipPercent}%</span></div>
                   <dl className="data-grid compact-data">
                     <div><dt>Email</dt><dd>{owner.email || '—'}</dd></div>
                     <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>
-                    <div><dt>DOB</dt><dd>{owner.dob || '—'}</dd></div>
+                    <div><dt>DOB</dt><dd>{formatDob(owner.dob) || '—'}</dd></div>
                     <div><dt>SSN</dt><dd>{formatSsn(owner.ssn)}</dd></div>
+                    <div className="data-wide"><dt>Address</dt><dd>{[owner.addressLine1, owner.addressLine2, owner.city, owner.state, owner.zip].filter(Boolean).join(', ') || '—'}</dd></div>
                   </dl>
                 </div>)}
-              </div>
+              </div>}
             </section>
 
             <section className="admin-card">
