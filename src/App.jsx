@@ -313,6 +313,11 @@ export default function App() {
     setBusy(true);
     setMessage('');
     try {
+      localStorage.setItem('uez_pending_application', JSON.stringify({
+        email: form.email.trim(),
+        address: eligibility?.matchedAddress || form.address,
+        eligibility
+      }));
       const auth = await signUpApplicant(form.email.trim(), form.password);
       if (!auth.session) {
         setSignInMode(true);
@@ -329,6 +334,7 @@ export default function App() {
         programCode: eligibility?.programs?.[0]?.code || null
       });
       setApplicationId(app.id);
+      localStorage.removeItem('uez_pending_application');
       setForm((old) => ({
         ...old,
         owners: old.owners.map((owner, index) => index === 0 && !owner.email ? { ...owner, email: old.email } : owner)
@@ -354,9 +360,43 @@ export default function App() {
       setSession(auth.session || null);
       const loaded = await loadLatestApplication();
       if (!loaded) {
-        setSignInMode(false);
-        setStep(0);
-        setMessage('Signed in. Start by checking your business address.');
+        let pending = null;
+        try {
+          pending = JSON.parse(localStorage.getItem('uez_pending_application') || 'null');
+        } catch (_) {}
+
+        const pendingEligibility = pending?.eligibility || eligibility;
+        const pendingAddress = pending?.address || pendingEligibility?.matchedAddress || form.address;
+
+        if (pendingEligibility?.eligible && pendingAddress) {
+          setEligibility(pendingEligibility);
+          setForm((old) => ({
+            ...old,
+            address: pendingAddress,
+            email: pending?.email || old.email,
+            owners: old.owners.map((owner, index) => index === 0 && !owner.email
+              ? { ...owner, email: pending?.email || old.email }
+              : owner)
+          }));
+
+          const app = await createApplication({
+            contactEmail: pending?.email || form.email.trim(),
+            address: pendingAddress,
+            zoneIdentifier: pendingEligibility?.zoneIdentifier,
+            zoneName: pendingEligibility?.zoneName,
+            zoneEligible: pendingEligibility?.eligible === true,
+            programCode: pendingEligibility?.programs?.[0]?.code || null
+          });
+          setApplicationId(app.id);
+          localStorage.removeItem('uez_pending_application');
+          setSignInMode(false);
+          setStep(3);
+          setMessage('Account confirmed. Continue with your business information.');
+        } else {
+          setSignInMode(false);
+          setStep(0);
+          setMessage('Signed in. Start by checking your business address.');
+        }
       }
     } catch (err) {
       setMessage(err.message);
