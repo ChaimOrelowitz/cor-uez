@@ -14,6 +14,8 @@ import {
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
+const UEZ_API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const LOCAL_BRC_CHECKER = 'http://127.0.0.1:4318';
 
 function statusLabel(status) {
   const labels = {
@@ -191,12 +193,65 @@ export default function AdminPage() {
     }
   }
 
-  function runBrcLookup() {
+  async function waitForLocalBrc(jobId) {
+    const statusMessages = {
+      opening: 'Opening the NJ BRC checker on this computer…',
+      waiting_for_nj: 'NJ is loading in the checker window…',
+      checking: 'NJ lookup submitted. Complete any verification shown in the checker window.',
+      waiting_for_verification: 'Complete the NJ verification in the checker window. UEZ will import the result automatically.',
+      saving_pdf: 'BRC found. Creating the applicant’s PDF…',
+      uploading: 'Uploading the BRC PDF directly to the applicant’s UEZ file…',
+      saving_not_found: 'Saving the NJ result…'
+    };
+
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const response = await fetch(`${LOCAL_BRC_CHECKER}/jobs/${jobId}`, { cache: 'no-store' });
+      const job = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(job.error || 'The local BRC checker stopped responding.');
+      if (statusMessages[job.status]) setMessage(statusMessages[job.status]);
+      if (['complete', 'not_found', 'error'].includes(job.status)) return job;
+    }
+  }
+
+  async function runBrcLookup() {
+    setBusy(true);
+    setMessage('Connecting to the BRC checker on this computer…');
     try {
-      openOfficialBrcLookup(detail.application);
-      setMessage('NJ lookup opened using this application’s name control and NJ Tax ID. Finish the lookup there, then record the result here.');
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before running the BRC check.');
+
+      const response = await fetch(`${LOCAL_BRC_CHECKER}/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId: detail.application.id,
+          businessName: detail.application.business_name_input,
+          ein: detail.application.ein,
+          apiBase: UEZ_API_BASE,
+          accessToken: currentSession.access_token
+        })
+      });
+      const started = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(started.error || 'Could not start the local BRC checker.');
+
+      const outcome = await waitForLocalBrc(started.id);
+      await refreshList(detail.application.id);
+
+      if (outcome.status === 'complete') {
+        setMessage('BRC confirmed. The PDF and certificate details were added directly to this applicant’s UEZ file.');
+      } else if (outcome.status === 'not_found') {
+        setMessage('NJ did not find a matching BRC. The applicant was marked as waiting for a BRC.');
+      } else {
+        throw new Error(outcome.error || 'The BRC check did not finish.');
+      }
     } catch (err) {
-      setMessage(err.message);
+      const connectionProblem = /fetch|network|failed to connect|stopped responding/i.test(String(err.message || err));
+      setMessage(connectionProblem
+        ? 'The BRC checker is not running on this computer. Start npm run brc-checker in the repository backend folder, then click this button again.'
+        : err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -348,8 +403,8 @@ export default function AdminPage() {
             <section className="admin-card brc-admin-card">
               <div className="admin-card-head"><h3>BRC verification</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
               <div className="lookup-values"><span>Name control <strong>{nameControl(detail.application.business_name_input)}</strong></span><span>NJ Tax ID <strong>{njTaxId(detail.application.ein)}</strong></span></div>
-              <button className="primary admin-primary" onClick={runBrcLookup}>Look up BRC on NJ</button>
-              <p className="admin-help">This posts the application’s lookup values directly to NJ from your browser. Complete any NJ verification in the window that opens.</p>
+              <button className="primary admin-primary" onClick={runBrcLookup} disabled={busy}>{busy ? 'BRC check running…' : 'Look up and import BRC from NJ'}</button>
+              <p className="admin-help">Start the local BRC checker on this computer, then click above. Complete any NJ verification in its window; the certificate details and PDF will be added directly to this applicant’s UEZ file.</p>
 
               <div className="brc-result-form">
                 <label>Official registered business name</label><input value={brcForm.registeredBusinessName} onChange={(e) => setBrcForm((old) => ({ ...old, registeredBusinessName: e.target.value }))} />
