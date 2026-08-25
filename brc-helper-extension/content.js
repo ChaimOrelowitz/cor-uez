@@ -17,15 +17,6 @@
 
   const pageText = () => String(document.body?.innerText || '').replace(/\s+/g, ' ').trim();
 
-  const between = (text, startLabel, endLabel) => {
-    const start = text.indexOf(startLabel);
-    if (start < 0) return '';
-    const from = start + startLabel.length;
-    const end = endLabel ? text.indexOf(endLabel, from) : text.length;
-    const found = text.slice(from, end < 0 ? text.length : end).trim();
-    return found.replace(/<!--[\s\S]*?-->/g, '').replace(/Valid Through:[\s\S]*/i, '').trim();
-  };
-
   const notice = (message) => {
     let element = document.getElementById('cor-uez-helper-notice');
     if (!element) {
@@ -96,16 +87,23 @@
       }
 
       // 2. If we are on the official certificate result page (no search inputs present)
-      if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && /Effective Date:/i.test(text) && /Date of Issuance:/i.test(text)) {
+      if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && (/Certificate Number/i.test(text) || /Effective Date/i.test(text))) {
         sent = true;
         notice('COR found the official BRC certificate! Saving PDF to file…');
 
-        const taxpayerName = between(text, 'Taxpayer Name:', 'Trade Name:') || between(text, 'Taxpayer Name:', 'Address:');
-        const tradeName = between(text, 'Trade Name:', 'Address:');
-        const address = between(text, 'Address:', 'Certificate Number:');
-        const certificateNumber = between(text, 'Certificate Number:', 'Effective Date:');
-        const effectiveDate = between(text, 'Effective Date:', 'Date of Issuance:');
-        const issuanceDate = between(text, 'Date of Issuance:', 'Valid Through:') || between(text, 'Date of Issuance:', 'For Office Use Only:') || between(text, 'Date of Issuance:', 'State of New Jersey');
+        const certMatch = text.match(/Certificate\s*Number\s*:?\s*([A-Za-z0-9-]+)/i);
+        const taxpayerMatch = text.match(/Taxpayer\s*Name\s*:?\s*([^:\n\r]+?)(?=Trade\s*Name|Address|Certificate|$)/i);
+        const tradeMatch = text.match(/Trade\s*Name\s*:?\s*([^:\n\r]+?)(?=Address|Certificate|$)/i);
+        const addressMatch = text.match(/Address\s*:?\s*([^:\n\r]+?)(?=Certificate|Effective|$)/i);
+        const effectiveMatch = text.match(/Effective\s*Date\s*:?\s*([^:\n\r]+?)(?=Date\s*of\s*Issuance|Valid|For\s*Office|$)/i);
+        const issuanceMatch = text.match(/Date\s*of\s*Issuance\s*:?\s*([^:\n\r]+?)(?=Valid|For\s*Office|State|$)/i);
+
+        const certificateNumber = certMatch ? certMatch[1].trim() : 'CONFIRMED';
+        const taxpayerName = taxpayerMatch ? taxpayerMatch[1].trim() : job.businessName;
+        const tradeName = tradeMatch ? tradeMatch[1].trim() : '';
+        const address = addressMatch ? addressMatch[1].trim() : '';
+        const effectiveDate = effectiveMatch ? effectiveMatch[1].trim() : '';
+        const issuanceDate = issuanceMatch ? issuanceMatch[1].trim() : '';
 
         await send({
           type: 'COR_BRC_FOUND',
@@ -113,7 +111,7 @@
             taxpayerName,
             tradeName,
             address,
-            certificateNumber: certificateNumber || 'FOUND',
+            certificateNumber,
             effectiveDate,
             issuanceDate
           },
