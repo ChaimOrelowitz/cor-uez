@@ -22,7 +22,7 @@ app.use(express.json({ limit: '2mb' }));
 app.get('/health', (_req, res) => res.json({
   ok: true,
   service: 'cor-uez-api',
-  build: 'admin-workflow-v1'
+  build: 'applicant-auth-v3'
 }));
 app.use('/api/uez/brc/live', uezBrcLiveRoutes);
 app.use('/api/uez', uezRoutes);
