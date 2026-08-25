@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { checkUezEligibility, suggestNjAddresses } from './eligibility';
 import UezMap from './UezMap';
+import { downloadBrcHelper } from './brcHelperBundle';
 import {
   browserBrcDocumentUrl,
   createApplication,
@@ -17,7 +18,7 @@ const TEST_MODE = true;
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'BRC', 'Review'];
 const blankOwner = () => ({ firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '' });
 
-function BrowserBrcCapture({ businessName, ein, onFound }) {
+function BrowserBrcCapture({ businessName, ein, onFound, showInstaller = false }) {
   const [session, setSession] = useState(null);
   const [status, setStatus] = useState(null);
   const [result, setResult] = useState(null);
@@ -83,6 +84,18 @@ function BrowserBrcCapture({ businessName, ein, onFound }) {
     : null;
 
   return <div className="browser-brc-capture">
+    {showInstaller && <details className="brc-helper-install" open>
+      <summary>First time on this computer? Install the COR BRC helper</summary>
+      <p>This one-time Chrome helper lets COR read the BRC result from the official NJ page after you complete any NJ verification.</p>
+      <button type="button" className="secondary" onClick={downloadBrcHelper}>Download COR BRC Helper</button>
+      <ol>
+        <li>Unzip the downloaded file.</li>
+        <li>Open <b>chrome://extensions</b> and turn on <b>Developer mode</b>.</li>
+        <li>Click <b>Load unpacked</b> and choose the <b>cor-brc-helper</b> folder.</li>
+      </ol>
+      <p>That is only for this test build. Later this can be distributed normally so clients do not use Developer mode.</p>
+    </details>}
+
     <button type="button" className="primary" onClick={startCheck} disabled={starting || !businessName || !ein}>
       {starting ? 'Opening NJ checker…' : 'Check my BRC'}
     </button>
@@ -110,7 +123,7 @@ function BrowserBrcCapture({ businessName, ein, onFound }) {
     {result?.status === 'error' && <div className="validation-error">{result.result?.message || 'The browser helper could not capture the NJ result.'}</div>}
     {error && <div className="validation-error">{error}</div>}
 
-    <p className="brc-helper-copy">Automatic capture requires the one-time COR BRC Capture Helper in Chrome. After that, the user only interacts with the official NJ window when NJ asks for verification.</p>
+    {!showInstaller && <p className="brc-helper-copy">The official NJ checker will open in a separate window. COR will capture the returned BRC automatically.</p>}
   </div>;
 }
 
@@ -127,7 +140,7 @@ function BrcTestPage() {
           <div className="intro-copy"><h3>Check a business registration certificate</h3><p>Enter the business name and 9-digit EIN. COR will open the official NJ checker and automatically capture the returned BRC.</p></div>
           <label>Business name</label><input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
           <label>EIN</label><input value={ein} onChange={(e) => setEin(e.target.value)} placeholder="12-3456789" />
-          <BrowserBrcCapture businessName={businessName} ein={ein} />
+          <BrowserBrcCapture businessName={businessName} ein={ein} showInstaller />
         </div>
       </div>
     </main>
