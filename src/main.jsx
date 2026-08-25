@@ -1,11 +1,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import AdminPage from './AdminPage';
 import BrcLiveTestPage from './BrcLiveTestPage';
 import './styles.css';
+import './workflow.css';
 import './brcLive.css';
 
-const Root = window.location.pathname === '/brc-test' ? BrcLiveTestPage : App;
+const path = window.location.pathname;
+const Root = path === '/admin' ? AdminPage : path === '/brc-test' ? BrcLiveTestPage : App;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
