@@ -229,7 +229,7 @@ export default function App() {
   const [uploadingType, setUploadingType] = useState('');
   const [form, setForm] = useState({
     address: '', email: '', password: '', businessName: '', businessDescription: '', ein: '', yearFounded: '',
-    isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '',
+    isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '',
     owners: [{ ...blankOwner(), ownershipPercent: '100' }]
   });
 
@@ -287,6 +287,8 @@ export default function App() {
       isSoleProprietorship: latest.is_sole_proprietorship == null ? old.isSoleProprietorship : (latest.is_sole_proprietorship ? 'yes' : 'no'),
       fullTimeEmployees: latest.full_time_employees ?? old.fullTimeEmployees,
       partTimeEmployees: latest.part_time_employees ?? old.partTimeEmployees,
+      hasDba: latest.has_dba == null ? old.hasDba : (latest.has_dba ? 'yes' : 'no'),
+      dbaName: latest.dba_name || old.dbaName,
       owners: full.owners?.length
         ? full.owners.map((owner) => ({
             firstName: owner.first_name || '',
@@ -466,8 +468,8 @@ export default function App() {
 
   async function saveBusinessStep() {
     const einDigits = form.ein.replace(/\D/g, '');
-    if (!form.businessName.trim() || !form.businessDescription.trim() || einDigits.length !== 9 || !form.isSoleProprietorship) {
-      setMessage('Complete the business name, description, 9-digit EIN, and business type before continuing.');
+    if (!form.businessName.trim() || !form.businessDescription.trim() || einDigits.length !== 9 || !form.isSoleProprietorship || !form.hasDba || (form.hasDba === 'yes' && !form.dbaName.trim())) {
+      setMessage('Complete the business name, description, 9-digit EIN, business type, and DBA information before continuing.');
       return;
     }
     if (!applicationId) {
@@ -486,6 +488,8 @@ export default function App() {
         isSoleProprietorship: form.isSoleProprietorship === 'yes',
         fullTimeEmployees: form.fullTimeEmployees,
         partTimeEmployees: form.partTimeEmployees,
+        hasDba: form.hasDba === 'yes',
+        dbaName: form.hasDba === 'yes' ? form.dbaName.trim() : '',
         contactPhone: form.owners[0]?.phone || null
       });
       setStep(4);
@@ -680,7 +684,8 @@ export default function App() {
             <div><label>EIN</label><input value={form.ein} onChange={update('ein')} placeholder="12-3456789" /></div>
             <div><label>Year founded</label><input value={form.yearFounded} onChange={update('yearFounded')} /></div>
             <div><label>Is this business a sole proprietorship?</label><select value={form.isSoleProprietorship} onChange={update('isSoleProprietorship')}><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
-            <div></div>
+            <div><label>Does the business have a DBA? <span className="required-star">*</span></label><select value={form.hasDba} onChange={(e) => setForm((old) => ({ ...old, hasDba: e.target.value, dbaName: e.target.value === 'yes' ? old.dbaName : '' }))} required><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+            {form.hasDba === 'yes' && <div><label>What is the DBA name? <span className="required-star">*</span></label><input value={form.dbaName} onChange={update('dbaName')} required /></div>}
             <div><label>Full-time employees</label><input type="number" min="0" value={form.fullTimeEmployees} onChange={update('fullTimeEmployees')} placeholder="0" /></div>
             <div><label>Part-time employees</label><input type="number" min="0" value={form.partTimeEmployees} onChange={update('partTimeEmployees')} placeholder="0" /></div>
           </div>

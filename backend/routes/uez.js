@@ -65,7 +65,7 @@ async function addStatusEvent(applicationId, status, label, message, userId, vis
 async function getApplicationBundle(application, user) {
   const [ownersResult, docsResult, eventsResult, paymentsResult] = await Promise.all([
     supabase.from('uez_owners')
-      .select('id, owner_order, first_name, last_name, email, phone, ownership_percent')
+      .select('id, owner_order, first_name, last_name, email, phone, ownership_percent, position_title')
       .eq('application_id', application.id)
       .order('owner_order'),
     supabase.from('uez_documents')
@@ -132,6 +132,7 @@ router.post('/applications', async (req, res) => {
       zone_name: body.zoneName || null,
       zone_eligible: body.zoneEligible === true,
       program_code: body.programCode || null,
+      grant_amount_requested: body.programCode === 'lakewood_technology_grant' ? 5000 : null,
       status: 'intake_in_progress'
     };
 
@@ -164,12 +165,16 @@ router.patch('/applications/:id/business', async (req, res) => {
       part_time_employees: body.partTimeEmployees === '' || body.partTimeEmployees == null
         ? application.part_time_employees
         : Number(body.partTimeEmployees),
+      has_dba: body.hasDba == null ? application.has_dba : body.hasDba === true,
+      dba_name: body.hasDba === true ? (String(body.dbaName || '').trim() || null) : (body.hasDba === false ? null : application.dba_name),
+      grant_amount_requested: application.grant_amount_requested ?? (application.program_code === 'lakewood_technology_grant' ? 5000 : null),
       contact_phone: body.contactPhone ?? application.contact_phone,
       updated_at: new Date().toISOString()
     };
 
     if (patch.full_time_employees != null && patch.full_time_employees < 0) throw new Error('Full-time employees cannot be negative');
     if (patch.part_time_employees != null && patch.part_time_employees < 0) throw new Error('Part-time employees cannot be negative');
+    if (patch.has_dba === true && !patch.dba_name) throw new Error('DBA name is required when the business has a DBA.');
 
     const { data, error } = await supabase.from('uez_applications')
       .update(patch)
@@ -199,6 +204,7 @@ router.put('/applications/:id/owners', async (req, res) => {
       email: owner.email || null,
       phone: owner.phone || null,
       ownership_percent: Number(owner.ownershipPercent),
+      position_title: String(owner.positionTitle || (owners.length === 1 ? 'Owner' : 'Partner')).trim(),
       address_line1: owner.addressLine1 || null,
       address_line2: owner.addressLine2 || null,
       city: owner.city || null,
@@ -219,7 +225,7 @@ router.put('/applications/:id/owners', async (req, res) => {
 
     const { data, error } = await supabase.from('uez_owners')
       .insert(rows)
-      .select('id, owner_order, first_name, last_name, email, phone, ownership_percent, created_at, updated_at')
+      .select('id, owner_order, first_name, last_name, email, phone, ownership_percent, position_title, created_at, updated_at')
       .order('owner_order');
     if (error) throw error;
 
@@ -403,6 +409,8 @@ router.post('/applications/:id/submit', async (req, res) => {
     if (!application.business_name_input || !application.ein || !application.address_line1) {
       return res.status(400).json({ error: 'Business name, EIN, and business address are required before submission.' });
     }
+    if (application.has_dba == null) return res.status(400).json({ error: 'Please answer whether the business has a DBA before submission.' });
+    if (application.has_dba && !application.dba_name) return res.status(400).json({ error: 'Please enter the DBA name before submission.' });
 
     const ownershipTotal = (ownersResult.data || []).reduce((sum, owner) => sum + Number(owner.ownership_percent || 0), 0);
     if (!(ownersResult.data || []).length || Math.abs(ownershipTotal - 100) > 0.001) {
@@ -623,6 +631,7 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       email: owner.email,
       phone: owner.phone,
       ownershipPercent: owner.ownership_percent,
+      positionTitle: owner.position_title || ((ownersResult.data || []).length === 1 ? 'Owner' : 'Partner'),
       addressLine1: owner.address_line1,
       addressLine2: owner.address_line2,
       city: owner.city,
@@ -657,6 +666,7 @@ router.patch('/admin/applications/:id', requireUezAdmin, async (req, res) => {
     const yearFounded = body.yearFounded === '' || body.yearFounded == null ? null : Number(body.yearFounded);
     const fullTimeEmployees = body.fullTimeEmployees === '' || body.fullTimeEmployees == null ? null : Number(body.fullTimeEmployees);
     const partTimeEmployees = body.partTimeEmployees === '' || body.partTimeEmployees == null ? null : Number(body.partTimeEmployees);
+    const grantAmountRequested = body.grantAmountRequested === '' || body.grantAmountRequested == null ? null : Number(body.grantAmountRequested);
 
     if (!String(body.businessName || '').trim()) return res.status(400).json({ error: 'Business name is required.' });
     if (ein.length !== 9) return res.status(400).json({ error: 'Enter a valid 9-digit EIN.' });
@@ -670,6 +680,9 @@ router.patch('/admin/applications/:id', requireUezAdmin, async (req, res) => {
     if (partTimeEmployees != null && (!Number.isInteger(partTimeEmployees) || partTimeEmployees < 0)) {
       return res.status(400).json({ error: 'Part-time employees must be zero or greater.' });
     }
+    if (body.hasDba !== true && body.hasDba !== false) return res.status(400).json({ error: 'DBA selection is required.' });
+    if (body.hasDba === true && !String(body.dbaName || '').trim()) return res.status(400).json({ error: 'DBA name is required when the business has a DBA.' });
+    if (grantAmountRequested != null && (!Number.isFinite(grantAmountRequested) || grantAmountRequested < 0)) return res.status(400).json({ error: 'Grant amount must be zero or greater.' });
 
     const patch = {
       contact_email: String(body.contactEmail).trim().toLowerCase(),
@@ -682,6 +695,9 @@ router.patch('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       is_sole_proprietorship: body.isSoleProprietorship === true,
       full_time_employees: fullTimeEmployees,
       part_time_employees: partTimeEmployees,
+      has_dba: body.hasDba === true,
+      dba_name: body.hasDba === true ? String(body.dbaName || '').trim() : null,
+      grant_amount_requested: grantAmountRequested ?? (application.program_code === 'lakewood_technology_grant' ? 5000 : application.grant_amount_requested),
       address_line1: String(body.addressLine1 || '').trim() || null,
       address_line2: String(body.addressLine2 || '').trim() || null,
       city: String(body.city || '').trim() || null,

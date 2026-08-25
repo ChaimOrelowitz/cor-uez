@@ -107,6 +107,9 @@ function applicationDraftFrom(app) {
     isSoleProprietorship: app.is_sole_proprietorship === true,
     fullTimeEmployees: app.full_time_employees ?? '',
     partTimeEmployees: app.part_time_employees ?? '',
+    hasDba: app.has_dba == null ? '' : (app.has_dba ? 'yes' : 'no'),
+    dbaName: app.dba_name || '',
+    grantAmountRequested: app.grant_amount_requested ?? (app.program_code === 'lakewood_technology_grant' ? 5000 : ''),
     addressLine1: app.address_line1 || '',
     addressLine2: app.address_line2 || '',
     city: app.city || '',
@@ -124,6 +127,7 @@ function ownerDraftFrom(owner = {}) {
     dob: formatDob(owner.dob),
     ssn: formatSsnInput(owner.ssn),
     ownershipPercent: owner.ownershipPercent ?? '',
+    positionTitle: owner.positionTitle || '',
     addressLine1: owner.addressLine1 || '',
     addressLine2: owner.addressLine2 || '',
     city: owner.city || '',
@@ -440,12 +444,20 @@ export default function AdminPage() {
       setMessage('Business name and contact email are required.');
       return;
     }
+    if (!applicationDraft.hasDba || (applicationDraft.hasDba === 'yes' && !applicationDraft.dbaName.trim())) {
+      setMessage('Complete the DBA information before saving.');
+      return;
+    }
 
     setBusy(true);
     setMessage('Saving application changes…');
     try {
       await saveOwners(detail.application.id, ownerDrafts);
-      await updateAdminApplication(detail.application.id, applicationDraft);
+      await updateAdminApplication(detail.application.id, {
+        ...applicationDraft,
+        hasDba: applicationDraft.hasDba === 'yes',
+        dbaName: applicationDraft.hasDba === 'yes' ? applicationDraft.dbaName : ''
+      });
       await refreshList(detail.application.id);
       setEditMode(false);
       setMessage('All applicant and owner changes were saved.');
@@ -686,6 +698,9 @@ export default function AdminPage() {
                 <div><label>Year founded</label><input type="number" value={applicationDraft.yearFounded} onChange={(e) => updateApplicationDraft('yearFounded', e.target.value)} /></div>
                 <div><label>Full-time employees</label><input type="number" min="0" value={applicationDraft.fullTimeEmployees} onChange={(e) => updateApplicationDraft('fullTimeEmployees', e.target.value)} /></div>
                 <div><label>Part-time employees</label><input type="number" min="0" value={applicationDraft.partTimeEmployees} onChange={(e) => updateApplicationDraft('partTimeEmployees', e.target.value)} /></div>
+                <div><label>Does the business have a DBA? <span className="required-star">*</span></label><select value={applicationDraft.hasDba} onChange={(e) => updateApplicationDraft('hasDba', e.target.value)}><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+                {applicationDraft.hasDba === 'yes' && <div><label>DBA name <span className="required-star">*</span></label><input value={applicationDraft.dbaName} onChange={(e) => updateApplicationDraft('dbaName', e.target.value)} /></div>}
+                <div><label>Grant amount requested</label><input type="number" min="0" step="0.01" value={applicationDraft.grantAmountRequested} onChange={(e) => updateApplicationDraft('grantAmountRequested', e.target.value)} /></div>
                 <div className="admin-edit-wide"><label>Address <span className="required-star">*</span></label><input value={applicationDraft.addressLine1} onChange={(e) => updateApplicationDraft('addressLine1', e.target.value)} /></div>
                 <div className="admin-edit-wide"><label>Address line 2</label><input value={applicationDraft.addressLine2} onChange={(e) => updateApplicationDraft('addressLine2', e.target.value)} /></div>
                 <div><label>City</label><input value={applicationDraft.city} onChange={(e) => updateApplicationDraft('city', e.target.value)} /></div>
@@ -704,6 +719,8 @@ export default function AdminPage() {
                 <div><dt>Founded</dt><dd>{detail.application.year_founded || '—'}</dd></div>
                 <div><dt>Employees</dt><dd>{detail.application.full_time_employees ?? 0} FT · {detail.application.part_time_employees ?? 0} PT</dd></div>
                 <div><dt>Business type</dt><dd>{detail.application.is_sole_proprietorship ? 'Sole proprietorship' : 'Entity'}</dd></div>
+                <div><dt>DBA</dt><dd>{detail.application.has_dba == null ? '—' : detail.application.has_dba ? (detail.application.dba_name || 'Yes') : 'No'}</dd></div>
+                <div><dt>Grant amount</dt><dd>{detail.application.grant_amount_requested == null ? '—' : `$${Number(detail.application.grant_amount_requested).toLocaleString()}`}</dd></div>
                 <div className="data-wide"><dt>Description</dt><dd>{detail.application.business_description || '—'}</dd></div>
               </dl>}
             </section>
@@ -804,6 +821,7 @@ export default function AdminPage() {
                       <div><label>Date of birth (MM/DD/YYYY) <span className="required-star">*</span></label><input inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={(e) => updateOwnerDraft(index, 'dob', formatDobInput(e.target.value))} /></div>
                       <div><label>SSN <span className="required-star">*</span></label><input inputMode="numeric" placeholder="###-##-####" value={owner.ssn} onChange={(e) => updateOwnerDraft(index, 'ssn', formatSsnInput(e.target.value))} /></div>
                       <div><label>Ownership percentage <span className="required-star">*</span></label><input type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={(e) => updateOwnerDraft(index, 'ownershipPercent', e.target.value)} /></div>
+                      <div><label>Position / title</label><input value={owner.positionTitle} onChange={(e) => updateOwnerDraft(index, 'positionTitle', e.target.value)} placeholder={ownerDrafts.length === 1 ? 'Owner' : 'Partner'} /></div>
                       <div><label>Address <span className="required-star">*</span></label><input value={owner.addressLine1} onChange={(e) => updateOwnerDraft(index, 'addressLine1', e.target.value)} /></div>
                       <div><label>Address line 2</label><input value={owner.addressLine2} onChange={(e) => updateOwnerDraft(index, 'addressLine2', e.target.value)} /></div>
                       <div><label>City <span className="required-star">*</span></label><input value={owner.city} onChange={(e) => updateOwnerDraft(index, 'city', e.target.value)} /></div>
@@ -819,6 +837,7 @@ export default function AdminPage() {
                   <dl className="data-grid compact-data">
                     <div><dt>Email</dt><dd>{owner.email || '—'}</dd></div>
                     <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>
+                    <div><dt>Position / title</dt><dd>{owner.positionTitle || (detail.owners.length === 1 ? 'Owner' : 'Partner')}</dd></div>
                     <div><dt>DOB</dt><dd>{formatDob(owner.dob) || '—'}</dd></div>
                     <div><dt>SSN</dt><dd>{formatSsn(owner.ssn)}</dd></div>
                     <div className="data-wide"><dt>Address</dt><dd>{[owner.addressLine1, owner.addressLine2, owner.city, owner.state, owner.zip].filter(Boolean).join(', ') || '—'}</dd></div>
