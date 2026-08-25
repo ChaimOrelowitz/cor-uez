@@ -13,18 +13,42 @@ export async function suggestNjAddresses(text) {
   const value = String(text || '').trim();
   if (value.length < 3) return [];
 
-  const params = new URLSearchParams({
+  const suggestParams = new URLSearchParams({
     text: value,
     maxSuggestions: '7',
     f: 'json'
   });
 
-  const response = await fetch(`${NJ_GEOCODER}/suggest?${params}`);
-  if (!response.ok) return [];
-  const data = await response.json();
-  return (data?.suggestions || [])
-    .filter((suggestion) => suggestion?.text)
-    .map((suggestion) => ({ text: suggestion.text, magicKey: suggestion.magicKey || null }));
+  const candidateParams = new URLSearchParams({
+    SingleLine: value,
+    outFields: 'Match_addr,Addr_type,City,Region,Postal',
+    outSR: '4326',
+    maxLocations: '7',
+    f: 'json'
+  });
+
+  const [suggestResult, candidateResult] = await Promise.allSettled([
+    fetch(`${NJ_GEOCODER}/suggest?${suggestParams}`).then(async (response) => response.ok ? response.json() : { suggestions: [] }),
+    fetch(`${NJ_GEOCODER}/findAddressCandidates?${candidateParams}`).then(async (response) => response.ok ? response.json() : { candidates: [] })
+  ]);
+
+  const suggestions = suggestResult.status === 'fulfilled'
+    ? (suggestResult.value?.suggestions || []).filter((item) => item?.text).map((item) => ({ text: item.text, magicKey: item.magicKey || null }))
+    : [];
+
+  const candidates = candidateResult.status === 'fulfilled'
+    ? (candidateResult.value?.candidates || [])
+        .filter((candidate) => candidate?.address && Number(candidate.score) >= 75)
+        .map((candidate) => ({ text: candidate.address, magicKey: null }))
+    : [];
+
+  const seen = new Set();
+  return [...suggestions, ...candidates].filter((item) => {
+    const key = item.text.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
 }
 
 async function geocodeAddress(address, magicKey = null) {
