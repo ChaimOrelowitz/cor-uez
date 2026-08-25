@@ -37,6 +37,28 @@ export async function checkBrcTest(businessName, ein) {
   return data;
 }
 
+export async function startBrowserBrcCapture(businessName, ein) {
+  const response = await fetch(`${API_BASE}/api/uez/brc/browser-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ businessName, ein })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Could not start the BRC browser check.');
+  return data;
+}
+
+export async function getBrowserBrcCapture(captureId, token) {
+  const response = await fetch(`${API_BASE}/api/uez/brc/browser-session/${encodeURIComponent(captureId)}?token=${encodeURIComponent(token)}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'Could not read the BRC browser check.');
+  return data;
+}
+
+export function browserBrcDocumentUrl(captureId, token) {
+  return `${API_BASE}/api/uez/brc/browser-session/${encodeURIComponent(captureId)}/document?token=${encodeURIComponent(token)}`;
+}
+
 export async function getApplicantSession() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
