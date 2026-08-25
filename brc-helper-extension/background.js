@@ -98,17 +98,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'COR_NJ_STATUS') { await notify(job, message.status || job.status); return { ok: true }; }
     if (message?.type === 'COR_BRC_NOT_FOUND') {
       await api(job, `/api/uez/admin/applications/${job.applicationId}/brc-not-found`, { method: 'POST' });
-      await notify(job, 'not_found'); await setJob(null); return { ok: true };
+      await notify(job, 'not_found');
+      if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);
+      await setJob(null);
+      return { ok: true };
     }
     if (message?.type === 'COR_BRC_FOUND') {
       await notify(job, 'saving_brc');
-      await api(job, `/api/uez/brc/${job.applicationId}/admin/captured-certificate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ result: message.result, html: message.html }) });
-      await notify(job, 'complete'); await setJob(null); return { ok: true };
+      try {
+        await api(job, `/api/uez/brc/${job.applicationId}/admin/captured-certificate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ result: message.result, html: message.html }) });
+        await notify(job, 'complete');
+        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);
+      } catch (err) {
+        await fail(job, err);
+      }
+      await setJob(null);
+      return { ok: true };
     }
     if (message?.type === 'COR_TAX_PDF') {
       await notify(job, 'uploading_tax_clearance');
-      await uploadTaxPdf(job, message.base64, message.filename);
-      await notify(job, 'complete'); await setJob(null); return { ok: true };
+      try {
+        await uploadTaxPdf(job, message.base64, message.filename);
+        await notify(job, 'complete');
+        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);
+      } catch (err) {
+        await fail(job, err);
+      }
+      await setJob(null);
+      return { ok: true };
     }
     if (message?.type === 'COR_NJ_ERROR') { await fail(job, new Error(message.error || 'New Jersey returned an error.')); return { ok: true }; }
     return { ok: false };
