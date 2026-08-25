@@ -24,8 +24,8 @@ button { cursor: pointer; }
 .wizard-head { display: flex; align-items: center; justify-content: space-between; padding: 28px 32px 18px; }
 .step-count { font-size: 12px; color: #8a90a4; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .wizard-head h2 { margin: 4px 0 0; font-size: 26px; }
-.fee-pill { padding: 9px 13px; border-radius: 999px; background: #f0f2ff; color: #626bd7; font-size: 12px; font-weight: 800; }
 .progress-row { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; padding: 0 32px 26px; border-bottom: 1px solid #edf0f6; }
+.progress-row.seven { grid-template-columns: repeat(7,1fr); }
 .progress-item { display: flex; align-items: center; gap: 7px; color: #a4a9b9; font-size: 11px; }
 .progress-item span { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #f2f3f7; font-size: 11px; font-weight: 800; }
 .progress-item.active { color: #5f67d6; font-weight: 700; }
@@ -59,15 +59,24 @@ textarea { min-height: 94px; resize: vertical; }
 
 .map-card { margin-top: 24px; border: 1px solid #e4e7f2; border-radius: 22px; overflow: hidden; background: white; box-shadow: 0 18px 45px rgba(48,54,111,.10); }
 .uez-map { width: 100%; height: 360px; border: 0; display: block; background: #eef1f7; }
-.result-strip { display: flex; gap: 14px; align-items: flex-start; padding: 18px 20px 20px; border-top: 1px solid #edf0f6; }
-.result-strip h4 { margin: 1px 0 5px; font-size: 18px; }
-.result-strip p { margin: 0; color: #7b8296; font-size: 13px; }
-.result-icon { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 12px; display: grid; place-items: center; font-weight: 900; }
-.result-icon.good { background: #eaf7ef; color: #258a52; }
-.result-icon.bad { background: #fff1f0; color: #c95850; }
-.grant-pill, .neutral-pill { display: inline-block; margin-top: 10px; padding: 7px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; }
-.grant-pill { background: #eff1ff; color: #5d65d7; }
-.neutral-pill { background: #f2f3f7; color: #70778b; }
+.address-confirmation { display: flex; flex-direction: column; gap: 3px; padding: 15px 18px 17px; border-top: 1px solid #edf0f6; }
+.address-confirmation strong { font-size: 14px; }
+.address-confirmation span { color: #8b91a4; font-size: 12px; }
+
+.eligibility-offer { max-width: 760px; margin: 0 auto; text-align: center; }
+.eligibility-offer .status-icon { margin: 0 auto 14px; background: #eaf7ef; color: #258a52; }
+.eligibility-offer h3 { margin: 2px auto 10px; font-size: 29px; letter-spacing: -.025em; max-width: 680px; }
+.offer-lead { margin: 0 auto; color: #70788e; font-size: 16px; line-height: 1.6; }
+.program-available { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 26px auto 0; max-width: 620px; text-align: left; padding: 16px 18px; border: 1px solid #e1e4f2; border-radius: 16px; background: #f8f9ff; }
+.program-available span { color: #7b8297; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.program-available strong { font-size: 16px; }
+.service-offer { max-width: 620px; margin: 20px auto 0; padding: 22px 24px; border: 1px solid #e4e7f2; border-radius: 20px; background: white; text-align: left; box-shadow: 0 14px 36px rgba(48,54,111,.07); }
+.service-offer h4 { margin: 0 0 8px; font-size: 19px; }
+.service-offer p { margin: 0; color: #6f7690; line-height: 1.6; }
+.service-price { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 10px; }
+.service-price strong { font-size: 32px; letter-spacing: -.03em; }
+.service-price span { color: #7b8297; font-size: 13px; font-weight: 700; }
+.refund-copy { font-size: 12px; color: #8a90a3 !important; }
 
 .ownership-summary { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; margin: 20px 0 4px; border-radius: 14px; background: #fafbff; border: 1px solid #e7e9f4; color: #666e87; font-size: 13px; }
 .ownership-summary strong { color: #c45c56; }
@@ -89,11 +98,12 @@ textarea { min-height: 94px; resize: vertical; }
   .hero p { font-size: 15px; }
   .wizard-card { border-radius: 20px; }
   .wizard-head, .content-block, .wizard-footer { padding-left: 20px; padding-right: 20px; }
-  .fee-pill { display: none; }
   .progress-row { padding: 0 20px 22px; gap: 5px; }
   .progress-item { justify-content: center; }
   .progress-item small { display: none; }
   .field-grid { grid-template-columns: 1fr; }
   .uez-map { height: 300px; }
+  .program-available { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .eligibility-offer h3 { font-size: 24px; }
   .validation-error, .form-message { margin-left: 20px; margin-right: 20px; }
 }
