@@ -1,11 +1,11 @@
 services:
   - type: web
     name: cor-uez-api
-    runtime: node
+    runtime: docker
     plan: starter
     rootDir: backend
-    buildCommand: npm install --omit=dev
-    startCommand: npm start
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
