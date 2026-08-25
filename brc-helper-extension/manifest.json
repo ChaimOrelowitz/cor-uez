@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "COR BRC Capture Helper",
+  "version": "0.1.0",
+  "description": "Captures New Jersey BRC results back into the COR Solutions UEZ app.",
+  "host_permissions": [
+    "https://cor-uez-api.onrender.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www1.state.nj.us/TYTR_BRC/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
