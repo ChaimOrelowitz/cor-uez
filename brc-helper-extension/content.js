@@ -1,4 +1,6 @@
 (() => {
+  if (globalThis.__corUezDocumentHelperLoaded) return;
+  globalThis.__corUezDocumentHelperLoaded = true;
   let sent = false;
   let running = false;
   let announced = false;
@@ -55,8 +57,17 @@
         const digits = job.ein.replace(/\D/g, '').slice(0, 9);
         if (!name.value) setValue(name, control);
         if (!taxId.value) setValue(taxId, digits.length === 9 ? `${digits}000` : '');
-        notice('COR filled the BRC lookup. Complete New Jersey verification and submit. The certificate will be saved to the applicant automatically.');
-        await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
+        const submissionKey = `corBrcSubmitted:${job.id}`;
+        const submit = document.querySelector('input[name="submit"], input[type="submit"], button[type="submit"]');
+        if (submit && !sessionStorage.getItem(submissionKey)) {
+          sessionStorage.setItem(submissionKey, '1');
+          notice('COR filled the BRC lookup and submitted it. Complete only New Jersey’s verification if it appears.');
+          await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
+          submit.click();
+        } else {
+          notice('COR filled the BRC lookup. Complete only New Jersey’s verification if it appears.');
+          await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
+        }
       } else if (/incapsula|hcaptcha|verify you are human/i.test(`${text} ${document.documentElement.innerHTML}`)) {
         notice('COR is active. Complete New Jersey verification if it appears; the BRC form will be filled afterward.');
         await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });

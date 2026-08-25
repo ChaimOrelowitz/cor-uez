@@ -54,7 +54,12 @@ async function startWorkflow(message, sender) {
   const tab = popup.tabs?.[0];
   job = { ...job, tabId: tab?.id || null, windowId: popup.id };
   await notify(job, job.workflow === 'brc' ? 'opening_brc' : 'opening_pbs');
+  if (tab?.id) await injectNjHelper(tab.id).catch(() => {});
   return { ok: true, jobId: job.id };
+}
+
+async function injectNjHelper(tabId) {
+  await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['content.js'] });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -87,4 +92,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: false, error: error.message || 'The COR extension failed.' });
   });
   return true;
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete' || !tab.url) return;
+  const host = new URL(tab.url).hostname.toLowerCase();
+  if (!['www1.state.nj.us', 'www1.nj.gov', 'www16.state.nj.us', 'www-njlib.nj.gov', 'my.nj.gov'].includes(host)) return;
+  const job = await getJob();
+  if (!job) return;
+  await injectNjHelper(tabId).catch(() => {});
 });
