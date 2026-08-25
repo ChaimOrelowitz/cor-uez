@@ -1,0 +1,364 @@
+(() => {
+  if (globalThis.__corUezJotformHelperLoaded) return;
+  globalThis.__corUezJotformHelperLoaded = true;
+
+  const FORM_ID = '241936732268060';
+  let running = false;
+  let finished = false;
+  let applicationData = null;
+  let lastAdvancedPage = '';
+  let lastStatus = '';
+
+  const send = (message) => chrome.runtime.sendMessage(message).catch(() => null);
+
+  const notifyStatus = async (status) => {
+    if (lastStatus === status) return;
+    lastStatus = status;
+    await send({ type: 'COR_NJ_STATUS', status });
+  };
+
+  const notice = (message) => {
+    let element = document.getElementById('cor-uez-helper-notice');
+    if (!element) {
+      element = document.createElement('div');
+      element.id = 'cor-uez-helper-notice';
+      Object.assign(element.style, {
+        position: 'fixed', top: '12px', right: '12px', zIndex: '2147483647',
+        background: '#17203a', color: 'white', padding: '12px 16px',
+        borderRadius: '10px', font: '13px system-ui, -apple-system, sans-serif',
+        maxWidth: '420px', boxShadow: '0 8px 25px rgba(0,0,0,.3)', border: '1px solid #3b4261'
+      });
+      (document.body || document.documentElement).appendChild(element);
+    }
+    element.textContent = message;
+  };
+
+  const bytesToBase64 = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+    }
+    return btoa(binary);
+  };
+
+  const dispatch = (element) => {
+    ['input', 'change', 'blur'].forEach((type) => element.dispatchEvent(new Event(type, { bubbles: true })));
+  };
+
+  function setField(name, value) {
+    if (value == null) return false;
+    const elements = [...document.getElementsByName(name)];
+    if (!elements.length) return false;
+    const textValue = String(value);
+    const first = elements[0];
+
+    if (first.type === 'radio') {
+      const target = elements.find((element) => String(element.value).toLowerCase() === textValue.toLowerCase());
+      if (!target) return false;
+      if (!target.checked) {
+        target.checked = true;
+        target.click();
+        dispatch(target);
+      }
+      return true;
+    }
+
+    if (first.type === 'checkbox') {
+      const shouldCheck = ['true', 'yes', '1', String(first.value).toLowerCase()].includes(textValue.toLowerCase());
+      if (first.checked !== shouldCheck) {
+        first.checked = shouldCheck;
+        first.click();
+        dispatch(first);
+      }
+      return true;
+    }
+
+    if (first.tagName === 'SELECT') {
+      const option = [...first.options].find((item) => item.value === textValue || (item.textContent || '').trim() === textValue);
+      if (!option) return false;
+      if (first.value !== option.value) {
+        first.value = option.value;
+        dispatch(first);
+      }
+      return true;
+    }
+
+    if (first.value !== textValue) {
+      first.value = textValue;
+      dispatch(first);
+    }
+    return true;
+  }
+
+  function formatPhone(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(-10);
+    if (digits.length !== 10) return String(value || '');
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  function formatSsn(value) {
+    const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
+    if (digits.length !== 9) return String(value || '');
+    return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+  }
+
+  function dateParts(value) {
+    const text = String(value || '').trim();
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (iso) return { year: iso[1], month: iso[2], day: iso[3] };
+    const us = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (us) return { year: us[3], month: us[1].padStart(2, '0'), day: us[2].padStart(2, '0') };
+    return { year: '', month: '', day: '' };
+  }
+
+  function todayParts() {
+    const today = new Date();
+    return {
+      month: String(today.getMonth() + 1).padStart(2, '0'),
+      day: String(today.getDate()).padStart(2, '0'),
+      year: String(today.getFullYear())
+    };
+  }
+
+  function parseBusinessAddress(application) {
+    let line1 = String(application.address_line1 || '').trim();
+    let line2 = String(application.address_line2 || '').trim();
+    let city = String(application.city || '').trim();
+    let state = String(application.state || '').trim() || 'NJ';
+    let postal = String(application.zip || '').trim();
+
+    if ((!city || !postal) && line1) {
+      const candidates = [line1, application.brc_data?.address].filter(Boolean).map((value) => String(value).trim());
+      for (const candidate of candidates) {
+        const match = candidate.match(/^(.*?),\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+        if (!match) continue;
+        line1 = match[1].trim();
+        city = city || match[2].trim();
+        state = state || match[3].trim().toUpperCase();
+        postal = postal || match[4].trim();
+        break;
+      }
+    }
+
+    return { line1, line2, city, state: state || 'NJ', postal };
+  }
+
+  function setAddress(prefix, address) {
+    setField(`${prefix}[addr_line1]`, address?.addressLine1 || address?.line1 || '');
+    setField(`${prefix}[addr_line2]`, address?.addressLine2 || address?.line2 || '');
+    setField(`${prefix}[city]`, address?.city || '');
+    setField(`${prefix}[state]`, address?.state || 'NJ');
+    setField(`${prefix}[postal]`, address?.zip || address?.postal || '');
+  }
+
+  function setDate(prefix, parts) {
+    setField(`${prefix}[month]`, parts.month || '');
+    setField(`${prefix}[day]`, parts.day || '');
+    setField(`${prefix}[year]`, parts.year || '');
+  }
+
+  function fillApplication(detail) {
+    const application = detail.application || {};
+    const owners = detail.owners || [];
+    const primary = owners[0] || {};
+    const secondary = owners[1] || null;
+    const legalName = application.registered_business_name || application.brc_registered_name || application.business_name_input || '';
+    const businessPhone = formatPhone(primary.phone || application.contact_phone || '');
+    const businessAddress = parseBusinessAddress(application);
+    const ownerCount = owners.length;
+    const primaryTitle = primary.positionTitle || (ownerCount > 1 ? 'Partner' : 'Owner');
+
+    setField('q3_companyName', legalName);
+    setField('q82_doesThe', application.has_dba ? 'Yes' : 'No');
+    if (application.has_dba) setField('q4_doingBusiness', application.dba_name || '');
+    setAddress('q83_businessAddress83', businessAddress);
+    setField('q6_ein', String(application.ein || '').replace(/\D/g, '').slice(0, 9));
+    setField('q8_businessPhone[full]', businessPhone);
+    setField('q9_fax', businessPhone);
+    setField('q74_email', application.contact_email || primary.email || '');
+
+    if (application.program_code === 'lakewood_technology_grant') setField('q12_incentiveProgram12', '1');
+    setField('q81_totalGrant81', application.grant_amount_requested ?? 5000);
+
+    setField('q90_applicantName90[first]', primary.firstName || '');
+    setField('q90_applicantName90[last]', primary.lastName || '');
+    setField('q23_applicantPositiontitle', primaryTitle);
+    setAddress('q68_applicantHome', primary);
+    setField('q29_applicantPhone[full]', formatPhone(primary.phone));
+    setField('q71_cell71[full]', formatPhone(primary.phone));
+    setField('q35_applicantSsn', formatSsn(primary.ssn));
+    setDate('q84_applicantDob', dateParts(primary.dob));
+    setField('q72_applicantPercentage', primary.ownershipPercent ?? '');
+
+    if (secondary) {
+      const secondaryTitle = secondary.positionTitle || 'Partner';
+      setField('q91_coapplicantName[first]', secondary.firstName || '');
+      setField('q91_coapplicantName[last]', secondary.lastName || '');
+      setField('q24_positionTitle24', secondaryTitle);
+      setAddress('q69_address80', secondary);
+      setField('q32_phone32[full]', formatPhone(secondary.phone));
+      setField('q70_cell70[full]', formatPhone(secondary.phone));
+      // JotForm's internal field name is misleading; the HAR confirms q37_dob37 is Co-Applicant SSN.
+      setField('q37_dob37', formatSsn(secondary.ssn));
+      setDate('q85_coapplicantDob', dateParts(secondary.dob));
+      setField('q73_coapplicantPercentage', secondary.ownershipPercent ?? '');
+    }
+
+    const ownershipTotal = owners.reduce((sum, owner) => sum + Number(owner.ownershipPercent || 0), 0);
+    setField('q86_totalPercentage', ownershipTotal || 100);
+  }
+
+  function visiblePage() {
+    const pages = [...document.querySelectorAll('.form-section.page-section, .form-section')];
+    return pages.find((page) => page.offsetParent !== null) || null;
+  }
+
+  function signaturePageVisible() {
+    const page = visiblePage();
+    if (!page) return /SIGNATURES/i.test(document.body?.innerText || '');
+    return /SIGNATURES/i.test(page.innerText || '');
+  }
+
+  function fillSignatureDates(detail) {
+    const owners = detail.owners || [];
+    const today = todayParts();
+    setDate('q58_applicantSignature58', today);
+    if (owners.length > 1) setDate('q60_date60', today);
+  }
+
+  function signaturePresent(name) {
+    const element = document.getElementsByName(name)[0];
+    return Boolean(element && String(element.value || '').startsWith('data:image/'));
+  }
+
+  function visibleNextButton() {
+    const page = visiblePage();
+    const candidates = page
+      ? [...page.querySelectorAll('.form-pagebreak-next, button.form-pagebreak-next, input.form-pagebreak-next')]
+      : [...document.querySelectorAll('.form-pagebreak-next, button.form-pagebreak-next, input.form-pagebreak-next')];
+    return candidates.find((button) => button.offsetParent !== null && !button.disabled) || null;
+  }
+
+  async function getApplicationData(job) {
+    const response = await send({ type: 'COR_JOTFORM_GET_DATA', jobId: job.id });
+    if (!response?.ok || !response.detail) throw new Error(response?.error || 'COR could not load this UEZ application.');
+    return response.detail;
+  }
+
+  function extractThankYouValues() {
+    const html = document.documentElement?.innerHTML || '';
+    const sid = html.match(/\bpdfSID\s*=\s*['"](\d+)['"]/i)?.[1]
+      || html.match(/submissionID\s*[:=]\s*['"](\d+)['"]/i)?.[1];
+    const formId = html.match(/\bformID\s*=\s*['"](\d+)['"]/i)?.[1] || FORM_ID;
+    const token = html.match(/\bdownloadToken\s*=\s*['"]([^'"]+)['"]/i)?.[1];
+    return { sid, formId, token };
+  }
+
+  function filenameFromDisposition(value) {
+    const match = String(value || '').match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/i);
+    const raw = match?.[1] || match?.[2] || match?.[3] || '';
+    try { return decodeURIComponent(raw.trim()); } catch (_) { return raw.trim(); }
+  }
+
+  async function captureCompletedPdf(job) {
+    if (finished) return;
+    const values = extractThankYouValues();
+    if (!values.sid || !values.token || !values.formId) {
+      notice('COR is waiting for JotForm to finish creating the signed submission.');
+      return;
+    }
+
+    finished = true;
+    await notifyStatus('downloading_ldc_pdf');
+    notice('JotForm submitted successfully. COR is downloading the signed application PDF…');
+
+    const url = `${location.origin}/API/pdf-converter/${encodeURIComponent(values.formId)}/fill-pdf?type=PDFv2&submissionID=${encodeURIComponent(values.sid)}&downloadToken=${encodeURIComponent(values.token)}`;
+    try {
+      const response = await fetch(url, { credentials: 'include' });
+      const buffer = await response.arrayBuffer();
+      const type = response.headers.get('content-type') || '';
+      if (!response.ok || !type.toLowerCase().includes('application/pdf') || buffer.byteLength < 100) {
+        throw new Error('JotForm did not return the completed PDF.');
+      }
+      const filename = filenameFromDisposition(response.headers.get('content-disposition'))
+        || `Lakewood-LDC-Incentive-Application-${values.sid}.pdf`;
+      await send({
+        type: 'COR_LDC_PDF',
+        jobId: job.id,
+        submissionId: values.sid,
+        base64: bytesToBase64(buffer),
+        filename
+      });
+      notice('Signed LDC application saved to COR. This window will close automatically.');
+    } catch (error) {
+      finished = false;
+      await send({ type: 'COR_NJ_ERROR', error: error.message || 'Could not save the completed JotForm PDF.' });
+    }
+  }
+
+  async function runOnce() {
+    const response = await send({ type: 'COR_NJ_GET_JOB' });
+    const job = response?.job;
+    if (!job || job.workflow !== 'ldc_jotform') return;
+
+    const host = location.hostname.toLowerCase();
+    if (host === 'submit.jotform.com') {
+      await captureCompletedPdf(job);
+      return;
+    }
+
+    if (host !== 'form.jotform.com') return;
+    if (!applicationData) applicationData = await getApplicationData(job);
+
+    fillApplication(applicationData);
+    await notifyStatus('filling_ldc_form');
+
+    if (signaturePageVisible()) {
+      fillSignatureDates(applicationData);
+      const applicantSigned = signaturePresent('q56_applicantSignature');
+      const coApplicantNeeded = (applicationData.owners || []).length > 1;
+      const coApplicantSigned = !coApplicantNeeded || signaturePresent('q57_coapplicantSignature');
+
+      if (applicantSigned && coApplicantSigned) {
+        notice('COR filled the application. Review the signed PDF preview and click the final Submit button when ready.');
+        await notifyStatus('waiting_for_final_submit');
+      } else {
+        notice(coApplicantNeeded
+          ? 'COR filled the application. Please review it and add the Applicant and Co-Applicant signatures.'
+          : 'COR filled the application. Please review it and add the Applicant signature.');
+        await notifyStatus('waiting_for_signature');
+      }
+      return;
+    }
+
+    const page = visiblePage();
+    const nextButton = visibleNextButton();
+    if (nextButton) {
+      const pageKey = page?.id || page?.dataset?.page || String(nextButton.id || nextButton.name || 'page');
+      if (pageKey !== lastAdvancedPage) {
+        lastAdvancedPage = pageKey;
+        notice('COR is filling the Lakewood LDC application…');
+        setTimeout(() => nextButton.click(), 250);
+      }
+      return;
+    }
+
+    notice('COR is filling the Lakewood LDC application. If JotForm shows a validation message, review the highlighted field.');
+  }
+
+  async function run() {
+    if (running) return;
+    running = true;
+    try { await runOnce(); } finally { running = false; }
+  }
+
+  const interval = setInterval(() => {
+    if (finished) { clearInterval(interval); return; }
+    run().catch((error) => send({ type: 'COR_NJ_ERROR', error: error.message }));
+  }, 500);
+
+  run().catch((error) => send({ type: 'COR_NJ_ERROR', error: error.message }));
+  new MutationObserver(() => run().catch(() => {})).observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener('load', () => run().catch(() => {}));
+})();
