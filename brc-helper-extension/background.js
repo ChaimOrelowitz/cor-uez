@@ -1,5 +1,6 @@
 const API_BASE = 'https://cor-uez-api.onrender.com';
 const ACTIVE_JOB_KEY = 'corUezActiveJob';
+const EXTENSION_KEY = 'cor-uez-extension-sec-2026';
 
 function isAllowedOrigin(origin) {
   if (!origin) return false;
@@ -23,7 +24,12 @@ async function setJob(job) {
 }
 
 async function api(job, path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { Authorization: `Bearer ${job.accessToken}`, ...(options.headers || {}) } });
+  const headers = {
+    Authorization: `Bearer ${job.accessToken}`,
+    'X-COR-Extension-Key': EXTENSION_KEY,
+    ...(options.headers || {})
+  };
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `UEZ returned ${response.status}.`);
   return data;

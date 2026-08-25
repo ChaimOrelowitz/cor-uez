@@ -179,14 +179,19 @@ async function ownedApplication(id, user) {
   return data;
 }
 
-async function addStatusEvent(applicationId, status, label, message, userId, visible = true) {
-  const { error } = await supabase.from('uez_status_events').insert({ application_id: applicationId, status, label, message, visible_to_applicant: visible, created_by: userId });
-  if (error) throw error;
+const EXTENSION_KEY = process.env.COR_EXTENSION_KEY || 'cor-uez-extension-sec-2026';
+
+function verifyExtensionKey(req) {
+  const key = req.get('x-cor-extension-key');
+  return key === EXTENSION_KEY;
 }
 
 router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res) => {
   let browser;
   try {
+    if (!verifyExtensionKey(req)) {
+      return res.status(403).json({ error: 'Invalid COR extension authorization key.' });
+    }
     const application = await ownedApplication(req.params.id, req.user);
     if (!application) return res.status(404).json({ error: 'Application not found' });
     const html = String(req.body?.html || '');

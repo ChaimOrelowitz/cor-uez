@@ -8,21 +8,29 @@ const app = express();
 const allowedOrigins = [
   process.env.UEZ_FRONTEND_URL,
   'https://uez.corsolutions.io',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
 ].filter(Boolean);
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) return callback(null, true);
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      /\.vercel\.app$/.test(origin) ||
+      /^chrome-extension:\/\//.test(origin)
+    ) {
+      return callback(null, true);
+    }
     return callback(new Error('Origin not allowed by CORS'));
   }
 }));
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 app.get('/health', (_req, res) => res.json({
   ok: true,
   service: 'cor-uez-api',
-  build: 'chrome-extension-v1'
+  build: 'chrome-extension-v2'
 }));
 app.use('/api/uez/brc/live', uezBrcLiveRoutes);
 app.use('/api/uez', uezRoutes);
