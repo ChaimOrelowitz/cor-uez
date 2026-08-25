@@ -84,7 +84,9 @@ function openOfficialBrcLookup(application) {
   });
 
   document.body.appendChild(form);
-  form.submit();
+  // The NJ form requires a field named "submit", which shadows form.submit.
+  // Call the native method directly so the targeted popup actually navigates.
+  HTMLFormElement.prototype.submit.call(form);
   form.remove();
   popup.focus();
 }
