@@ -9,8 +9,18 @@ function isAllowedOrigin(origin) {
   return false;
 }
 
-async function getJob() { return (await chrome.storage.session.get(ACTIVE_JOB_KEY))[ACTIVE_JOB_KEY] || null; }
-async function setJob(job) { if (job) await chrome.storage.session.set({ [ACTIVE_JOB_KEY]: job }); else await chrome.storage.session.remove(ACTIVE_JOB_KEY); }
+async function getJob() {
+  const local = await chrome.storage.local.get(ACTIVE_JOB_KEY).catch(() => ({}));
+  return local[ACTIVE_JOB_KEY] || null;
+}
+
+async function setJob(job) {
+  if (job) {
+    await chrome.storage.local.set({ [ACTIVE_JOB_KEY]: job }).catch(() => {});
+  } else {
+    await chrome.storage.local.remove(ACTIVE_JOB_KEY).catch(() => {});
+  }
+}
 
 async function api(job, path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers: { Authorization: `Bearer ${job.accessToken}`, ...(options.headers || {}) } });
@@ -46,8 +56,10 @@ async function startWorkflow(message, sender) {
   if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
   if (!['brc', 'tax_clearance'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
   const existing = await getJob();
-  if (existing && Date.now() - existing.createdAt < 30 * 60 * 1000) throw new Error('A COR document retrieval is already running. Finish it first.');
-  if (existing) await setJob(null);
+  if (existing && Date.now() - (existing.createdAt || 0) < 30 * 60 * 1000 && existing.status !== 'complete' && existing.status !== 'error') {
+    throw new Error('A COR document retrieval is already running. Finish it first.');
+  }
+  await setJob(null);
 
   let job = { id: String(message.requestId || crypto.randomUUID()), workflow: message.workflow, applicationId: String(message.payload?.applicationId || ''), businessName: String(message.payload?.businessName || ''), ein: String(message.payload?.ein || ''), accessToken: String(message.payload?.accessToken || ''), status: 'starting', createdAt: Date.now() };
   if (!job.applicationId || !job.businessName || !job.accessToken) throw new Error('The selected UEZ application is incomplete.');
