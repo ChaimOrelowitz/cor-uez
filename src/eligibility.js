@@ -8,6 +8,16 @@ function titleCase(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function parseActive(value) {
+  if (value == null || value === '') return true;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const normalized = String(value).trim().toUpperCase();
+  if (['N', 'NO', 'FALSE', '0', 'INACTIVE'].includes(normalized)) return false;
+  if (['Y', 'YES', 'TRUE', '1', 'ACTIVE'].includes(normalized)) return true;
+  return false;
+}
+
 async function jsonFetch(url) {
   const response = await fetch(url);
   if (!response.ok) return null;
@@ -144,9 +154,10 @@ export async function checkUezEligibility(address, magicKey = null) {
   const zoneName = `${zoneBaseName} Urban Enterprise Zone (UEZ)`;
   const zoneIdentifier = (rawZoneName || municipality || 'uez').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   const isLakewood = zoneIdentifier === 'lakewood' || /lakewood/i.test(rawZoneName) || /lakewood/i.test(municipality);
+  const active = parseActive(zone.ACTIVE);
 
   return {
-    status: 'in_uez',
+    status: active ? 'in_uez' : 'inactive_uez',
     address,
     matchedAddress,
     latitude: location.y,
@@ -155,7 +166,7 @@ export async function checkUezEligibility(address, magicKey = null) {
     zoneIdentifier,
     zoneName,
     municipality,
-    eligible: zone.ACTIVE == null ? true : Boolean(zone.ACTIVE),
-    programs: isLakewood ? [{ code: 'lakewood_technology_grant', name: 'Lakewood LDC Technology Grant' }] : []
+    eligible: active,
+    programs: active && isLakewood ? [{ code: 'lakewood_technology_grant', name: 'Lakewood LDC Technology Grant' }] : []
   };
 }
