@@ -7,6 +7,7 @@ const HOST = '127.0.0.1';
 const PORT = Number(process.env.BRC_CHECKER_PORT || 4318);
 const NJ_FORM_URL = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
 const NJ_TAX_REVENUE_URL = 'https://www1.nj.gov/TYTR_ACE_App/servlet/common/portalRequest';
+const NJ_PBS_HOME_URL = 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp';
 const JOB_TIMEOUT_MS = 25 * 60 * 1000;
 const jobs = new Map();
 
@@ -96,6 +97,14 @@ async function uploadTaxClearance(job, pdf, suggestedFilename) {
     method: 'POST',
     body
   });
+}
+
+async function getMyNjCredentials(job) {
+  const result = await apiRequest(job, `/api/uez/applications/${job.applicationId}/credentials/mynj`);
+  if (!result.exists || !result.credentials?.username || !result.credentials?.password) {
+    throw new Error('MyNJ / PBS login information is missing for this application.');
+  }
+  return result.credentials;
 }
 
 async function downloadToBuffer(download) {
@@ -209,6 +218,8 @@ async function runJob(job) {
 async function runTaxClearanceJob(job) {
   let browser;
   try {
+    job.status = 'loading_pbs_credentials';
+    const credentials = await getMyNjCredentials(job);
     job.status = 'opening_tax_clearance';
     browser = await chromium.launch({
       headless: false,
@@ -244,11 +255,78 @@ async function runTaxClearanceJob(job) {
     const page = await context.newPage();
     watchPage(page);
     job.status = 'waiting_for_pbs';
-    await page.goto(NJ_TAX_REVENUE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    job.status = 'waiting_for_tax_clearance_download';
+    await page.goto(NJ_PBS_HOME_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+    let loginOpened = false;
+    let loginSubmitted = false;
+    let taxCenterOpened = false;
+    let incentiveClicked = false;
+    let downloadClicked = false;
+    const workflowDeadline = Date.now() + JOB_TIMEOUT_MS;
+
+    while (Date.now() < workflowDeadline && !captured) {
+      for (const candidate of context.pages()) {
+        const loginLink = candidate.locator('a[href*="my.nj.gov/aui/Login"]');
+        if (!loginOpened && !loginSubmitted && await loginLink.count()) {
+          job.status = 'opening_mynj_login';
+          await loginLink.first().click();
+          loginOpened = true;
+          continue;
+        }
+
+        const username = candidate.locator('input[name="IDToken1"]');
+        const password = candidate.locator('input[name="IDToken2"]');
+        if (!loginSubmitted && await username.count() && await password.count()) {
+          job.status = 'signing_in_to_pbs';
+          await username.fill(credentials.username);
+          await password.fill(credentials.password);
+          const loginButton = candidate.locator('input[type="submit"], button[type="submit"]').first();
+          if (!await loginButton.count()) throw new Error('The MyNJ login button could not be found.');
+          await loginButton.click();
+          loginSubmitted = true;
+          job.status = 'waiting_for_pbs_home';
+          continue;
+        }
+
+        const taxCenterLink = candidate.locator('a[href*="TYTR_ACE_App/servlet/common/portalRequest"]')
+          .or(candidate.getByText('Tax & Revenue Center', { exact: true })).first();
+        if (!taxCenterOpened && await taxCenterLink.count()) {
+          job.status = 'opening_tax_revenue_center';
+          await taxCenterLink.click();
+          taxCenterOpened = true;
+          continue;
+        }
+
+        const incentiveButton = candidate.locator('input[name="Submit"][value="Business Incentive Tax Clearance"]');
+        if (!incentiveClicked && await incentiveButton.count()) {
+          job.status = 'opening_business_incentive_clearance';
+          await incentiveButton.click();
+          incentiveClicked = true;
+          job.status = 'waiting_for_human_verification';
+          continue;
+        }
+
+        const department = candidate.locator('select[name="ClearanceDept"]');
+        const downloadButton = candidate.locator('input[name="Submit"][value="Download Clearance Letter"]');
+        if (!downloadClicked && await department.count() && await downloadButton.count()) {
+          job.status = 'requesting_tax_clearance_pdf';
+          await department.selectOption({ label: 'New Jersey Department of Community Affairs' });
+          await downloadButton.click();
+          downloadClicked = true;
+          job.status = 'waiting_for_tax_clearance_download';
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+
+    credentials.username = null;
+    credentials.password = null;
+    credentials.challengeAnswer = null;
+    if (!captured) throw new Error('The tax-clearance session timed out. Start it again when you are ready.');
 
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('The tax-clearance session timed out. Start it again when you are ready.')), JOB_TIMEOUT_MS);
+      setTimeout(() => reject(new Error('The tax-clearance download timed out. Start it again when you are ready.')), 60000);
     });
     const downloaded = await Promise.race([downloadPromise, timeoutPromise]);
     job.status = 'uploading_tax_clearance';

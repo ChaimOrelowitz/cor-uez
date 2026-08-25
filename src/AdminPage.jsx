@@ -294,8 +294,16 @@ export default function AdminPage() {
       saving_pdf: 'BRC found. Creating the applicant’s PDF…',
       uploading: 'Uploading the BRC PDF directly to the applicant’s UEZ file…',
       saving_not_found: 'Saving the NJ result…',
+      loading_pbs_credentials: 'Loading the applicant’s encrypted PBS login…',
       opening_tax_clearance: 'Opening the PBS tax-clearance window…',
       waiting_for_pbs: 'Opening New Jersey PBS…',
+      opening_mynj_login: 'Opening the MyNJ login…',
+      signing_in_to_pbs: 'Signing into PBS with the stored MyNJ login…',
+      waiting_for_pbs_home: 'PBS is loading…',
+      opening_tax_revenue_center: 'Opening Tax & Revenue Center…',
+      opening_business_incentive_clearance: 'Opening Business Incentive Tax Clearance…',
+      waiting_for_human_verification: 'Complete New Jersey’s verification in the visible PBS window.',
+      requesting_tax_clearance_pdf: 'Selecting the Department of Community Affairs and requesting the letter…',
       waiting_for_tax_clearance_download: 'Use the PBS window to download the existing tax-clearance letter.',
       uploading_tax_clearance: 'Tax clearance downloaded. Adding it directly to the applicant’s UEZ file…'
     };
@@ -767,12 +775,12 @@ export default function AdminPage() {
                 <p className="admin-help">The New Jersey tax-clearance letter is saved in this applicant’s Documents below.</p>
                 <button className="secondary admin-full-button" onClick={() => openDoc(detail.documents.find((doc) => doc.document_type === 'tax_clearance'))}>Open tax-clearance letter</button>
               </> : <>
-                <p className="admin-help">Open PBS in the local checker. Sign in, choose <strong>Tax &amp; Revenue Center</strong>, then <strong>Business Incentive Tax Clearance</strong> and <strong>New Jersey Department of Community Affairs</strong>. Click download; the PDF will be filed here automatically.</p>
+                <p className="admin-help">The checker signs into PBS, opens <strong>Tax &amp; Revenue Center</strong>, selects <strong>Business Incentive Tax Clearance</strong> and <strong>New Jersey Department of Community Affairs</strong>, then files the downloaded PDF here automatically. Complete any New Jersey verification shown in the visible window.</p>
                 <button
                   className="primary admin-full-button"
                   onClick={runTaxClearance}
                   disabled={busy || !myNjCredentials || !['account_created', 'uez_approval_uploaded'].includes(detail.application.pbs_status)}
-                >Open PBS and retrieve tax clearance</button>
+                >Retrieve tax clearance from PBS</button>
                 {!myNjCredentials && <p className="admin-help">MyNJ / PBS login information is required first.</p>}
                 {myNjCredentials && !['account_created', 'uez_approval_uploaded'].includes(detail.application.pbs_status) && <p className="admin-help">Mark the PBS account created before retrieving tax clearance.</p>}
               </>}
