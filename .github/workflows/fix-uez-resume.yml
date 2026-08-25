@@ -1,0 +1,49 @@
+name: Fix UEZ signup resume
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-uez-resume.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch App.jsx
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('src/App.jsx')
+          s = p.read_text()
+
+          old = """    setBusy(true);\n    setMessage('');\n    try {\n      const auth = await signUpApplicant(form.email.trim(), form.password);"""
+          new = """    setBusy(true);\n    setMessage('');\n    try {\n      localStorage.setItem('uez_pending_application', JSON.stringify({\n        email: form.email.trim(),\n        address: eligibility?.matchedAddress || form.address,\n        eligibility\n      }));\n      const auth = await signUpApplicant(form.email.trim(), form.password);"""
+          if old not in s:
+              raise SystemExit('createAccountAndCase anchor not found')
+          s = s.replace(old, new, 1)
+
+          old2 = """      setApplicationId(app.id);\n      setForm((old) => ({\n        ...old,\n        owners: old.owners.map((owner, index) => index === 0 && !owner.email ? { ...owner, email: old.email } : owner)\n      }));\n      setStep(3);"""
+          new2 = """      setApplicationId(app.id);\n      localStorage.removeItem('uez_pending_application');\n      setForm((old) => ({\n        ...old,\n        owners: old.owners.map((owner, index) => index === 0 && !owner.email ? { ...owner, email: old.email } : owner)\n      }));\n      setStep(3);"""
+          if old2 not in s:
+              raise SystemExit('post-create anchor not found')
+          s = s.replace(old2, new2, 1)
+
+          old3 = """      const loaded = await loadLatestApplication();\n      if (!loaded) {\n        setSignInMode(false);\n        setStep(0);\n        setMessage('Signed in. Start by checking your business address.');\n      }"""
+          new3 = """      const loaded = await loadLatestApplication();\n      if (!loaded) {\n        let pending = null;\n        try {\n          pending = JSON.parse(localStorage.getItem('uez_pending_application') || 'null');\n        } catch (_) {}\n\n        const pendingEligibility = pending?.eligibility || eligibility;\n        const pendingAddress = pending?.address || pendingEligibility?.matchedAddress || form.address;\n\n        if (pendingEligibility?.eligible && pendingAddress) {\n          setEligibility(pendingEligibility);\n          setForm((old) => ({\n            ...old,\n            address: pendingAddress,\n            email: pending?.email || old.email,\n            owners: old.owners.map((owner, index) => index === 0 && !owner.email\n              ? { ...owner, email: pending?.email || old.email }\n              : owner)\n          }));\n\n          const app = await createApplication({\n            contactEmail: pending?.email || form.email.trim(),\n            address: pendingAddress,\n            zoneIdentifier: pendingEligibility?.zoneIdentifier,\n            zoneName: pendingEligibility?.zoneName,\n            zoneEligible: pendingEligibility?.eligible === true,\n            programCode: pendingEligibility?.programs?.[0]?.code || null\n          });\n          setApplicationId(app.id);\n          localStorage.removeItem('uez_pending_application');\n          setSignInMode(false);\n          setStep(3);\n          setMessage('Account confirmed. Continue with your business information.');\n        } else {\n          setSignInMode(false);\n          setStep(0);\n          setMessage('Signed in. Start by checking your business address.');\n        }\n      }"""
+          if old3 not in s:
+              raise SystemExit('signInAndResume anchor not found')
+          s = s.replace(old3, new3, 1)
+
+          p.write_text(s)
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add src/App.jsx
+          git commit -m "Resume UEZ application after account confirmation"
+          git push
