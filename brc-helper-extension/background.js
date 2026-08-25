@@ -50,8 +50,9 @@ async function startWorkflow(message, sender) {
   }
   await setJob(job);
   const url = job.workflow === 'brc' ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp' : 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp';
-  const tab = await chrome.tabs.create({ url, active: true });
-  job = { ...job, tabId: tab.id };
+  const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });
+  const tab = popup.tabs?.[0];
+  job = { ...job, tabId: tab?.id || null, windowId: popup.id };
   await notify(job, job.workflow === 'brc' ? 'opening_brc' : 'opening_pbs');
   return { ok: true, jobId: job.id };
 }

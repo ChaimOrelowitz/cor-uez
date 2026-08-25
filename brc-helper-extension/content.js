@@ -1,7 +1,7 @@
 (() => {
-  if (window !== window.top) return;
   let sent = false;
   let running = false;
+  let announced = false;
   const send = (message) => chrome.runtime.sendMessage(message).catch(() => null);
   const setValue = (input, value) => { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); };
   const pageText = () => String(document.body?.innerText || '').replace(/\s+/g, ' ').trim();
@@ -32,6 +32,10 @@
     const job = response?.job;
     if (!job || sent) return;
     const text = pageText();
+    if (!announced) {
+      announced = true;
+      await send({ type: 'COR_NJ_STATUS', status: 'nj_page_open' });
+    }
 
     if (job.workflow === 'brc') {
       if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && /Certificate Number:/i.test(text)) {
@@ -52,6 +56,9 @@
         if (!name.value) setValue(name, control);
         if (!taxId.value) setValue(taxId, digits.length === 9 ? `${digits}000` : '');
         notice('COR filled the BRC lookup. Complete New Jersey verification and submit. The certificate will be saved to the applicant automatically.');
+        await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
+      } else if (/incapsula|hcaptcha|verify you are human/i.test(`${text} ${document.documentElement.innerHTML}`)) {
+        notice('COR is active. Complete New Jersey verification if it appears; the BRC form will be filled afterward.');
         await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
       }
       return;

@@ -286,6 +286,7 @@ export default function AdminPage() {
   async function runExtensionWorkflow(workflow, payload) {
     const statusMessages = {
       starting: 'Starting the COR Chrome extension…',
+      nj_page_open: 'The COR extension is active on the New Jersey page…',
       opening_brc: 'Opening the New Jersey BRC lookup…',
       waiting_for_verification: 'Complete the NJ verification in the checker window. UEZ will import the result automatically.',
       saving_brc: 'BRC found. Creating and saving the applicant’s PDF…',
