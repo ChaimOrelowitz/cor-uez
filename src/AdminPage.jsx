@@ -536,6 +536,7 @@ export default function AdminPage() {
       </aside>
 
       <section className="admin-detail">
+        {message && <div className="admin-message">{message}</div>}
         {!detail && <div className="admin-empty"><h2>Select an application</h2><p>New submissions will appear on the left.</p></div>}
 
         {detail && <>
@@ -543,8 +544,6 @@ export default function AdminPage() {
             <div><span className="eyebrow">UEZ APPLICATION</span><h1>{detail.application.business_name_input}</h1><p>{detail.application.contact_email} · {detail.application.contact_phone || 'No phone'}</p></div>
             <div className="admin-header-status"><span>{statusLabel(detail.application.status)}</span><small>Submitted {detail.application.submitted_at ? new Date(detail.application.submitted_at).toLocaleString() : 'not yet'}</small></div>
           </div>
-
-          {message && <div className="admin-message">{message}</div>}
 
           <div className="admin-edit-actions">
             {editMode ? <>
