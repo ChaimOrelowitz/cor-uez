@@ -220,6 +220,15 @@ router.put('/applications/:id/owners', async (req, res) => {
       .select('id, owner_order, first_name, last_name, email, phone, ownership_percent, created_at, updated_at')
       .order('owner_order');
     if (error) throw error;
+
+    const primaryPhone = rows[0]?.phone || null;
+    if (primaryPhone && primaryPhone !== application.contact_phone) {
+      const { error: phoneError } = await supabase.from('uez_applications')
+        .update({ contact_phone: primaryPhone, updated_at: new Date().toISOString() })
+        .eq('id', application.id);
+      if (phoneError) throw phoneError;
+    }
+
     res.json(data || []);
   } catch (err) {
     res.status(400).json({ error: err.message });
