@@ -1,0 +1,167 @@
+name: Add LDC application fields
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-ldc-fields.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch UEZ applicant, API, and admin fields
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f'{label} anchor not found in {path}')
+              p.write_text(s.replace(old, new, 1))
+
+          # Applicant form: collect required DBA decision/name and persist it.
+          replace_once('src/App.jsx',
+              "    isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '',\n    owners: [{ ...blankOwner(), ownershipPercent: '100' }]",
+              "    isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '',\n    owners: [{ ...blankOwner(), ownershipPercent: '100' }]",
+              'app form state')
+
+          replace_once('src/App.jsx',
+              "      partTimeEmployees: latest.part_time_employees ?? old.partTimeEmployees,\n      owners: full.owners?.length",
+              "      partTimeEmployees: latest.part_time_employees ?? old.partTimeEmployees,\n      hasDba: latest.has_dba == null ? old.hasDba : (latest.has_dba ? 'yes' : 'no'),\n      dbaName: latest.dba_name || old.dbaName,\n      owners: full.owners?.length",
+              'app hydrate DBA')
+
+          replace_once('src/App.jsx',
+              "    if (!form.businessName.trim() || !form.businessDescription.trim() || einDigits.length !== 9 || !form.isSoleProprietorship) {\n      setMessage('Complete the business name, description, 9-digit EIN, and business type before continuing.');",
+              "    if (!form.businessName.trim() || !form.businessDescription.trim() || einDigits.length !== 9 || !form.isSoleProprietorship || !form.hasDba || (form.hasDba === 'yes' && !form.dbaName.trim())) {\n      setMessage('Complete the business name, description, 9-digit EIN, business type, and DBA information before continuing.');",
+              'app business validation')
+
+          replace_once('src/App.jsx',
+              "        partTimeEmployees: form.partTimeEmployees,\n        contactPhone: form.owners[0]?.phone || null",
+              "        partTimeEmployees: form.partTimeEmployees,\n        hasDba: form.hasDba === 'yes',\n        dbaName: form.hasDba === 'yes' ? form.dbaName.trim() : '',\n        contactPhone: form.owners[0]?.phone || null",
+              'app business save payload')
+
+          replace_once('src/App.jsx',
+              "            <div><label>Is this business a sole proprietorship?</label><select value={form.isSoleProprietorship} onChange={update('isSoleProprietorship')}><option value=\"\">Select yes or no</option><option value=\"yes\">Yes</option><option value=\"no\">No</option></select></div>\n            <div></div>\n            <div><label>Full-time employees</label>",
+              "            <div><label>Is this business a sole proprietorship?</label><select value={form.isSoleProprietorship} onChange={update('isSoleProprietorship')}><option value=\"\">Select yes or no</option><option value=\"yes\">Yes</option><option value=\"no\">No</option></select></div>\n            <div><label>Does the business have a DBA? <span className=\"required-star\">*</span></label><select value={form.hasDba} onChange={(e) => setForm((old) => ({ ...old, hasDba: e.target.value, dbaName: e.target.value === 'yes' ? old.dbaName : '' }))} required><option value=\"\">Select yes or no</option><option value=\"yes\">Yes</option><option value=\"no\">No</option></select></div>\n            {form.hasDba === 'yes' && <div><label>What is the DBA name? <span className=\"required-star\">*</span></label><input value={form.dbaName} onChange={update('dbaName')} required /></div>}\n            <div><label>Full-time employees</label>",
+              'app DBA UI')
+
+          # Backend: default Lakewood grant to $5,000, store DBA, derive owner titles, expose everything to admin.
+          replace_once('backend/routes/uez.js',
+              "      program_code: body.programCode || null,\n      status: 'intake_in_progress'",
+              "      program_code: body.programCode || null,\n      grant_amount_requested: body.programCode === 'lakewood_technology_grant' ? 5000 : null,\n      status: 'intake_in_progress'",
+              'backend application grant default')
+
+          replace_once('backend/routes/uez.js',
+              "      part_time_employees: body.partTimeEmployees === '' || body.partTimeEmployees == null\n        ? application.part_time_employees\n        : Number(body.partTimeEmployees),\n      contact_phone: body.contactPhone ?? application.contact_phone,",
+              "      part_time_employees: body.partTimeEmployees === '' || body.partTimeEmployees == null\n        ? application.part_time_employees\n        : Number(body.partTimeEmployees),\n      has_dba: body.hasDba == null ? application.has_dba : body.hasDba === true,\n      dba_name: body.hasDba === true ? (String(body.dbaName || '').trim() || null) : (body.hasDba === false ? null : application.dba_name),\n      grant_amount_requested: application.grant_amount_requested ?? (application.program_code === 'lakewood_technology_grant' ? 5000 : null),\n      contact_phone: body.contactPhone ?? application.contact_phone,",
+              'backend business DBA')
+
+          replace_once('backend/routes/uez.js',
+              "    if (patch.part_time_employees != null && patch.part_time_employees < 0) throw new Error('Part-time employees cannot be negative');",
+              "    if (patch.part_time_employees != null && patch.part_time_employees < 0) throw new Error('Part-time employees cannot be negative');\n    if (patch.has_dba === true && !patch.dba_name) throw new Error('DBA name is required when the business has a DBA.');",
+              'backend DBA validation')
+
+          replace_once('backend/routes/uez.js',
+              "      ownership_percent: Number(owner.ownershipPercent),\n      address_line1: owner.addressLine1 || null,",
+              "      ownership_percent: Number(owner.ownershipPercent),\n      position_title: String(owner.positionTitle || (owners.length === 1 ? 'Owner' : 'Partner')).trim(),\n      address_line1: owner.addressLine1 || null,",
+              'backend owner title')
+
+          replace_once('backend/routes/uez.js',
+              ".select('id, owner_order, first_name, last_name, email, phone, ownership_percent')",
+              ".select('id, owner_order, first_name, last_name, email, phone, ownership_percent, position_title')",
+              'backend applicant owner select')
+
+          replace_once('backend/routes/uez.js',
+              ".select('id, owner_order, first_name, last_name, email, phone, ownership_percent, created_at, updated_at')",
+              ".select('id, owner_order, first_name, last_name, email, phone, ownership_percent, position_title, created_at, updated_at')",
+              'backend saved owner select')
+
+          replace_once('backend/routes/uez.js',
+              "      ownershipPercent: owner.ownership_percent,\n      addressLine1: owner.address_line1,",
+              "      ownershipPercent: owner.ownership_percent,\n      positionTitle: owner.position_title || ((ownersResult.data || []).length === 1 ? 'Owner' : 'Partner'),\n      addressLine1: owner.address_line1,",
+              'backend admin owner map')
+
+          replace_once('backend/routes/uez.js',
+              "    const partTimeEmployees = body.partTimeEmployees === '' || body.partTimeEmployees == null ? null : Number(body.partTimeEmployees);",
+              "    const partTimeEmployees = body.partTimeEmployees === '' || body.partTimeEmployees == null ? null : Number(body.partTimeEmployees);\n    const grantAmountRequested = body.grantAmountRequested === '' || body.grantAmountRequested == null ? null : Number(body.grantAmountRequested);",
+              'backend admin grant parse')
+
+          replace_once('backend/routes/uez.js',
+              "    if (partTimeEmployees != null && (!Number.isInteger(partTimeEmployees) || partTimeEmployees < 0)) {\n      return res.status(400).json({ error: 'Part-time employees must be zero or greater.' });\n    }",
+              "    if (partTimeEmployees != null && (!Number.isInteger(partTimeEmployees) || partTimeEmployees < 0)) {\n      return res.status(400).json({ error: 'Part-time employees must be zero or greater.' });\n    }\n    if (body.hasDba !== true && body.hasDba !== false) return res.status(400).json({ error: 'DBA selection is required.' });\n    if (body.hasDba === true && !String(body.dbaName || '').trim()) return res.status(400).json({ error: 'DBA name is required when the business has a DBA.' });\n    if (grantAmountRequested != null && (!Number.isFinite(grantAmountRequested) || grantAmountRequested < 0)) return res.status(400).json({ error: 'Grant amount must be zero or greater.' });",
+              'backend admin DBA grant validation')
+
+          replace_once('backend/routes/uez.js',
+              "      part_time_employees: partTimeEmployees,\n      address_line1: String(body.addressLine1 || '').trim() || null,",
+              "      part_time_employees: partTimeEmployees,\n      has_dba: body.hasDba === true,\n      dba_name: body.hasDba === true ? String(body.dbaName || '').trim() : null,\n      grant_amount_requested: grantAmountRequested ?? (application.program_code === 'lakewood_technology_grant' ? 5000 : application.grant_amount_requested),\n      address_line1: String(body.addressLine1 || '').trim() || null,",
+              'backend admin DBA grant patch')
+
+          replace_once('backend/routes/uez.js',
+              "    if (!application.business_name_input || !application.ein || !application.address_line1) {\n      return res.status(400).json({ error: 'Business name, EIN, and business address are required before submission.' });\n    }",
+              "    if (!application.business_name_input || !application.ein || !application.address_line1) {\n      return res.status(400).json({ error: 'Business name, EIN, and business address are required before submission.' });\n    }\n    if (application.has_dba == null) return res.status(400).json({ error: 'Please answer whether the business has a DBA before submission.' });\n    if (application.has_dba && !application.dba_name) return res.status(400).json({ error: 'Please enter the DBA name before submission.' });",
+              'backend submit DBA guard')
+
+          # Admin: show/edit DBA, grant amount, and derived owner/partner title.
+          replace_once('src/AdminPage.jsx',
+              "    partTimeEmployees: app.part_time_employees ?? '',\n    addressLine1: app.address_line1 || '',",
+              "    partTimeEmployees: app.part_time_employees ?? '',\n    hasDba: app.has_dba == null ? '' : (app.has_dba ? 'yes' : 'no'),\n    dbaName: app.dba_name || '',\n    grantAmountRequested: app.grant_amount_requested ?? (app.program_code === 'lakewood_technology_grant' ? 5000 : ''),\n    addressLine1: app.address_line1 || '',",
+              'admin application draft')
+
+          replace_once('src/AdminPage.jsx',
+              "    ownershipPercent: owner.ownershipPercent ?? '',\n    addressLine1: owner.addressLine1 || '',",
+              "    ownershipPercent: owner.ownershipPercent ?? '',\n    positionTitle: owner.positionTitle || '',\n    addressLine1: owner.addressLine1 || '',",
+              'admin owner draft')
+
+          replace_once('src/AdminPage.jsx',
+              "    if (!applicationDraft.businessName.trim() || !applicationDraft.contactEmail.trim()) {\n      setMessage('Business name and contact email are required.');\n      return;\n    }",
+              "    if (!applicationDraft.businessName.trim() || !applicationDraft.contactEmail.trim()) {\n      setMessage('Business name and contact email are required.');\n      return;\n    }\n    if (!applicationDraft.hasDba || (applicationDraft.hasDba === 'yes' && !applicationDraft.dbaName.trim())) {\n      setMessage('Complete the DBA information before saving.');\n      return;\n    }",
+              'admin save DBA validation')
+
+          replace_once('src/AdminPage.jsx',
+              "      await updateAdminApplication(detail.application.id, applicationDraft);",
+              "      await updateAdminApplication(detail.application.id, {\n        ...applicationDraft,\n        hasDba: applicationDraft.hasDba === 'yes',\n        dbaName: applicationDraft.hasDba === 'yes' ? applicationDraft.dbaName : ''\n      });",
+              'admin save normalized DBA')
+
+          replace_once('src/AdminPage.jsx',
+              "                <div><label>Part-time employees</label><input type=\"number\" min=\"0\" value={applicationDraft.partTimeEmployees} onChange={(e) => updateApplicationDraft('partTimeEmployees', e.target.value)} /></div>\n                <div className=\"admin-edit-wide\"><label>Address",
+              "                <div><label>Part-time employees</label><input type=\"number\" min=\"0\" value={applicationDraft.partTimeEmployees} onChange={(e) => updateApplicationDraft('partTimeEmployees', e.target.value)} /></div>\n                <div><label>Does the business have a DBA? <span className=\"required-star\">*</span></label><select value={applicationDraft.hasDba} onChange={(e) => updateApplicationDraft('hasDba', e.target.value)}><option value=\"\">Select yes or no</option><option value=\"yes\">Yes</option><option value=\"no\">No</option></select></div>\n                {applicationDraft.hasDba === 'yes' && <div><label>DBA name <span className=\"required-star\">*</span></label><input value={applicationDraft.dbaName} onChange={(e) => updateApplicationDraft('dbaName', e.target.value)} /></div>}\n                <div><label>Grant amount requested</label><input type=\"number\" min=\"0\" step=\"0.01\" value={applicationDraft.grantAmountRequested} onChange={(e) => updateApplicationDraft('grantAmountRequested', e.target.value)} /></div>\n                <div className=\"admin-edit-wide\"><label>Address",
+              'admin business edit fields')
+
+          replace_once('src/AdminPage.jsx',
+              "                <div><dt>Business type</dt><dd>{detail.application.is_sole_proprietorship ? 'Sole proprietorship' : 'Entity'}</dd></div>\n                <div className=\"data-wide\"><dt>Description</dt>",
+              "                <div><dt>Business type</dt><dd>{detail.application.is_sole_proprietorship ? 'Sole proprietorship' : 'Entity'}</dd></div>\n                <div><dt>DBA</dt><dd>{detail.application.has_dba == null ? '—' : detail.application.has_dba ? (detail.application.dba_name || 'Yes') : 'No'}</dd></div>\n                <div><dt>Grant amount</dt><dd>{detail.application.grant_amount_requested == null ? '—' : `$${Number(detail.application.grant_amount_requested).toLocaleString()}`}</dd></div>\n                <div className=\"data-wide\"><dt>Description</dt>",
+              'admin business display fields')
+
+          replace_once('src/AdminPage.jsx',
+              "                      <div><label>Ownership percentage <span className=\"required-star\">*</span></label><input type=\"number\" min=\"0.01\" max=\"100\" step=\"0.01\" value={owner.ownershipPercent} onChange={(e) => updateOwnerDraft(index, 'ownershipPercent', e.target.value)} /></div>\n                      <div><label>Address",
+              "                      <div><label>Ownership percentage <span className=\"required-star\">*</span></label><input type=\"number\" min=\"0.01\" max=\"100\" step=\"0.01\" value={owner.ownershipPercent} onChange={(e) => updateOwnerDraft(index, 'ownershipPercent', e.target.value)} /></div>\n                      <div><label>Position / title</label><input value={owner.positionTitle} onChange={(e) => updateOwnerDraft(index, 'positionTitle', e.target.value)} placeholder={ownerDrafts.length === 1 ? 'Owner' : 'Partner'} /></div>\n                      <div><label>Address",
+              'admin owner title edit')
+
+          replace_once('src/AdminPage.jsx',
+              "                    <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>\n                    <div><dt>DOB</dt>",
+              "                    <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>\n                    <div><dt>Position / title</dt><dd>{owner.positionTitle || (detail.owners.length === 1 ? 'Owner' : 'Partner')}</dd></div>\n                    <div><dt>DOB</dt>",
+              'admin owner title display')
+
+          # The workflow is a one-time patcher; remove it from the resulting application commit.
+          Path('.github/workflows/add-ldc-fields.yml').unlink()
+          PY
+
+      - name: Verify frontend and backend
+        run: |
+          npm install --ignore-scripts
+          npm run build
+          node --check backend/routes/uez.js
+
+      - name: Commit field implementation
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add src/App.jsx src/AdminPage.jsx backend/routes/uez.js .github/workflows/add-ldc-fields.yml
+          git commit -m "Add LDC application fields"
+          git push
