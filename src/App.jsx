@@ -48,6 +48,7 @@ function documentLabel(type) {
     brc: 'Business Registration Certificate',
     uez_approval_email: 'Notice of Certification Application Approved email',
     tax_clearance: 'New Jersey tax-clearance letter',
+    ldc_application: 'Lakewood LDC incentive application',
     supporting: 'Supporting document'
   };
   return labels[type] || type;

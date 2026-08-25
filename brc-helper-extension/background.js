@@ -49,18 +49,37 @@ async function fail(job, error) {
   await setJob(null);
 }
 
-async function uploadTaxPdf(job, base64, filename) {
+async function uploadPdf(job, documentType, base64, filename) {
   const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
   const body = new FormData();
-  body.append('documentType', 'tax_clearance');
-  body.append('file', new Blob([bytes], { type: 'application/pdf' }), filename || 'NJ-Tax-Clearance.pdf');
+  body.append('documentType', documentType);
+  body.append('file', new Blob([bytes], { type: 'application/pdf' }), filename);
   await api(job, `/api/uez/applications/${job.applicationId}/documents`, { method: 'POST', body });
+}
+
+async function uploadTaxPdf(job, base64, filename) {
+  await uploadPdf(job, 'tax_clearance', base64, filename || 'NJ-Tax-Clearance.pdf');
+}
+
+async function uploadLdcPdf(job, base64, filename, submissionId) {
+  await uploadPdf(job, 'ldc_application', base64, filename || `Lakewood-LDC-Incentive-Application-${submissionId || 'submitted'}.pdf`);
+  await api(job, `/api/uez/admin/applications/${job.applicationId}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      status: 'ldc_submitted',
+      label: 'LDC application submitted',
+      message: submissionId
+        ? `The Lakewood LDC incentive application was submitted successfully. JotForm submission ID: ${submissionId}.`
+        : 'The Lakewood LDC incentive application was submitted successfully.'
+    })
+  });
 }
 
 async function startWorkflow(message, sender) {
   const senderOrigin = sender.tab?.url ? new URL(sender.tab.url).origin : '';
   if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
-  if (!['brc', 'tax_clearance'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
+  if (!['brc', 'tax_clearance', 'ldc_jotform'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
   const existing = await getJob();
   if (existing && Date.now() - (existing.createdAt || 0) < 30 * 60 * 1000 && existing.status !== 'complete' && existing.status !== 'error') {
     throw new Error('A COR document retrieval is already running. Finish it first.');
@@ -75,12 +94,17 @@ async function startWorkflow(message, sender) {
     job.credentials = result.credentials;
   }
   await setJob(job);
-  const url = job.workflow === 'brc' ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp' : 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp';
+  const url = job.workflow === 'brc'
+    ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp'
+    : job.workflow === 'tax_clearance'
+      ? 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp'
+      : 'https://form.jotform.com/241936732268060';
   const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });
   const tab = popup.tabs?.[0];
   job = { ...job, tabId: tab?.id || null, windowId: popup.id };
-  await notify(job, job.workflow === 'brc' ? 'opening_brc' : 'opening_pbs');
-  if (tab?.id) await injectNjHelper(tab.id).catch(() => {});
+  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : 'opening_ldc_form';
+  await notify(job, openingStatus);
+  if (tab?.id && job.workflow !== 'ldc_jotform') await injectNjHelper(tab.id).catch(() => {});
   return { ok: true, jobId: job.id };
 }
 
@@ -95,6 +119,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const job = await getJob();
     if (!job) return { ok: false, error: 'No COR workflow is active.' };
     if (message?.type === 'COR_NJ_GET_JOB') return { ok: true, job: { id: job.id, workflow: job.workflow, applicationId: job.applicationId, businessName: job.businessName, ein: job.ein, status: job.status, credentials: job.credentials || null } };
+    if (message?.type === 'COR_JOTFORM_GET_DATA') {
+      if (job.workflow !== 'ldc_jotform' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching LDC form workflow is active.' };
+      const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
+      return { ok: true, detail };
+    }
     if (message?.type === 'COR_NJ_STATUS') { await notify(job, message.status || job.status); return { ok: true }; }
     if (message?.type === 'COR_BRC_NOT_FOUND') {
       await api(job, `/api/uez/admin/applications/${job.applicationId}/brc-not-found`, { method: 'POST' });
@@ -121,6 +150,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await uploadTaxPdf(job, message.base64, message.filename);
         await notify(job, 'complete');
         if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);
+      } catch (err) {
+        await fail(job, err);
+      }
+      await setJob(null);
+      return { ok: true };
+    }
+    if (message?.type === 'COR_LDC_PDF') {
+      if (job.workflow !== 'ldc_jotform' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching LDC form workflow is active.' };
+      await notify(job, 'uploading_ldc_application');
+      try {
+        await uploadLdcPdf(job, message.base64, message.filename, message.submissionId);
+        await notify(job, 'complete', { submissionId: message.submissionId || null });
+        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
       } catch (err) {
         await fail(job, err);
       }

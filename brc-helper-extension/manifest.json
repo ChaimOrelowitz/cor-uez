@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "COR UEZ Document Helper",
-  "version": "1.1.2",
-  "description": "Runs BRC and tax-clearance retrieval when started from the COR UEZ admin app.",
+  "version": "1.2.0",
+  "description": "Runs BRC, tax-clearance, and Lakewood LDC application workflows from the COR UEZ admin app.",
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
     "http://localhost/*",
@@ -13,7 +13,9 @@
     "https://uez.corsolutions.io/*",
     "https://*.state.nj.us/*",
     "https://*.nj.gov/*",
-    "https://my.nj.gov/*"
+    "https://my.nj.gov/*",
+    "https://form.jotform.com/*",
+    "https://submit.jotform.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -40,6 +42,14 @@
       "run_at": "document_idle",
       "all_frames": true,
       "match_about_blank": true
+    },
+    {
+      "matches": [
+        "https://form.jotform.com/*",
+        "https://submit.jotform.com/*"
+      ],
+      "js": ["jotform.js"],
+      "run_at": "document_idle"
     }
   ]
 }

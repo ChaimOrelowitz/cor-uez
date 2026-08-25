@@ -48,6 +48,7 @@ function documentLabel(type) {
   if (type === 'brc') return 'BRC';
   if (type === 'uez_approval_email') return 'UEZ approval email';
   if (type === 'tax_clearance') return 'Tax-clearance letter';
+  if (type === 'ldc_application') return 'LDC incentive application';
   if (type === 'supporting') return 'Supporting';
   return type;
 }
@@ -316,7 +317,14 @@ export default function AdminPage() {
       opening_tax_revenue_center: 'Opening Tax & Revenue Center…',
       waiting_for_human_verification: 'Complete New Jersey’s verification in the visible PBS window.',
       requesting_tax_clearance_pdf: 'Selecting the Department of Community Affairs and requesting the letter…',
-      uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…'
+      uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…',
+      opening_ldc_form: 'Opening the Lakewood LDC incentive application…',
+      filling_ldc_form: 'COR is filling the Lakewood LDC application…',
+      waiting_for_signature: 'Application filled. Add the required signature in the JotForm popup.',
+      generating_ldc_preview: 'Signature received. Generating the JotForm PDF preview…',
+      waiting_for_final_submit: 'Review the generated application and click the final Submit button in JotForm.',
+      downloading_ldc_pdf: 'Application submitted. Downloading JotForm’s signed PDF…',
+      uploading_ldc_application: 'Saving the signed LDC application PDF to this UEZ file…'
     };
     const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     return new Promise((resolve, reject) => {
@@ -332,7 +340,7 @@ export default function AdminPage() {
         if (message.requestId === requestId && message.type === 'COR_UEZ_START_RESULT') {
           if (!message.ok) return finish(new Error(message.error || 'The COR Chrome extension could not start.'));
           window.clearTimeout(timer);
-          timer = window.setTimeout(() => finish(new Error('The New Jersey document session timed out. Start it again when ready.')), 25 * 60 * 1000);
+          timer = window.setTimeout(() => finish(new Error('The COR workflow session timed out. Start it again when ready.')), 25 * 60 * 1000);
           return;
         }
         if (message.jobId !== requestId || message.type !== 'COR_UEZ_STATUS') return;
@@ -391,6 +399,28 @@ export default function AdminPage() {
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');
       await refreshList(detail.application.id);
       setMessage('Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runLdcJotform() {
+    setBusy(true);
+    setMessage('Starting the COR Chrome extension…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the LDC application.');
+
+      const outcome = await runExtensionWorkflow('ldc_jotform', {
+        applicationId: detail.application.id,
+        businessName: detail.application.registered_business_name || detail.application.business_name_input,
+        accessToken: currentSession.access_token
+      });
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The LDC application workflow did not finish.');
+      await refreshList(detail.application.id);
+      setMessage('LDC application submitted. The signed JotForm PDF is saved in this applicant’s Documents.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -868,6 +898,12 @@ export default function AdminPage() {
               <div className="admin-card-head"><h3>Workflow</h3></div>
               <button className="secondary admin-full-button" onClick={markReadyForLdc} disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded'}>Mark ready for grant processing</button>
               <p className="admin-help">This becomes available after the applicant uploads the required UEZ approval email.</p>
+              <button
+                className="primary admin-full-button"
+                onClick={runLdcJotform}
+                disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded' || !detail.documents.some((doc) => doc.document_type === 'tax_clearance') || detail.documents.some((doc) => doc.document_type === 'ldc_application')}
+              >{detail.documents.some((doc) => doc.document_type === 'ldc_application') ? '✓ LDC application submitted' : 'Fill & submit LDC application'}</button>
+              <p className="admin-help">COR fills the Lakewood JotForm, pauses for the required signature, then saves JotForm’s completed signed PDF here after final submission.</p>
               <div className="admin-timeline">
                 {[...detail.statusEvents].reverse().slice(0, 6).map((event) => <div key={event.id}><strong>{event.label || statusLabel(event.status)}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>)}
               </div>

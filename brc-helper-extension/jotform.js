@@ -175,7 +175,6 @@
     setAddress('q83_businessAddress83', businessAddress);
     setField('q6_ein', String(application.ein || '').replace(/\D/g, '').slice(0, 9));
     setField('q8_businessPhone[full]', businessPhone);
-    setField('q9_fax', businessPhone);
     setField('q74_email', application.contact_email || primary.email || '');
 
     if (application.program_code === 'lakewood_technology_grant') setField('q12_incentiveProgram12', '1');
@@ -321,7 +320,17 @@
       const coApplicantSigned = !coApplicantNeeded || signaturePresent('q57_coapplicantSignature');
 
       if (applicantSigned && coApplicantSigned) {
-        notice('COR filled the application. Review the signed PDF preview and click the final Submit button when ready.');
+        const previewKey = `corLdcPreview:${job.id}`;
+        const page = visiblePage();
+        const previewButton = [...(page || document).querySelectorAll('button[type="submit"], input[type="submit"], .form-submit-button')].find((button) => button.offsetParent !== null && !button.disabled);
+        if (previewButton && !sessionStorage.getItem(previewKey)) {
+          sessionStorage.setItem(previewKey, '1');
+          notice('Signatures complete. COR is generating the JotForm PDF preview…');
+          await notifyStatus('generating_ldc_preview');
+          setTimeout(() => previewButton.click(), 250);
+          return;
+        }
+        notice('Review the generated application PDF and click the final Submit button when ready.');
         await notifyStatus('waiting_for_final_submit');
       } else {
         notice(coApplicantNeeded
