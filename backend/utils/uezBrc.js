@@ -56,12 +56,53 @@ function parseBrcCertificateHtml(html) {
   };
 }
 
+function responseCookies(response) {
+  let setCookies = [];
+  if (typeof response.headers.getSetCookie === 'function') setCookies = response.headers.getSetCookie();
+  if (!setCookies.length) {
+    const fallback = response.headers.get('set-cookie');
+    if (fallback) setCookies = [fallback];
+  }
+  return setCookies
+    .map((cookie) => String(cookie).split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
+}
+
 async function lookupBrc(application) {
   const lookup = brcLookupDescriptor(application);
-  const body = new URLSearchParams({ pinnctl: lookup.nameControl.toLowerCase(), pinidnum: lookup.njTaxId, pincorpid: '', pincasinoid: '', submit: '  Submit  ' });
+  const browserHeaders = {
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
+  };
+
+  // Load the official form first, just as a normal browser does, and carry its session cookies into the lookup.
+  const landingResponse = await fetch(BRC_REFERER, {
+    method: 'GET',
+    headers: browserHeaders,
+    redirect: 'follow'
+  });
+  await landingResponse.text();
+  const cookies = responseCookies(landingResponse);
+
+  const body = new URLSearchParams({
+    pinnctl: lookup.nameControl.toLowerCase(),
+    pinidnum: lookup.njTaxId,
+    pincorpid: '',
+    pincasinoid: '',
+    submit: '  Submit  '
+  });
+
   const response = await fetch(BRC_LOOKUP_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'text/html,application/xhtml+xml', 'Referer': BRC_REFERER, 'User-Agent': 'COR-Solutions-UEZ/1.0' },
+    headers: {
+      ...browserHeaders,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Origin': 'https://www1.state.nj.us',
+      'Referer': BRC_REFERER,
+      ...(cookies ? { Cookie: cookies } : {})
+    },
     body: body.toString(),
     redirect: 'follow'
   });
