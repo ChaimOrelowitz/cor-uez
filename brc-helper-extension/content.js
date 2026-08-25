@@ -36,7 +36,7 @@
         borderRadius: '10px', font: '13px system-ui, -apple-system, sans-serif',
         maxWidth: '380px', boxShadow: '0 8px 25px rgba(0,0,0,.3)', border: '1px solid #3b4261'
       });
-      document.documentElement.appendChild(element);
+      (document.body || document.documentElement).appendChild(element);
     }
     element.textContent = message;
   };
@@ -62,6 +62,7 @@
     if (job.workflow === 'brc') {
       if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && /Certificate Number:/i.test(text)) {
         sent = true;
+        notice('COR found the Business Registration Certificate! Saving to file…');
         await send({
           type: 'COR_BRC_FOUND',
           result: {
@@ -91,23 +92,30 @@
         const digits = job.ein.replace(/\D/g, '').slice(0, 9);
         const fullTaxId = digits.length === 9 ? `${digits}000` : digits;
 
-        if (!nameInput.value) setValue(nameInput, control);
-        if (!taxInput.value) setValue(taxInput, fullTaxId);
+        let filledAny = false;
+        if (!nameInput.value || nameInput.value.toLowerCase() !== control.toLowerCase()) {
+          setValue(nameInput, control);
+          filledAny = true;
+        }
+        if (!taxInput.value || taxInput.value !== fullTaxId) {
+          setValue(taxInput, fullTaxId);
+          filledAny = true;
+        }
 
         const submissionKey = `corBrcSubmitted:${job.id}`;
         const submitBtn = document.querySelector('input[name="submit"], input[type="submit"], button[type="submit"]');
 
-        if (submitBtn && !sessionStorage.getItem(submissionKey)) {
+        if (submitBtn && (!sessionStorage.getItem(submissionKey) || filledAny)) {
           sessionStorage.setItem(submissionKey, '1');
-          notice('COR filled the BRC lookup form. Complete any Security/CAPTCHA verification if shown.');
+          notice('COR filled the BRC lookup form. Submitting…');
           await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
           submitBtn.click();
         } else {
-          notice('COR filled the BRC lookup form. Complete any Security/CAPTCHA verification if shown.');
+          notice('COR filled the BRC lookup form. Complete any CAPTCHA verification if shown.');
           await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
         }
-      } else if (/incapsula|hcaptcha|verify you are human|security check/i.test(`${text} ${document.documentElement.innerHTML}`)) {
-        notice('COR is active. Complete New Jersey verification if it appears; the BRC form will be filled afterward.');
+      } else {
+        notice('COR is waiting for New Jersey page to load. Complete any security verification if shown.');
         await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_verification' });
       }
       return;
@@ -199,6 +207,12 @@
     running = true;
     try { await runOnce(); } finally { running = false; }
   }
+
+  // Poll every 500ms to catch dynamic Incapsula challenge page resolution
+  const pollInterval = setInterval(() => {
+    if (sent) { clearInterval(pollInterval); return; }
+    run().catch(() => {});
+  }, 500);
 
   run().catch((error) => send({ type: 'COR_NJ_ERROR', error: error.message }));
   new MutationObserver(() => run().catch(() => {})).observe(document.documentElement, { childList: true, subtree: true });
