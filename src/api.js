@@ -26,6 +26,17 @@ async function request(path, options = {}) {
   return data;
 }
 
+export async function checkBrcTest(businessName, ein) {
+  const response = await fetch(`${API_BASE}/api/uez/brc/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ businessName, ein })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'BRC lookup failed.');
+  return data;
+}
+
 export async function getApplicantSession() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
