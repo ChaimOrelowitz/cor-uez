@@ -11,10 +11,16 @@ router.post('/test', async (req, res) => {
     const ein = String(req.body?.ein || '').trim();
     const result = await lookupBrc({ business_name_input: businessName, ein });
 
+    const base = {
+      engine: result.engine || 'unknown',
+      lookup: result.lookup,
+      finalUrl: result.finalUrl || null
+    };
+
     if (result.status === 'found') {
       return res.json({
+        ...base,
         outcome: 'found',
-        lookup: result.lookup,
         result: {
           taxpayerName: result.taxpayerName,
           tradeName: result.tradeName,
@@ -22,16 +28,20 @@ router.post('/test', async (req, res) => {
           certificateNumber: result.certificateNumber,
           effectiveDate: result.effectiveDate,
           issuanceDate: result.issuanceDate
-        }
+        },
+        certificatePdfBase64: result.certificatePdfBase64 || null
       });
     }
 
-    if (result.status === 'not_found') return res.json({ outcome: 'not_found', lookup: result.lookup });
-    if (result.status === 'challenge_required') return res.json({ outcome: 'manual_verification_required', lookup: result.lookup });
+    if (result.status === 'not_found') return res.json({ ...base, outcome: 'not_found' });
+    if (result.status === 'challenge_required') return res.json({ ...base, outcome: 'manual_verification_required' });
+    if (result.status === 'browser_error') {
+      return res.status(502).json({ ...base, outcome: 'browser_error', error: result.text || 'Headless browser failed.' });
+    }
 
     return res.status(502).json({
+      ...base,
       outcome: 'error',
-      lookup: result.lookup,
       error: result.text || 'NJ returned an unexpected BRC response.'
     });
   } catch (err) {
