@@ -55,7 +55,7 @@
       const nameInput = document.querySelector('input[name="pinnctl"]');
       const taxInput = document.querySelector('input[name="pinidnum"]');
 
-      // 1. If we are on the search form page, fill and submit!
+      // 1. Search form page -> Fill & Submit
       if (nameInput && taxInput) {
         const control = job.businessName.replace(/[^a-z0-9]/gi, '').slice(0, 4);
         const digits = job.ein.replace(/\D/g, '').slice(0, 9);
@@ -86,7 +86,7 @@
         return;
       }
 
-      // 2. If we are on the official certificate result page (no search inputs present)
+      // 2. Certificate Result Page
       if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && (/Certificate Number/i.test(text) || /Effective Date/i.test(text))) {
         sent = true;
         notice('COR found the official BRC certificate! Saving PDF to file…');
@@ -107,20 +107,13 @@
 
         await send({
           type: 'COR_BRC_FOUND',
-          result: {
-            taxpayerName,
-            tradeName,
-            address,
-            certificateNumber,
-            effectiveDate,
-            issuanceDate
-          },
+          result: { taxpayerName, tradeName, address, certificateNumber, effectiveDate, issuanceDate },
           html: document.documentElement.outerHTML
         });
         return;
       }
 
-      // 3. No match found on NJ database
+      // 3. No match found
       if (/There was no match on the fields entered/i.test(text)) {
         sent = true;
         notice('NJ reported no matching BRC found.');
@@ -137,78 +130,110 @@
       const usernameInput = document.querySelector('input[name="IDToken1"]');
       const passwordInput = document.querySelector('input[name="IDToken2"]');
 
+      // Step A: MyNJ Login Form
       if (usernameInput && passwordInput && job.credentials) {
-        setValue(usernameInput, job.credentials.username || '');
-        setValue(passwordInput, job.credentials.password || '');
-        notice('COR filled the stored MyNJ login and is signing in.');
-        await send({ type: 'COR_NJ_STATUS', status: 'signing_in_to_pbs' });
-        document.querySelector('input[name="Login.Submit"], input[type="submit"], button[type="submit"]')?.click();
+        const loginKey = `corTaxLogin:${job.id}`;
+        if (!sessionStorage.getItem(loginKey)) {
+          sessionStorage.setItem(loginKey, '1');
+          setValue(usernameInput, job.credentials.username || '');
+          setValue(passwordInput, job.credentials.password || '');
+          notice('COR filled the stored MyNJ login and is signing in.');
+          await send({ type: 'COR_NJ_STATUS', status: 'signing_in_to_pbs' });
+          const submitBtn = document.querySelector('input[name="Login.Submit"], input[type="submit"], button[type="submit"]');
+          submitBtn?.click();
+        }
         return;
       }
 
+      // Step B: MyNJ Challenge Question Form
       if (usernameInput && !passwordInput && job.credentials?.challengeAnswer) {
         if (/challenge|security question|secret question/i.test(text)) {
-          setValue(usernameInput, job.credentials.challengeAnswer);
-          notice('COR filled the MyNJ challenge question answer and is continuing.');
-          await send({ type: 'COR_NJ_STATUS', status: 'signing_in_to_pbs' });
-          document.querySelector('input[type="submit"], button[type="submit"]')?.click();
+          const challengeKey = `corTaxChallenge:${job.id}`;
+          if (!sessionStorage.getItem(challengeKey)) {
+            sessionStorage.setItem(challengeKey, '1');
+            setValue(usernameInput, job.credentials.challengeAnswer);
+            notice('COR filled the MyNJ challenge question answer and is continuing.');
+            await send({ type: 'COR_NJ_STATUS', status: 'signing_in_to_pbs' });
+            const submitBtn = document.querySelector('input[type="submit"], button[type="submit"]');
+            submitBtn?.click();
+          }
           return;
         }
       }
 
+      // Step C: Link to Tax & Revenue Center
       const taxLink = [...document.querySelectorAll('a')].find((link) =>
         /Tax & Revenue Center/i.test(link.textContent || '') ||
         /TYTR_ACE_App\/servlet\/common\/portalRequest/i.test(link.href || '')
       );
       if (taxLink) {
-        notice('COR is opening Tax & Revenue Center.');
-        await send({ type: 'COR_NJ_STATUS', status: 'opening_tax_revenue_center' });
-        taxLink.click();
+        const centerKey = `corTaxCenter:${job.id}`;
+        if (!sessionStorage.getItem(centerKey)) {
+          sessionStorage.setItem(centerKey, '1');
+          notice('COR is opening Tax & Revenue Center.');
+          await send({ type: 'COR_NJ_STATUS', status: 'opening_tax_revenue_center' });
+          taxLink.click();
+        }
         return;
       }
 
+      // Step D: MyNJ Login Link on PBS Home
       const loginLink = document.querySelector('a[href*="my.nj.gov/aui/Login"]');
       if (loginLink) {
-        notice('COR is opening the MyNJ login.');
-        await send({ type: 'COR_NJ_STATUS', status: 'opening_mynj_login' });
-        loginLink.click();
+        const loginLinkKey = `corTaxLoginLink:${job.id}`;
+        if (!sessionStorage.getItem(loginLinkKey)) {
+          sessionStorage.setItem(loginLinkKey, '1');
+          notice('COR is opening the MyNJ login.');
+          await send({ type: 'COR_NJ_STATUS', status: 'opening_mynj_login' });
+          loginLink.click();
+        }
         return;
       }
 
+      // Step E: Business Incentive Tax Clearance Button
       const incentiveBtn = document.querySelector('input[name="Submit"][value="Business Incentive Tax Clearance"]');
       if (incentiveBtn) {
-        notice('COR selected Business Incentive Tax Clearance. Complete New Jersey verification if it appears.');
-        await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_human_verification' });
-        incentiveBtn.click();
+        const incentiveKey = `corTaxIncentive:${job.id}`;
+        if (!sessionStorage.getItem(incentiveKey)) {
+          sessionStorage.setItem(incentiveKey, '1');
+          notice('COR selected Business Incentive Tax Clearance. Complete New Jersey verification if it appears.');
+          await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_human_verification' });
+          incentiveBtn.click();
+        }
         return;
       }
 
+      // Step F: Department Selection & Download PDF
       const departmentSelect = document.querySelector('select[name="ClearanceDept"]');
       const downloadBtn = document.querySelector('input[name="Submit"][value="Download Clearance Letter"]');
       if (departmentSelect && downloadBtn?.form) {
-        const option = [...departmentSelect.options].find((item) => /New Jersey Department of Community Affairs/i.test(item.textContent || ''));
-        if (option) setValue(departmentSelect, option.value);
-        notice('COR is retrieving the tax-clearance PDF and adding it to the applicant file.');
-        await send({ type: 'COR_NJ_STATUS', status: 'requesting_tax_clearance_pdf' });
-        sent = true;
+        const pdfKey = `corTaxPdf:${job.id}`;
+        if (!sessionStorage.getItem(pdfKey)) {
+          sessionStorage.setItem(pdfKey, '1');
+          const option = [...departmentSelect.options].find((item) => /New Jersey Department of Community Affairs/i.test(item.textContent || ''));
+          if (option) setValue(departmentSelect, option.value);
+          notice('COR is retrieving the tax-clearance PDF and adding it to the applicant file.');
+          await send({ type: 'COR_NJ_STATUS', status: 'requesting_tax_clearance_pdf' });
+          sent = true;
 
-        try {
-          const form = downloadBtn.form;
-          const formData = new FormData(form);
-          formData.set(downloadBtn.name, downloadBtn.value);
-          const result = await fetch(form.action || location.href, {
-            method: (form.method || 'POST').toUpperCase(),
-            body: new URLSearchParams([...formData.entries()].map(([k, v]) => [k, String(v)])),
-            credentials: 'include'
-          });
-          const buffer = await result.arrayBuffer();
-          const type = result.headers.get('content-type') || '';
-          if (!result.ok || !type.toLowerCase().includes('application/pdf') || buffer.byteLength < 100) {
-            throw new Error('New Jersey did not return a tax-clearance PDF.');
+          try {
+            const form = downloadBtn.form;
+            const formData = new FormData(form);
+            formData.set(downloadBtn.name, downloadBtn.value);
+            const result = await fetch(form.action || location.href, {
+              method: (form.method || 'POST').toUpperCase(),
+              body: new URLSearchParams([...formData.entries()].map(([k, v]) => [k, String(v)])),
+              credentials: 'include'
+            });
+            const buffer = await result.arrayBuffer();
+            const type = result.headers.get('content-type') || '';
+            if (!result.ok || !type.toLowerCase().includes('application/pdf') || buffer.byteLength < 100) {
+              throw new Error('New Jersey did not return a tax-clearance PDF.');
+            }
+            await send({ type: 'COR_TAX_PDF', base64: bytesToBase64(buffer), filename: 'NJ-Tax-Clearance.pdf' });
+          } catch (error) {
+            await send({ type: 'COR_NJ_ERROR', error: error.message });
           }
-          await send({ type: 'COR_TAX_PDF', base64: bytesToBase64(buffer), filename: 'NJ-Tax-Clearance.pdf' });
-        } catch (error) {
-          await send({ type: 'COR_NJ_ERROR', error: error.message });
         }
       }
     }

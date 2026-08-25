@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "COR UEZ Document Helper",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "Runs BRC and tax-clearance retrieval when started from the COR UEZ admin app.",
   "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": [
