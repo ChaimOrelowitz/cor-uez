@@ -251,6 +251,12 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     if (documentType === 'uez_approval_email' && application.pbs_status !== 'account_created' && application.status !== 'waiting_for_uez_approval') {
       return res.status(400).json({ error: 'The PBS account must be marked created before uploading the UEZ approval email.' });
     }
+    if (documentType === 'tax_clearance' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only a UEZ admin can add the tax-clearance letter.' });
+    }
+    if (documentType === 'tax_clearance' && !['account_created', 'uez_approval_uploaded'].includes(application.pbs_status)) {
+      return res.status(400).json({ error: 'The PBS account must be created before retrieving tax clearance.' });
+    }
     const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${safeFilename(req.file.originalname)}`;
 
     const { error: storageError } = await supabase.storage.from(DOCUMENT_BUCKET).upload(storagePath, req.file.buffer, {
@@ -307,6 +313,17 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         'uez_approval_uploaded',
         'UEZ approval email uploaded',
         'We received your Notice of Certification Application Approved email. COR will verify it and continue your application.',
+        req.user.id,
+        true
+      );
+    }
+
+    if (documentType === 'tax_clearance') {
+      await addStatusEvent(
+        application.id,
+        'tax_clearance_received',
+        'Tax-clearance letter received',
+        'COR retrieved the New Jersey tax-clearance letter and added it to your UEZ application.',
         req.user.id,
         true
       );

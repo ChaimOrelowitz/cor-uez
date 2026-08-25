@@ -47,6 +47,7 @@ function documentLabel(type) {
     formation: 'Certificate of Formation / formation document',
     brc: 'Business Registration Certificate',
     uez_approval_email: 'Notice of Certification Application Approved email',
+    tax_clearance: 'New Jersey tax-clearance letter',
     supporting: 'Supporting document'
   };
   return labels[type] || type;

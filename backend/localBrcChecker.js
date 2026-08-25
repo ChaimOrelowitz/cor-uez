@@ -6,6 +6,7 @@ const { brcLookupDescriptor, parseBrcCertificateHtml } = require('./utils/uezBrc
 const HOST = '127.0.0.1';
 const PORT = Number(process.env.BRC_CHECKER_PORT || 4318);
 const NJ_FORM_URL = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
+const NJ_TAX_REVENUE_URL = 'https://www1.nj.gov/TYTR_ACE_App/servlet/common/portalRequest';
 const JOB_TIMEOUT_MS = 25 * 60 * 1000;
 const jobs = new Map();
 
@@ -78,6 +79,35 @@ async function uploadBrc(job, pdf, result) {
       issuanceDate: result.issuanceDate || ''
     })
   });
+}
+
+async function uploadTaxClearance(job, pdf, suggestedFilename) {
+  const safeBusinessName = String(job.businessName || job.applicationId)
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 70) || job.applicationId;
+  const originalName = String(suggestedFilename || 'Tax-Clearance.pdf');
+  const filename = /\.pdf$/i.test(originalName) ? originalName : `NJ-Tax-Clearance-${safeBusinessName}.pdf`;
+  const body = new FormData();
+  body.append('documentType', 'tax_clearance');
+  body.append('file', new Blob([pdf], { type: 'application/pdf' }), filename);
+
+  await apiRequest(job, `/api/uez/applications/${job.applicationId}/documents`, {
+    method: 'POST',
+    body
+  });
+}
+
+async function downloadToBuffer(download) {
+  const stream = await download.createReadStream();
+  if (!stream) throw new Error('New Jersey did not provide a downloadable tax-clearance file.');
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const buffer = Buffer.concat(chunks);
+  if (buffer.length < 5 || buffer.subarray(0, 5).toString('ascii') !== '%PDF-') {
+    throw new Error('The downloaded tax-clearance file was not a PDF. Try the download again.');
+  }
+  return buffer;
 }
 
 async function markNotFound(job) {
@@ -176,6 +206,64 @@ async function runJob(job) {
   }
 }
 
+async function runTaxClearanceJob(job) {
+  let browser;
+  try {
+    job.status = 'opening_tax_clearance';
+    browser = await chromium.launch({
+      headless: false,
+      args: ['--disable-dev-shm-usage']
+    });
+    const context = await browser.newContext({
+      locale: 'en-US',
+      viewport: { width: 1200, height: 900 },
+      acceptDownloads: true
+    });
+
+    let resolveDownload;
+    let rejectDownload;
+    let captured = false;
+    const downloadPromise = new Promise((resolve, reject) => {
+      resolveDownload = resolve;
+      rejectDownload = reject;
+    });
+    const watchPage = (page) => {
+      page.on('download', async (download) => {
+        if (captured) return;
+        captured = true;
+        try {
+          const pdf = await downloadToBuffer(download);
+          resolveDownload({ pdf, filename: download.suggestedFilename() });
+        } catch (err) {
+          rejectDownload(err);
+        }
+      });
+    };
+    context.on('page', watchPage);
+
+    const page = await context.newPage();
+    watchPage(page);
+    job.status = 'waiting_for_pbs';
+    await page.goto(NJ_TAX_REVENUE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    job.status = 'waiting_for_tax_clearance_download';
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('The tax-clearance session timed out. Start it again when you are ready.')), JOB_TIMEOUT_MS);
+    });
+    const downloaded = await Promise.race([downloadPromise, timeoutPromise]);
+    job.status = 'uploading_tax_clearance';
+    await uploadTaxClearance(job, downloaded.pdf, downloaded.filename);
+    job.result = { filename: downloaded.filename };
+    job.status = 'complete';
+  } catch (err) {
+    job.status = 'error';
+    job.error = err.message || 'The tax-clearance download failed.';
+  } finally {
+    job.accessToken = null;
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const origin = String(req.headers.origin || '');
   res.allowedOrigin = allowedOrigin(origin) ? origin : 'https://cor-uez.vercel.app';
@@ -186,7 +274,41 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/health') {
-    return send(res, 200, { ok: true, service: 'COR UEZ local BRC checker' });
+    return send(res, 200, { ok: true, service: 'COR UEZ local document checker' });
+  }
+
+  if (req.method === 'POST' && req.url === '/tax-clearance') {
+    try {
+      if (!allowedOrigin(origin)) return send(res, 403, { error: 'Open the checker from the COR UEZ admin site.' });
+      if ([...jobs.values()].some((job) => !['complete', 'not_found', 'error'].includes(job.status))) {
+        return send(res, 409, { error: 'A UEZ document check is already running on this computer.' });
+      }
+
+      const body = await readJson(req);
+      const applicationId = String(body.applicationId || '').trim();
+      const businessName = String(body.businessName || '').trim();
+      const accessToken = String(body.accessToken || '');
+      if (!applicationId || !businessName || !accessToken) throw new Error('The selected UEZ application is incomplete.');
+
+      const id = crypto.randomUUID();
+      const job = {
+        id,
+        type: 'tax_clearance',
+        applicationId,
+        businessName,
+        apiBase: allowedApiBase(body.apiBase),
+        accessToken,
+        status: 'queued',
+        error: null,
+        result: null,
+        createdAt: Date.now()
+      };
+      jobs.set(id, job);
+      runTaxClearanceJob(job);
+      return send(res, 202, { id, status: job.status });
+    } catch (err) {
+      return send(res, 400, { error: err.message });
+    }
   }
 
   if (req.method === 'POST' && req.url === '/check') {
@@ -242,6 +364,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`COR UEZ BRC checker is ready at http://${HOST}:${PORT}`);
-  console.log('Leave this window open while running BRC checks from the UEZ admin page.');
+  console.log(`COR UEZ local document checker is ready at http://${HOST}:${PORT}`);
+  console.log('Leave this window open while running BRC or tax-clearance checks from the UEZ admin page.');
 });

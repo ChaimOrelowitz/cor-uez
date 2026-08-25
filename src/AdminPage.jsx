@@ -48,6 +48,7 @@ function documentLabel(type) {
   if (type === 'formation') return 'Formation document';
   if (type === 'brc') return 'BRC';
   if (type === 'uez_approval_email') return 'UEZ approval email';
+  if (type === 'tax_clearance') return 'Tax-clearance letter';
   if (type === 'supporting') return 'Supporting';
   return type;
 }
@@ -292,7 +293,11 @@ export default function AdminPage() {
       waiting_for_verification: 'Complete the NJ verification in the checker window. UEZ will import the result automatically.',
       saving_pdf: 'BRC found. Creating the applicant’s PDF…',
       uploading: 'Uploading the BRC PDF directly to the applicant’s UEZ file…',
-      saving_not_found: 'Saving the NJ result…'
+      saving_not_found: 'Saving the NJ result…',
+      opening_tax_clearance: 'Opening the PBS tax-clearance window…',
+      waiting_for_pbs: 'Opening New Jersey PBS…',
+      waiting_for_tax_clearance_download: 'Use the PBS window to download the existing tax-clearance letter.',
+      uploading_tax_clearance: 'Tax clearance downloaded. Adding it directly to the applicant’s UEZ file…'
     };
 
     while (true) {
@@ -340,6 +345,40 @@ export default function AdminPage() {
       const connectionProblem = /fetch|network|failed to connect|stopped responding/i.test(String(err.message || err));
       setMessage(connectionProblem
         ? 'The BRC checker is not running on this computer. Start npm run brc-checker in the repository backend folder, then click this button again.'
+        : err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runTaxClearance() {
+    setBusy(true);
+    setMessage('Connecting to the document checker on this computer…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before retrieving tax clearance.');
+
+      const response = await fetch(`${LOCAL_BRC_CHECKER}/tax-clearance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId: detail.application.id,
+          businessName: detail.application.registered_business_name || detail.application.business_name_input,
+          apiBase: UEZ_API_BASE,
+          accessToken: currentSession.access_token
+        })
+      });
+      const started = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(started.error || 'Could not start the tax-clearance window.');
+
+      const outcome = await waitForLocalBrc(started.id);
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');
+      await refreshList(detail.application.id);
+      setMessage('Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');
+    } catch (err) {
+      const connectionProblem = /fetch|network|failed to connect|stopped responding/i.test(String(err.message || err));
+      setMessage(connectionProblem
+        ? 'The local document checker is not running. Start npm run document-checker in the repository backend folder, then try again.'
         : err.message);
     } finally {
       setBusy(false);
@@ -719,6 +758,23 @@ export default function AdminPage() {
                   disabled={busy || (detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed')}
                 >Generate missing MyNJ login</button>
                 {detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed' && <p className="admin-help">The BRC must be confirmed first.</p>}
+              </>}
+            </section>
+
+            <section className="admin-card tax-clearance-card">
+              <div className="admin-card-head"><h3>Tax clearance</h3><span>{detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? 'RECEIVED' : 'NOT RETRIEVED'}</span></div>
+              {detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? <>
+                <p className="admin-help">The New Jersey tax-clearance letter is saved in this applicant’s Documents below.</p>
+                <button className="secondary admin-full-button" onClick={() => openDoc(detail.documents.find((doc) => doc.document_type === 'tax_clearance'))}>Open tax-clearance letter</button>
+              </> : <>
+                <p className="admin-help">Open PBS in the local checker. Sign in, choose <strong>Tax &amp; Revenue Center</strong>, then <strong>Business Incentive Tax Clearance</strong> and <strong>New Jersey Department of Community Affairs</strong>. Click download; the PDF will be filed here automatically.</p>
+                <button
+                  className="primary admin-full-button"
+                  onClick={runTaxClearance}
+                  disabled={busy || !myNjCredentials || !['account_created', 'uez_approval_uploaded'].includes(detail.application.pbs_status)}
+                >Open PBS and retrieve tax clearance</button>
+                {!myNjCredentials && <p className="admin-help">MyNJ / PBS login information is required first.</p>}
+                {myNjCredentials && !['account_created', 'uez_approval_uploaded'].includes(detail.application.pbs_status) && <p className="admin-help">Mark the PBS account created before retrieving tax clearance.</p>}
               </>}
             </section>
 
