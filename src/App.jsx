@@ -26,6 +26,10 @@ function BrcTestPage() {
     }
   }
 
+  const pdfHref = result?.certificatePdfBase64
+    ? `data:application/pdf;base64,${result.certificatePdfBase64}`
+    : null;
+
   return <div className="app-shell">
     <header className="topbar"><div className="brand-mark">COR</div><div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">BRC Lookup Test</div></div></header>
     <main className="page-wrap brc-test-wrap">
@@ -35,15 +39,19 @@ function BrcTestPage() {
           <div className="intro-copy"><h3>Check a business registration certificate</h3><p>Enter the business name and 9-digit EIN exactly as you know them.</p></div>
           <label>Business name</label><input value={businessName} onChange={(e) => setBusinessName(e.target.value)} required />
           <label>EIN</label><input value={ein} onChange={(e) => setEin(e.target.value)} placeholder="12-3456789" required />
-          <button className="primary" disabled={busy}>{busy ? 'Checking…' : 'Check BRC'}</button>
+          <button className="primary" disabled={busy}>{busy ? 'Opening NJ in Chromium…' : 'Check BRC'}</button>
           {error && <div className="validation-error">{error}</div>}
           {result && <div className={`brc-test-result ${result.outcome}`}>
             <strong>{result.outcome === 'found' ? 'BRC found' : result.outcome === 'not_found' ? 'No BRC match found' : result.outcome === 'manual_verification_required' ? 'Manual verification required' : 'Lookup result'}</strong>
+            {result.engine && <p><b>Lookup engine:</b> {result.engine}</p>}
             {result.lookup && <p>Name control: {result.lookup.nameControl} · NJ Tax ID: {result.lookup.njTaxId}</p>}
             {result.result?.taxpayerName && <p><b>Registered name:</b> {result.result.taxpayerName}</p>}
             {result.result?.tradeName && <p><b>Trade name:</b> {result.result.tradeName}</p>}
             {result.result?.address && <p><b>Address:</b> {result.result.address}</p>}
             {result.result?.certificateNumber && <p><b>Certificate #:</b> {result.result.certificateNumber}</p>}
+            {result.result?.effectiveDate && <p><b>Effective date:</b> {result.result.effectiveDate}</p>}
+            {result.result?.issuanceDate && <p><b>Issued:</b> {result.result.issuanceDate}</p>}
+            {pdfHref && <a className="primary brc-download" href={pdfHref} download={`BRC-${result.result?.taxpayerName || businessName}.pdf`}>Open BRC PDF</a>}
           </div>}
         </form>
       </div>
