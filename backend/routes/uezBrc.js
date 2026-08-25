@@ -201,19 +201,24 @@ router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res)
       return res.status(400).json({ error: 'The captured BRC certificate was incomplete.' });
     }
 
-    browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
-    const page = await browser.newPage({ javaScriptEnabled: false });
-    await page.route('**/*', (route) => {
-      if (route.request().resourceType() === 'document') route.continue();
-      else route.abort();
-    });
-    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const pdf = await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.35in', right: '0.35in', bottom: '0.35in', left: '0.35in' } });
+    let pdf;
+    try {
+      browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage', '--no-sandbox'] });
+      const page = await browser.newPage({ javaScriptEnabled: false });
+      await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      pdf = await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.35in', right: '0.35in', bottom: '0.35in', left: '0.35in' } });
+    } catch (err) {
+      console.error('Playwright PDF render error, falling back to HTML payload:', err.message);
+      pdf = Buffer.from(html, 'utf-8');
+    }
 
-    const safeCertificate = String(result.certificateNumber).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
-    const filename = `NJ-BRC-${safeCertificate}.pdf`;
+    const safeCertificate = String(result.certificateNumber || 'captured').replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+    const isPdf = pdf && pdf.subarray(0, 5).toString('ascii') === '%PDF-';
+    const extension = isPdf ? 'pdf' : 'html';
+    const contentType = isPdf ? 'application/pdf' : 'text/html';
+    const filename = `NJ-BRC-${safeCertificate}.${extension}`;
     const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
-    const { error: storageError } = await supabase.storage.from('uez-documents').upload(storagePath, pdf, { contentType: 'application/pdf', upsert: false });
+    const { error: storageError } = await supabase.storage.from('uez-documents').upload(storagePath, pdf, { contentType, upsert: false });
     if (storageError) throw storageError;
 
     const { data: document, error: documentError } = await supabase.from('uez_documents').insert({

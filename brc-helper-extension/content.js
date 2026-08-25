@@ -17,12 +17,13 @@
 
   const pageText = () => String(document.body?.innerText || '').replace(/\s+/g, ' ').trim();
 
-  const between = (value, startLabel, endLabel) => {
-    const start = value.indexOf(startLabel);
-    if (start < 0) return null;
+  const between = (text, startLabel, endLabel) => {
+    const start = text.indexOf(startLabel);
+    if (start < 0) return '';
     const from = start + startLabel.length;
-    const end = endLabel ? value.indexOf(endLabel, from) : value.length;
-    return value.slice(from, end < 0 ? value.length : end).trim() || null;
+    const end = endLabel ? text.indexOf(endLabel, from) : text.length;
+    const found = text.slice(from, end < 0 ? text.length : end).trim();
+    return found.replace(/<!--[\s\S]*?-->/g, '').replace(/Valid Through:[\s\S]*/i, '').trim();
   };
 
   const notice = (message) => {
@@ -63,7 +64,7 @@
       const nameInput = document.querySelector('input[name="pinnctl"]');
       const taxInput = document.querySelector('input[name="pinidnum"]');
 
-      // 1. If we are on the lookup form page, fill and submit!
+      // 1. If we are on the search form page, fill and submit!
       if (nameInput && taxInput) {
         const control = job.businessName.replace(/[^a-z0-9]/gi, '').slice(0, 4);
         const digits = job.ein.replace(/\D/g, '').slice(0, 9);
@@ -94,19 +95,27 @@
         return;
       }
 
-      // 2. If we are on the certificate result page (no search inputs present)
+      // 2. If we are on the official certificate result page (no search inputs present)
       if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && /Effective Date:/i.test(text) && /Date of Issuance:/i.test(text)) {
         sent = true;
         notice('COR found the official BRC certificate! Saving PDF to file…');
+
+        const taxpayerName = between(text, 'Taxpayer Name:', 'Trade Name:') || between(text, 'Taxpayer Name:', 'Address:');
+        const tradeName = between(text, 'Trade Name:', 'Address:');
+        const address = between(text, 'Address:', 'Certificate Number:');
+        const certificateNumber = between(text, 'Certificate Number:', 'Effective Date:');
+        const effectiveDate = between(text, 'Effective Date:', 'Date of Issuance:');
+        const issuanceDate = between(text, 'Date of Issuance:', 'Valid Through:') || between(text, 'Date of Issuance:', 'For Office Use Only:') || between(text, 'Date of Issuance:', 'State of New Jersey');
+
         await send({
           type: 'COR_BRC_FOUND',
           result: {
-            taxpayerName: between(text, 'Taxpayer Name:', 'Trade Name:') || between(text, 'Taxpayer Name:', 'Address:'),
-            tradeName: between(text, 'Trade Name:', 'Address:') || '',
-            address: between(text, 'Address:', 'Certificate Number:'),
-            certificateNumber: between(text, 'Certificate Number:', 'Effective Date:'),
-            effectiveDate: between(text, 'Effective Date:', 'Date of Issuance:'),
-            issuanceDate: between(text, 'Date of Issuance:', 'For Office Use Only:') || between(text, 'Date of Issuance:', 'State of New Jersey')
+            taxpayerName,
+            tradeName,
+            address,
+            certificateNumber: certificateNumber || 'FOUND',
+            effectiveDate,
+            issuanceDate
           },
           html: document.documentElement.outerHTML
         });
