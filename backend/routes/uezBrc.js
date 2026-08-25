@@ -1,9 +1,127 @@
 const express = require('express');
+const crypto = require('crypto');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, lookupBrc } = require('../utils/uezBrc');
 
 const router = express.Router();
+const BRC_FORM_URL = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
+const browserCaptureSessions = new Map();
+
+function pruneBrowserSessions() {
+  const cutoff = Date.now() - (30 * 60 * 1000);
+  for (const [id, session] of browserCaptureSessions.entries()) {
+    if (session.createdAt < cutoff) browserCaptureSessions.delete(id);
+  }
+}
+
+function browserSessionForRequest(req) {
+  const session = browserCaptureSessions.get(req.params.id);
+  const token = String(req.query?.token || req.get('x-cor-capture-token') || '');
+  if (!session || !token || token !== session.token) return null;
+  return session;
+}
+
+router.post('/browser-session', (req, res) => {
+  try {
+    pruneBrowserSessions();
+    const businessName = String(req.body?.businessName || '').trim();
+    const ein = String(req.body?.ein || '').trim();
+    const lookup = brcLookupDescriptor({ business_name_input: businessName, ein });
+    const captureId = crypto.randomUUID();
+    const token = crypto.randomBytes(24).toString('hex');
+    const createdAt = Date.now();
+
+    browserCaptureSessions.set(captureId, {
+      captureId,
+      token,
+      status: 'pending',
+      createdAt,
+      lookup,
+      result: null,
+      capturedHtml: null
+    });
+
+    const helperPayload = Buffer.from(JSON.stringify({
+      captureId,
+      token,
+      lookup,
+      apiBase: `${req.protocol}://${req.get('host')}`
+    })).toString('base64url');
+
+    res.json({
+      captureId,
+      token,
+      lookup,
+      status: 'pending',
+      checkerUrl: `${BRC_FORM_URL}#corBrc=${helperPayload}`
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/browser-session/:id', (req, res) => {
+  const session = browserSessionForRequest(req);
+  if (!session) return res.status(404).json({ error: 'BRC capture session not found or expired.' });
+  res.json({
+    captureId: session.captureId,
+    status: session.status,
+    lookup: session.lookup,
+    result: session.result,
+    hasCapturedDocument: Boolean(session.capturedHtml)
+  });
+});
+
+router.post('/browser-session/:id/result', (req, res) => {
+  const session = browserSessionForRequest(req);
+  if (!session) return res.status(404).json({ error: 'BRC capture session not found or expired.' });
+
+  const outcome = String(req.body?.outcome || '').trim();
+  if (!['challenge', 'found', 'not_found', 'error'].includes(outcome)) {
+    return res.status(400).json({ error: 'Invalid BRC capture outcome.' });
+  }
+
+  if (outcome === 'challenge') {
+    session.status = 'challenge';
+    return res.json({ ok: true, status: session.status });
+  }
+
+  if (outcome === 'not_found') {
+    session.status = 'not_found';
+    session.result = null;
+    session.capturedHtml = null;
+    return res.json({ ok: true, status: session.status });
+  }
+
+  if (outcome === 'error') {
+    session.status = 'error';
+    session.result = { message: String(req.body?.message || 'Browser helper could not read the NJ result.') };
+    return res.json({ ok: true, status: session.status });
+  }
+
+  const result = req.body?.result || {};
+  session.status = 'found';
+  session.result = {
+    taxpayerName: result.taxpayerName || null,
+    tradeName: result.tradeName || null,
+    address: result.address || null,
+    certificateNumber: result.certificateNumber || null,
+    effectiveDate: result.effectiveDate || null,
+    issuanceDate: result.issuanceDate || null
+  };
+  session.capturedHtml = typeof req.body?.html === 'string' ? req.body.html.slice(0, 1500000) : null;
+
+  res.json({ ok: true, status: session.status });
+});
+
+router.get('/browser-session/:id/document', (req, res) => {
+  const session = browserSessionForRequest(req);
+  if (!session || !session.capturedHtml) return res.status(404).send('Captured BRC document not found.');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="BRC-${session.captureId}.html"`);
+  res.send(session.capturedHtml);
+});
 
 router.post('/test', async (req, res) => {
   try {
