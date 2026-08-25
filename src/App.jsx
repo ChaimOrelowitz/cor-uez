@@ -235,7 +235,11 @@ function App() {
             </form>
             {eligibility?.matchedAddress && <div className="map-card">
               <UezMap latitude={eligibility.latitude} longitude={eligibility.longitude} zoneGeometry={eligibility.zoneGeometry} address={eligibility.matchedAddress} />
-              <div className="address-confirmation"><strong>{eligibility.matchedAddress}</strong><span>Matched business address</span></div>
+              <div className="result-strip"><div className={`result-icon ${eligibility.eligible ? 'good' : 'bad'}`}>{eligibility.eligible ? '✓' : '!'}</div><div>
+                <h4>{eligibility.eligible ? `Your business is inside the ${eligibility.zoneName}.` : 'This address is not inside a UEZ.'}</h4>
+                <p>{eligibility.matchedAddress}</p>
+                {eligibility.programs?.length > 0 && <span className="grant-pill">{eligibleProgramName} available</span>}
+              </div></div>
             </div>}
           </div>}
 
@@ -246,9 +250,9 @@ function App() {
             <p className="offer-lead">This address is eligible for New Jersey UEZ enrollment.</p>
             {eligibility?.programs?.length > 0 && <div className="program-available"><span>Available program</span><strong>{eligibleProgramName}</strong></div>}
             <div className="service-offer">
-              <h4>Have COR Solutions handle the application</h4>
-              <p>COR Solutions can enroll your business in the UEZ{eligibility?.programs?.length > 0 ? ` and apply for the ${eligibleProgramName}` : ''} on your behalf.</p>
-              <div className="service-price"><strong>$500</strong><span>to begin</span></div>
+              <h4>Have COR Solutions handle the process</h4>
+              <p>We will first check whether your business already has a valid New Jersey Business Registration Certificate (BRC). Once the business has a BRC, COR Solutions will enroll it in the UEZ{eligibility?.programs?.length > 0 ? ` and apply for the ${eligibleProgramName}` : ''} on your behalf.</p>
+              <p style={{ marginTop: '16px' }}><strong>Service fee: $500</strong></p>
               <p className="refund-copy">If the LDC rejects the grant application, the $500 service fee will be refunded. Once the grant is approved, the fee is non-refundable.</p>
             </div>
           </div>}
