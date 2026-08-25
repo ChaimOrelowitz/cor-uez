@@ -4,6 +4,41 @@ const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, lookupBrc } = require('../utils/uezBrc');
 
 const router = express.Router();
+
+router.post('/test', async (req, res) => {
+  try {
+    const businessName = String(req.body?.businessName || '').trim();
+    const ein = String(req.body?.ein || '').trim();
+    const result = await lookupBrc({ business_name_input: businessName, ein });
+
+    if (result.status === 'found') {
+      return res.json({
+        outcome: 'found',
+        lookup: result.lookup,
+        result: {
+          taxpayerName: result.taxpayerName,
+          tradeName: result.tradeName,
+          address: result.address,
+          certificateNumber: result.certificateNumber,
+          effectiveDate: result.effectiveDate,
+          issuanceDate: result.issuanceDate
+        }
+      });
+    }
+
+    if (result.status === 'not_found') return res.json({ outcome: 'not_found', lookup: result.lookup });
+    if (result.status === 'challenge_required') return res.json({ outcome: 'manual_verification_required', lookup: result.lookup });
+
+    return res.status(502).json({
+      outcome: 'error',
+      lookup: result.lookup,
+      error: result.text || 'NJ returned an unexpected BRC response.'
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.use(requireUezAuth);
 
 async function ownedApplication(id, user) {
