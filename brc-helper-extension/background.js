@@ -7,7 +7,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return;
   }
 
-  fetch(`${apiBase}/api/uez/brc/browser-session/${encodeURIComponent(captureId)}/result`, {
+  const safeApiBase = String(apiBase).replace(/^http:\/\/cor-uez-api\.onrender\.com/i, 'https://cor-uez-api.onrender.com');
+
+  fetch(`${safeApiBase}/api/uez/brc/browser-session/${encodeURIComponent(captureId)}/result`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
