@@ -2,6 +2,38 @@ import supabase from './supabaseClient';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+function decodeBase64Url(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function encodeBase64Url(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function normalizeBrowserCheckerUrl(checkerUrl) {
+  try {
+    const url = new URL(checkerUrl);
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+    const encodedPayload = hash.get('corBrc');
+    if (!encodedPayload) return checkerUrl;
+
+    const payload = JSON.parse(decodeBase64Url(encodedPayload));
+    payload.apiBase = API_BASE;
+    hash.set('corBrc', encodeBase64Url(JSON.stringify(payload)));
+    url.hash = hash.toString();
+    return url.toString();
+  } catch (_) {
+    return checkerUrl;
+  }
+}
+
 async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -45,6 +77,12 @@ export async function startBrowserBrcCapture(businessName, ein) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'Could not start the BRC browser check.');
+
+  // Older Render builds generated the capture payload with http:// because Render
+  // terminates TLS before Express. Always rewrite the helper payload to the same
+  // public API URL this frontend is already using so the Chrome helper can relay
+  // the NJ result back over HTTPS even while Render is temporarily on an older build.
+  if (data.checkerUrl) data.checkerUrl = normalizeBrowserCheckerUrl(data.checkerUrl);
   return data;
 }
 
