@@ -1,6 +1,7 @@
 (() => {
   const SESSION_KEY = 'corBrcCapturePayload';
   let sentOutcome = null;
+  let challengeSent = false;
 
   function decodePayload(value) {
     try {
@@ -46,8 +47,14 @@
   }
 
   function relay(outcome, extra = {}) {
-    if (sentOutcome === outcome && outcome !== 'challenge') return;
-    if (outcome !== 'challenge') sentOutcome = outcome;
+    if (outcome === 'challenge') {
+      if (challengeSent) return;
+      challengeSent = true;
+    } else {
+      if (sentOutcome === outcome) return;
+      sentOutcome = outcome;
+    }
+
     chrome.runtime.sendMessage({
       type: 'cor-brc-capture',
       apiBase: payload.apiBase,
