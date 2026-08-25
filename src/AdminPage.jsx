@@ -21,8 +21,6 @@ import {
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
-const UEZ_API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-const LOCAL_BRC_CHECKER = 'http://127.0.0.1:4318';
 
 function statusLabel(status) {
   const labels = {
@@ -285,61 +283,62 @@ export default function AdminPage() {
     }
   }
 
-  async function waitForLocalBrc(jobId) {
+  async function runExtensionWorkflow(workflow, payload) {
     const statusMessages = {
-      opening: 'Opening the NJ BRC checker on this computer…',
-      waiting_for_nj: 'NJ is loading in the checker window…',
-      checking: 'NJ lookup submitted. Complete any verification shown in the checker window.',
+      starting: 'Starting the COR Chrome extension…',
+      opening_brc: 'Opening the New Jersey BRC lookup…',
       waiting_for_verification: 'Complete the NJ verification in the checker window. UEZ will import the result automatically.',
-      saving_pdf: 'BRC found. Creating the applicant’s PDF…',
-      uploading: 'Uploading the BRC PDF directly to the applicant’s UEZ file…',
-      saving_not_found: 'Saving the NJ result…',
-      loading_pbs_credentials: 'Loading the applicant’s encrypted PBS login…',
-      opening_tax_clearance: 'Opening the PBS tax-clearance window…',
-      waiting_for_pbs: 'Opening New Jersey PBS…',
+      saving_brc: 'BRC found. Creating and saving the applicant’s PDF…',
+      opening_pbs: 'Opening New Jersey PBS…',
       opening_mynj_login: 'Opening the MyNJ login…',
       signing_in_to_pbs: 'Signing into PBS with the stored MyNJ login…',
-      waiting_for_pbs_home: 'PBS is loading…',
       opening_tax_revenue_center: 'Opening Tax & Revenue Center…',
-      opening_business_incentive_clearance: 'Opening Business Incentive Tax Clearance…',
       waiting_for_human_verification: 'Complete New Jersey’s verification in the visible PBS window.',
       requesting_tax_clearance_pdf: 'Selecting the Department of Community Affairs and requesting the letter…',
-      waiting_for_tax_clearance_download: 'Use the PBS window to download the existing tax-clearance letter.',
-      uploading_tax_clearance: 'Tax clearance downloaded. Adding it directly to the applicant’s UEZ file…'
+      uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…'
     };
-
-    while (true) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const response = await fetch(`${LOCAL_BRC_CHECKER}/jobs/${jobId}`, { cache: 'no-store' });
-      const job = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(job.error || 'The local BRC checker stopped responding.');
-      if (statusMessages[job.status]) setMessage(statusMessages[job.status]);
-      if (['complete', 'not_found', 'error'].includes(job.status)) return job;
-    }
+    const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+    return new Promise((resolve, reject) => {
+      let timer = window.setTimeout(() => finish(new Error('The COR Chrome extension is not installed or is not enabled.')), 2500);
+      const finish = (error, result) => {
+        window.clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+        if (error) reject(error); else resolve(result);
+      };
+      const onMessage = (event) => {
+        if (event.source !== window || event.origin !== window.location.origin || event.data?.source !== 'cor-uez-extension') return;
+        const message = event.data;
+        if (message.requestId === requestId && message.type === 'COR_UEZ_START_RESULT') {
+          if (!message.ok) return finish(new Error(message.error || 'The COR Chrome extension could not start.'));
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => finish(new Error('The New Jersey document session timed out. Start it again when ready.')), 25 * 60 * 1000);
+          return;
+        }
+        if (message.jobId !== requestId || message.type !== 'COR_UEZ_STATUS') return;
+        if (statusMessages[message.status]) setMessage(statusMessages[message.status]);
+        if (message.status === 'complete') finish(null, { status: 'complete' });
+        if (message.status === 'not_found') finish(null, { status: 'not_found' });
+        if (message.status === 'error') finish(new Error(message.error || 'The document retrieval did not finish.'));
+      };
+      window.addEventListener('message', onMessage);
+      window.postMessage({ source: 'cor-uez-app', type: 'COR_UEZ_START', requestId, workflow, payload }, window.location.origin);
+      setMessage('Starting the COR Chrome extension…');
+    });
   }
 
   async function runBrcLookup() {
     setBusy(true);
-    setMessage('Connecting to the BRC checker on this computer…');
+    setMessage('Starting the COR Chrome extension…');
     try {
       const currentSession = await getApplicantSession();
       if (!currentSession?.access_token) throw new Error('Please sign in again before running the BRC check.');
 
-      const response = await fetch(`${LOCAL_BRC_CHECKER}/check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          applicationId: detail.application.id,
-          businessName: detail.application.business_name_input,
-          ein: detail.application.ein,
-          apiBase: UEZ_API_BASE,
-          accessToken: currentSession.access_token
-        })
+      const outcome = await runExtensionWorkflow('brc', {
+        applicationId: detail.application.id,
+        businessName: detail.application.business_name_input,
+        ein: detail.application.ein,
+        accessToken: currentSession.access_token
       });
-      const started = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(started.error || 'Could not start the local BRC checker.');
-
-      const outcome = await waitForLocalBrc(started.id);
       await refreshList(detail.application.id);
 
       if (outcome.status === 'complete') {
@@ -350,10 +349,7 @@ export default function AdminPage() {
         throw new Error(outcome.error || 'The BRC check did not finish.');
       }
     } catch (err) {
-      const connectionProblem = /fetch|network|failed to connect|stopped responding/i.test(String(err.message || err));
-      setMessage(connectionProblem
-        ? 'The BRC checker is not running on this computer. Start npm run brc-checker in the repository backend folder, then click this button again.'
-        : err.message);
+      setMessage(err.message);
     } finally {
       setBusy(false);
     }
@@ -361,33 +357,21 @@ export default function AdminPage() {
 
   async function runTaxClearance() {
     setBusy(true);
-    setMessage('Connecting to the document checker on this computer…');
+    setMessage('Starting the COR Chrome extension…');
     try {
       const currentSession = await getApplicantSession();
       if (!currentSession?.access_token) throw new Error('Please sign in again before retrieving tax clearance.');
 
-      const response = await fetch(`${LOCAL_BRC_CHECKER}/tax-clearance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          applicationId: detail.application.id,
-          businessName: detail.application.registered_business_name || detail.application.business_name_input,
-          apiBase: UEZ_API_BASE,
-          accessToken: currentSession.access_token
-        })
+      const outcome = await runExtensionWorkflow('tax_clearance', {
+        applicationId: detail.application.id,
+        businessName: detail.application.registered_business_name || detail.application.business_name_input,
+        accessToken: currentSession.access_token
       });
-      const started = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(started.error || 'Could not start the tax-clearance window.');
-
-      const outcome = await waitForLocalBrc(started.id);
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');
       await refreshList(detail.application.id);
       setMessage('Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');
     } catch (err) {
-      const connectionProblem = /fetch|network|failed to connect|stopped responding/i.test(String(err.message || err));
-      setMessage(connectionProblem
-        ? 'The local document checker is not running. Start npm run document-checker in the repository backend folder, then try again.'
-        : err.message);
+      setMessage(err.message);
     } finally {
       setBusy(false);
     }
@@ -711,7 +695,7 @@ export default function AdminPage() {
               <div className="admin-card-head"><h3>BRC verification</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
               <div className="lookup-values"><span>Name control <strong>{nameControl(detail.application.business_name_input)}</strong></span><span>NJ Tax ID <strong>{njTaxId(detail.application.ein)}</strong></span></div>
               <button className="primary admin-primary" onClick={runBrcLookup} disabled={busy}>{busy ? 'BRC check running…' : 'Look up and import BRC from NJ'}</button>
-              <p className="admin-help">Start the local BRC checker on this computer, then click above. Complete any NJ verification in its window; the certificate details and PDF will be added directly to this applicant’s UEZ file.</p>
+              <p className="admin-help">The COR Chrome extension opens New Jersey when you click above. Complete any NJ verification shown; the certificate details and PDF are added directly to this applicant’s UEZ file.</p>
 
               <div className="brc-result-form">
                 <label>Official registered business name</label><input value={brcForm.registeredBusinessName} onChange={(e) => setBrcForm((old) => ({ ...old, registeredBusinessName: e.target.value }))} />
@@ -775,7 +759,7 @@ export default function AdminPage() {
                 <p className="admin-help">The New Jersey tax-clearance letter is saved in this applicant’s Documents below.</p>
                 <button className="secondary admin-full-button" onClick={() => openDoc(detail.documents.find((doc) => doc.document_type === 'tax_clearance'))}>Open tax-clearance letter</button>
               </> : <>
-                <p className="admin-help">The checker signs into PBS, opens <strong>Tax &amp; Revenue Center</strong>, selects <strong>Business Incentive Tax Clearance</strong> and <strong>New Jersey Department of Community Affairs</strong>, then files the downloaded PDF here automatically. Complete any New Jersey verification shown in the visible window.</p>
+                <p className="admin-help">The COR Chrome extension signs into PBS, opens <strong>Tax &amp; Revenue Center</strong>, selects <strong>Business Incentive Tax Clearance</strong> and <strong>New Jersey Department of Community Affairs</strong>, then files the PDF here automatically. Complete any New Jersey verification shown in the visible window.</p>
                 <button
                   className="primary admin-full-button"
                   onClick={runTaxClearance}

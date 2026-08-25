@@ -1,23 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "COR BRC Capture Helper",
-  "version": "0.1.1",
-  "description": "Captures New Jersey BRC results back into the COR Solutions UEZ app.",
+  "name": "COR UEZ Document Helper",
+  "version": "1.0.0",
+  "description": "Runs BRC and tax-clearance retrieval only when started from the COR UEZ admin app.",
+  "permissions": ["storage", "tabs"],
   "host_permissions": [
-    "https://cor-uez-api.onrender.com/*"
+    "https://cor-uez-api.onrender.com/*",
+    "https://cor-uez.vercel.app/*",
+    "https://uez.corsolutions.io/*",
+    "https://www1.state.nj.us/TYTR_BRC/*",
+    "https://www16.state.nj.us/*",
+    "https://www-njlib.nj.gov/*",
+    "https://my.nj.gov/*",
+    "https://www1.nj.gov/TYTR_ACE_App/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
+      "matches": ["https://cor-uez.vercel.app/*", "https://uez.corsolutions.io/*"],
+      "js": ["appBridge.js"],
+      "run_at": "document_start"
+    },
+    {
       "matches": [
-        "https://www1.state.nj.us/TYTR_BRC/*"
+        "https://www1.state.nj.us/TYTR_BRC/*",
+        "https://www16.state.nj.us/*",
+        "https://www-njlib.nj.gov/*",
+        "https://my.nj.gov/*",
+        "https://www1.nj.gov/TYTR_ACE_App/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_idle",
-      "all_frames": true,
-      "match_about_blank": true
+      "run_at": "document_idle"
     }
   ]
 }

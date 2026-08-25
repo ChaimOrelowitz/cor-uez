@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const { chromium } = require('playwright');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, lookupBrc } = require('../utils/uezBrc');
@@ -182,6 +183,70 @@ async function addStatusEvent(applicationId, status, label, message, userId, vis
   const { error } = await supabase.from('uez_status_events').insert({ application_id: applicationId, status, label, message, visible_to_applicant: visible, created_by: userId });
   if (error) throw error;
 }
+
+router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res) => {
+  let browser;
+  try {
+    const application = await ownedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+    const html = String(req.body?.html || '');
+    const result = req.body?.result || {};
+    if (!html || html.length > 1500000 || !result.certificateNumber) {
+      return res.status(400).json({ error: 'The captured BRC certificate was incomplete.' });
+    }
+
+    browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
+    const page = await browser.newPage({ javaScriptEnabled: false });
+    await page.route('**/*', (route) => {
+      if (route.request().resourceType() === 'document') route.continue();
+      else route.abort();
+    });
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const pdf = await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.35in', right: '0.35in', bottom: '0.35in', left: '0.35in' } });
+
+    const safeCertificate = String(result.certificateNumber).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+    const filename = `NJ-BRC-${safeCertificate}.pdf`;
+    const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
+    const { error: storageError } = await supabase.storage.from('uez-documents').upload(storagePath, pdf, { contentType: 'application/pdf', upsert: false });
+    if (storageError) throw storageError;
+
+    const { data: document, error: documentError } = await supabase.from('uez_documents').insert({
+      application_id: application.id,
+      document_type: 'brc',
+      storage_path: storagePath,
+      filename,
+      source: 'admin_upload',
+      status: 'received',
+      metadata: { mimeType: 'application/pdf', size: pdf.length, capturedBy: 'chrome_extension' },
+      created_by: req.user.id
+    }).select('id, document_type, filename, source, status, metadata, created_at').single();
+    if (documentError) throw documentError;
+
+    const checkedAt = new Date().toISOString();
+    const brcData = {
+      taxpayerName: result.taxpayerName || null,
+      tradeName: result.tradeName || null,
+      address: result.address || null,
+      certificateNumber: result.certificateNumber || null,
+      effectiveDate: result.effectiveDate || null,
+      issuanceDate: result.issuanceDate || null
+    };
+    const canonicalName = result.taxpayerName || result.tradeName || application.business_name_input;
+    const { data: updated, error: updateError } = await supabase.from('uez_applications').update({
+      brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: canonicalName,
+      registered_business_name: canonicalName, brc_data: brcData, brc_last_error: null,
+      status: 'brc_confirmed', updated_at: checkedAt
+    }).eq('id', application.id).select('*').single();
+    if (updateError) throw updateError;
+    await addStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
+    await ensureMyNjCredentials(updated, req.user.id);
+    res.status(201).json({ application: updated, document, result: brcData });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+});
 
 router.post('/:id/request-check', async (req, res) => {
   try {
