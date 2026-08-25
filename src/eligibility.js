@@ -1,3 +1,4 @@
+const ARCGIS_GEOCODER = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer';
 const NJ_GEOCODER = 'https://geo.nj.gov/arcgis/rest/services/Tasks/NJ_Geocode/GeocodeServer';
 const UEZ_LAYER = 'https://services.arcgis.com/Aur8tCo478N3VovT/arcgis/rest/services/Govt_admin_UEZ_bnd/FeatureServer/0/query';
 
@@ -7,36 +8,65 @@ function titleCase(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+async function jsonFetch(url) {
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  return response.json();
+}
+
 export async function suggestNjAddresses(text) {
   const value = String(text || '').trim();
   if (value.length < 3) return [];
 
-  const suggestParams = new URLSearchParams({ text: value, maxSuggestions: '7', f: 'json' });
-  const candidateParams = new URLSearchParams({
-    SingleLine: value,
-    outFields: 'Match_addr,Addr_type,City,Region,Postal',
-    outSR: '4326',
-    maxLocations: '7',
+  const worldSuggestParams = new URLSearchParams({
+    text: value,
+    maxSuggestions: '8',
+    countryCode: 'USA',
     f: 'json'
   });
 
-  const [suggestResult, candidateResult] = await Promise.allSettled([
-    fetch(`${NJ_GEOCODER}/suggest?${suggestParams}`).then(async (response) => response.ok ? response.json() : { suggestions: [] }),
-    fetch(`${NJ_GEOCODER}/findAddressCandidates?${candidateParams}`).then(async (response) => response.ok ? response.json() : { candidates: [] })
+  const worldCandidateParams = new URLSearchParams({
+    SingleLine: value,
+    outFields: 'Match_addr,Addr_type,City,Region,Postal',
+    outSR: '4326',
+    maxLocations: '8',
+    countryCode: 'USA',
+    f: 'json'
+  });
+
+  const njCandidateParams = new URLSearchParams({
+    SingleLine: value,
+    outFields: 'Match_addr,Addr_type,City,Region,Postal',
+    outSR: '4326',
+    maxLocations: '8',
+    f: 'json'
+  });
+
+  const [worldSuggestResult, worldCandidateResult, njCandidateResult] = await Promise.allSettled([
+    jsonFetch(`${ARCGIS_GEOCODER}/suggest?${worldSuggestParams}`),
+    jsonFetch(`${ARCGIS_GEOCODER}/findAddressCandidates?${worldCandidateParams}`),
+    jsonFetch(`${NJ_GEOCODER}/findAddressCandidates?${njCandidateParams}`)
   ]);
 
-  const suggestions = suggestResult.status === 'fulfilled'
-    ? (suggestResult.value?.suggestions || []).filter((item) => item?.text).map((item) => ({ text: item.text, magicKey: item.magicKey || null }))
+  const worldSuggestions = worldSuggestResult.status === 'fulfilled'
+    ? (worldSuggestResult.value?.suggestions || [])
+        .filter((item) => item?.text && /\bNJ\b|New Jersey/i.test(item.text))
+        .map((item) => ({ text: item.text, magicKey: item.magicKey || null }))
     : [];
 
-  const candidates = candidateResult.status === 'fulfilled'
-    ? (candidateResult.value?.candidates || [])
-        .filter((candidate) => candidate?.address && Number(candidate.score) >= 75)
-        .map((candidate) => ({ text: candidate.address, magicKey: null }))
-    : [];
+  const candidateRows = [];
+  for (const result of [worldCandidateResult, njCandidateResult]) {
+    if (result.status !== 'fulfilled') continue;
+    for (const candidate of result.value?.candidates || []) {
+      const region = candidate.attributes?.Region || candidate.attributes?.RegionAbbr || '';
+      if (!candidate?.address || Number(candidate.score) < 70) continue;
+      if (region && !/^NJ$|New Jersey/i.test(region)) continue;
+      candidateRows.push({ text: candidate.address, magicKey: null });
+    }
+  }
 
   const seen = new Set();
-  return [...suggestions, ...candidates].filter((item) => {
+  return [...worldSuggestions, ...candidateRows].filter((item) => {
     const key = item.text.toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
@@ -44,7 +74,7 @@ export async function suggestNjAddresses(text) {
   }).slice(0, 8);
 }
 
-async function geocodeAddress(address, magicKey = null) {
+async function geocodeWith(service, address, magicKey = null) {
   const params = new URLSearchParams({
     SingleLine: address,
     outFields: '*',
@@ -52,14 +82,19 @@ async function geocodeAddress(address, magicKey = null) {
     maxLocations: '5',
     f: 'json'
   });
-  if (magicKey) params.set('magicKey', magicKey);
+  if (service === ARCGIS_GEOCODER) params.set('countryCode', 'USA');
+  if (magicKey && service === ARCGIS_GEOCODER) params.set('magicKey', magicKey);
 
-  const response = await fetch(`${NJ_GEOCODER}/findAddressCandidates?${params}`);
-  if (!response.ok) throw new Error('Could not verify that address.');
-  const data = await response.json();
+  const data = await jsonFetch(`${service}/findAddressCandidates?${params}`);
   const candidate = data?.candidates?.[0];
-  if (!candidate || candidate.score < 90) return null;
+  if (!candidate || Number(candidate.score) < 85) return null;
   return candidate;
+}
+
+async function geocodeAddress(address, magicKey = null) {
+  const world = await geocodeWith(ARCGIS_GEOCODER, address, magicKey);
+  if (world) return world;
+  return geocodeWith(NJ_GEOCODER, address, null);
 }
 
 async function findUezZone(location) {
