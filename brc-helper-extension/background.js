@@ -1,6 +1,13 @@
 const API_BASE = 'https://cor-uez-api.onrender.com';
-const APP_URLS = ['https://cor-uez.vercel.app/*', 'https://uez.corsolutions.io/*'];
 const ACTIVE_JOB_KEY = 'corUezActiveJob';
+
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (origin === 'https://cor-uez.vercel.app' || origin === 'https://uez.corsolutions.io') return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return true;
+  if (/^https:\/\/cor-uez-[a-z0-9-]+\.vercel\.app$/i.test(origin)) return true;
+  return false;
+}
 
 async function getJob() { return (await chrome.storage.session.get(ACTIVE_JOB_KEY))[ACTIVE_JOB_KEY] || null; }
 async function setJob(job) { if (job) await chrome.storage.session.set({ [ACTIVE_JOB_KEY]: job }); else await chrome.storage.session.remove(ACTIVE_JOB_KEY); }
@@ -15,8 +22,9 @@ async function api(job, path, options = {}) {
 async function notify(job, status, extra = {}) {
   const updated = { ...job, status, updatedAt: Date.now() };
   await setJob(updated);
-  const tabs = await chrome.tabs.query({ url: APP_URLS });
-  await Promise.all(tabs.map((tab) => chrome.tabs.sendMessage(tab.id, { source: 'cor-uez-background', type: 'COR_UEZ_STATUS', jobId: updated.id, workflow: updated.workflow, status, ...extra }).catch(() => {})));
+  const tabs = await chrome.tabs.query({});
+  const appTabs = tabs.filter((t) => t.url && isAllowedOrigin(new URL(t.url).origin));
+  await Promise.all(appTabs.map((tab) => chrome.tabs.sendMessage(tab.id, { source: 'cor-uez-background', type: 'COR_UEZ_STATUS', jobId: updated.id, workflow: updated.workflow, status, ...extra }).catch(() => {})));
   return updated;
 }
 
@@ -35,7 +43,7 @@ async function uploadTaxPdf(job, base64, filename) {
 
 async function startWorkflow(message, sender) {
   const senderOrigin = sender.tab?.url ? new URL(sender.tab.url).origin : '';
-  if (!['https://cor-uez.vercel.app', 'https://uez.corsolutions.io'].includes(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
+  if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
   if (!['brc', 'tax_clearance'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
   const existing = await getJob();
   if (existing && Date.now() - existing.createdAt < 30 * 60 * 1000) throw new Error('A COR document retrieval is already running. Finish it first.');
@@ -59,7 +67,7 @@ async function startWorkflow(message, sender) {
 }
 
 async function injectNjHelper(tabId) {
-  await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['content.js'] });
+  await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['content.js'] }).catch(() => {});
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -97,8 +105,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
   const host = new URL(tab.url).hostname.toLowerCase();
-  if (!['www1.state.nj.us', 'www1.nj.gov', 'www16.state.nj.us', 'www-njlib.nj.gov', 'my.nj.gov'].includes(host)) return;
-  const job = await getJob();
-  if (!job) return;
-  await injectNjHelper(tabId).catch(() => {});
+  if (host.includes('nj.us') || host.includes('nj.gov')) {
+    const job = await getJob();
+    if (!job) return;
+    await injectNjHelper(tabId).catch(() => {});
+  }
 });
