@@ -10,23 +10,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply BRC CAPTCHA and formation review fix
-        run: python .github/scripts/fix_brc_captcha_and_formation_review.py
-      - name: Verify backend and frontend
+      - name: Apply sole prop formation label
+        run: python .github/scripts/label_sole_prop_formation.py
+      - name: Verify frontend
         run: |
-          node --check backend/routes/uez.js
-          node --check backend/routes/uezBrc.js
-          node --check backend/services/uezEmail.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add backend/routes/uez.js src/AdminPage.jsx brc-helper-extension/content.js brc-helper-extension/manifest.json
+          git add src/AdminPage.jsx
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Fix BRC CAPTCHA overlay and formation review"
+            git commit -m "Clarify sole prop formation status"
             git push
           fi
