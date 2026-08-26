@@ -10,21 +10,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply polish patch
-        run: python .github/scripts/polish_admin_operations.py
-      - name: Verify backend and frontend
+      - name: Apply live refresh and login patch
+        run: python .github/scripts/fix_live_refresh_and_login.py
+      - name: Verify frontend
         run: |
-          node --check backend/routes/uez.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "Chaim Orelowitz"
           git config user.email "chaim@corsolutions.io"
-          git add backend/routes/uez.js src/AdminPage.jsx src/styles.css
+          git add src/App.jsx src/AdminPage.jsx src/intakePolish.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Polish UEZ admin operations"
+            git commit -m "Fix live refresh and login UX"
             git push
           fi
