@@ -10,8 +10,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Require all signup fields
-        run: python .github/scripts/require_all_signup_fields.py
+      - name: Add required owner title
+        run: python .github/scripts/add_required_owner_title.py
       - name: Verify backend and frontend
         run: |
           node --check backend/routes/uez.js
@@ -25,6 +25,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Require all signup fields"
+            git commit -m "Require owner title in signup"
             git push
           fi
