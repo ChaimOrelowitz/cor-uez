@@ -215,3 +215,16 @@
   .admin-detail-header h1 { font-size: 25px; }
   .uploaded-doc-row { grid-template-columns: 1fr; gap: 3px; }
 }
+
+
+/* PBS admin action modal */
+.pbs-modal { width: min(1180px, 96vw); height: min(900px, 92vh); }
+.pbs-modal-body { min-height: 70vh; padding: 0 !important; background: #fff; }
+.pbs-modal-body iframe { display: block; width: 100%; height: 70vh; border: 0; background: #fff; }
+.pbs-modal .document-modal-footer { align-items: center; }
+.pbs-modal .document-modal-footer > div { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pbs-frame-note { color: #8b91a2; font-size: 11px; }
+@media (max-width: 700px) {
+  .pbs-modal { width: 98vw; height: 94vh; }
+  .pbs-modal-body iframe { height: 72vh; }
+}
