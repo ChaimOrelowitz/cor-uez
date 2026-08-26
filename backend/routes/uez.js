@@ -1069,6 +1069,7 @@ router.post('/admin/applications/:id/brc-not-found', requireUezAdmin, async (req
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await safeSendApplicationEmail(data, 'brc_not_found', { dedupeKey: `brc_not_found:${application.id}` });
 
     await addStatusEvent(
       application.id,

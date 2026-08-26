@@ -139,6 +139,7 @@ function attentionItems(detail) {
   const formation = docFor(detail, 'formation');
   const approval = docFor(detail, 'uez_approval_email');
   if (payment?.status === 'client_reported') items.push('Client says payment was sent');
+  if (detail.application.brc_status === 'client_created') items.push('Client says BRC was created — recheck BRC');
   if (!detail.application.is_sole_proprietorship && formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
   if (!detail.application.is_sole_proprietorship && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
   if (approval && (detail.application.uez_approval_review_status || 'not_reviewed') === 'not_reviewed') items.push('Review UEZ approval email');
@@ -854,7 +855,7 @@ export default function AdminPage() {
   return <div className="admin-shell">
     <header className="admin-topbar">
       <div className="admin-brand"><div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div></div>
-      <div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button onClick={handleSignOut}>Log out</button></div>
+      <div className="admin-top-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button onClick={handleSignOut}>Log out</button></div>
     </header>
 
     <main className="admin-layout">
@@ -874,6 +875,7 @@ export default function AdminPage() {
         <div className="application-list">
           {filtered.map((app) => {
             const needsAttention = app.payment_status === 'client_reported'
+              || app.brc_status === 'client_created'
               || (!app.is_sole_proprietorship && (app.document_types || []).includes('formation') && app.formation_review_status !== 'approved')
               || ((app.document_types || []).includes('uez_approval_email') && (app.uez_approval_review_status || 'not_reviewed') === 'not_reviewed');
             return <button key={app.id} className={`application-list-item ops-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => openApplication(app.id)}>

@@ -16,7 +16,8 @@ import {
   submitApplication,
   uploadApplicationDocument,
   deleteDocument,
-  reportApplicantPayment
+  reportApplicantPayment,
+  reportBrcCreated
 } from './api';
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
@@ -70,6 +71,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   const [myNjCredentials, setMyNjCredentials] = useState(null);
   const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
+  const [brcBusy, setBrcBusy] = useState(false);
   const app = bundle.application;
   const needsBrc = ['not_found', 'missing', 'required'].includes(app.brc_status) || app.status === 'waiting_for_brc';
   const brcUploaded = app.brc_status === 'uploaded' || app.status === 'brc_uploaded';
@@ -120,6 +122,16 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     finally { setPaymentBusy(false); }
   }
 
+  async function reportBrcMade() {
+    setBrcBusy(true); setMessage('');
+    try {
+      await reportBrcCreated(app.id);
+      await onRefresh();
+      setMessage('Thanks. COR was notified and will recheck your BRC.');
+    } catch (err) { setMessage(err.message); }
+    finally { setBrcBusy(false); }
+  }
+
   async function openDocument(doc) {
     try {
       const result = await getDocumentUrl(app.id, doc.id);
@@ -155,6 +167,13 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
           {brcConfirmed && <div className="action-panel good-panel">
             <h3>✓ BRC confirmed</h3>
             <p>{app.registered_business_name || app.brc_registered_name || app.business_name_input}</p>
+          </div>}
+
+          {needsBrc && <div className="action-panel warn-panel">
+            <h3>Business Registration Certificate needed</h3>
+            <p>COR could not locate a current New Jersey BRC. Create/register for it with New Jersey, then come back here and tell us when you're done. You do not need to upload the BRC.</p>
+            <a className="primary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Create my BRC</a>
+            <button className="secondary compact inline-button" onClick={reportBrcMade} disabled={brcBusy}>{brcBusy ? 'Saving…' : 'I created my BRC'}</button>
           </div>}
 
           {needsApprovalEmail && !approvalUploaded && <div className="action-panel warn-panel">

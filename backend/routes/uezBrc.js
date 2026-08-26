@@ -5,6 +5,7 @@ const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, lookupBrc } = require('../utils/uezBrc');
 const { ensureMyNjCredentials } = require('../services/uezMyNj');
+const { safeSendApplicationEmail } = require('../services/uezEmail');
 
 const router = express.Router();
 const BRC_FORM_URL = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
@@ -171,6 +172,24 @@ router.post('/test', async (req, res) => {
 
 router.use(requireUezAuth);
 
+router.post('/:id/client-created', async (req, res) => {
+  try {
+    const application = await ownedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+    const now = new Date().toISOString();
+    const { data, error } = await supabase.from('uez_applications').update({
+      brc_status: 'client_created',
+      brc_last_error: null,
+      updated_at: now
+    }).eq('id', application.id).select('*').single();
+    if (error) throw error;
+    await safeStatusEvent(application.id, 'brc_client_created', 'Client says BRC was created', 'You told COR that you completed the New Jersey BRC registration. COR will recheck it.', req.user.id, true);
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 async function ownedApplication(id, user) {
   let query = supabase.from('uez_applications').select('*').eq('id', id);
   if (user.role !== 'admin') query = query.eq('applicant_user_id', user.id);
@@ -313,6 +332,7 @@ router.post('/:id/request-check', async (req, res) => {
       const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'not_found', brc_checked_at: checkedAt, brc_last_error: null, updated_at: checkedAt }).eq('id', application.id).select('*').single();
       if (error) throw error;
       await safeStatusEvent(application.id, 'waiting_for_brc', 'BRC needed', 'We could not find a current New Jersey Business Registration Certificate. Please register for one, then return here and tell us when it is complete.', req.user.id, true);
+      await safeSendApplicationEmail(data, 'brc_not_found', { dedupeKey: `brc_not_found:${application.id}` });
       return res.json({ application: data, outcome: 'not_found' });
     }
 
