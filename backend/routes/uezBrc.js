@@ -196,9 +196,10 @@ router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res)
     if (!application) return res.status(404).json({ error: 'Application not found' });
 
     const html = typeof req.body?.html === 'string' ? req.body.html.trim() : '';
+    const screenshotBase64 = typeof req.body?.screenshotBase64 === 'string' ? req.body.screenshotBase64.trim() : '';
     const result = req.body?.result && typeof req.body.result === 'object' ? { ...req.body.result } : {};
-    if (!html) {
-      return res.status(400).json({ error: 'The captured BRC certificate HTML was empty.' });
+    if (!html && !screenshotBase64) {
+      return res.status(400).json({ error: 'The captured BRC certificate was empty.' });
     }
     if (!result.certificateNumber) {
       return res.status(400).json({ error: 'The captured BRC certificate number was missing.' });
@@ -206,8 +207,17 @@ router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res)
 
     browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage', '--no-sandbox'] });
     const page = await browser.newPage({ javaScriptEnabled: false });
-    await page.setContent(html, { waitUntil: 'load', timeout: 15000 });
-    await page.waitForFunction(() => Array.from(document.images || []).every((image) => image.complete && image.naturalWidth > 0), null, { timeout: 5000 }).catch(() => {});
+    if (screenshotBase64) {
+      let imageBuffer;
+      try { imageBuffer = Buffer.from(screenshotBase64, 'base64'); } catch (_) { imageBuffer = null; }
+      if (!imageBuffer || imageBuffer.length < 100 || imageBuffer.subarray(1, 4).toString('ascii') !== 'PNG') {
+        return res.status(400).json({ error: 'The captured BRC screenshot was not a valid PNG.' });
+      }
+      await page.setContent(`<!doctype html><html><head><style>@page{size:Letter;margin:.35in}html,body{margin:0;padding:0;background:#fff}body{display:flex;align-items:flex-start;justify-content:center}img{display:block;max-width:100%;height:auto}</style></head><body><img src="data:image/png;base64,${screenshotBase64}"></body></html>`, { waitUntil: 'load', timeout: 15000 });
+    } else {
+      await page.setContent(html, { waitUntil: 'load', timeout: 15000 });
+      await page.waitForFunction(() => Array.from(document.images || []).every((image) => image.complete && image.naturalWidth > 0), null, { timeout: 5000 }).catch(() => {});
+    }
     const pdf = await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.35in', right: '0.35in', bottom: '0.35in', left: '0.35in' } });
     if (!pdf || pdf.length < 100 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
       throw new Error('COR could not render the BRC certificate as a valid PDF.');

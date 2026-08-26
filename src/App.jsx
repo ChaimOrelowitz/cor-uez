@@ -679,11 +679,11 @@ export default function App() {
       {session && <button className="signin-link" onClick={handleSignOut}>Sign out</button>}
     </header>
 
-    <main className="page-wrap">
+    <main className={`page-wrap intake-page ${step === 0 ? 'intake-first-screen' : ''}`}>
       <section className="hero">
         <div className="eyebrow">NEW JERSEY UEZ SERVICES</div>
-        <h1>We’ll guide you through the process.</h1>
-        <p>Start with your business address. We’ll identify your UEZ zone and show you which programs are available.</p>
+        <h1>We handle your UEZ signup and grant application.</h1>
+        <p>Start with your business address. COR will check eligibility, collect what we need, and handle the applications for you.</p>
       </section>
 
       <div className="wizard-card">

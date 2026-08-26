@@ -109,6 +109,23 @@
     }
   };
 
+  const certificateElement = () => {
+    const candidates = [...document.querySelectorAll('table, div, section, fieldset, form, main')]
+      .filter((element) => {
+        if (element.id === 'cor-uez-helper-notice' || element.closest('#cor-uez-helper-notice')) return false;
+        const text = String(element.innerText || '');
+        if (!/BUSINESS REGISTRATION CERTIFICATE/i.test(text) || !/Certificate\s*Number/i.test(text)) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width >= 350 && rect.height >= 180;
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { element, area: rect.width * rect.height };
+      })
+      .sort((a, b) => a.area - b.area);
+    return candidates[0]?.element || null;
+  };
+
   const notice = (message) => {
     let element = document.getElementById('cor-uez-helper-notice');
     if (!element) {
@@ -206,14 +223,20 @@
         const address = addressMatch ? addressMatch[1].trim() : '';
         const effectiveDate = effectiveMatch ? effectiveMatch[1].trim() : '';
         const issuanceDate = issuanceMatch ? issuanceMatch[1].trim() : '';
-        const certificateHtml = await cleanCertificateHtml();
-
-        notice('COR found the official BRC certificate! Saving a clean certificate PDF…');
-        await send({
-          type: 'COR_BRC_FOUND',
+        const certificate = certificateElement();
+        if (!certificate) throw new Error('COR could not isolate the NJ certificate on the result page.');
+        const helperNotice = document.getElementById('cor-uez-helper-notice');
+        if (helperNotice) helperNotice.style.display = 'none';
+        certificate.scrollIntoView({ block: 'center', inline: 'nearest' });
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        const rect = certificate.getBoundingClientRect();
+        const capture = await send({
+          type: 'COR_BRC_CAPTURE_REQUEST',
           result: { taxpayerName, tradeName, address, certificateNumber, effectiveDate, issuanceDate },
-          html: certificateHtml
+          rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+          viewport: { width: window.innerWidth, height: window.innerHeight }
         });
+        if (!capture?.ok) throw new Error(capture?.error || 'COR could not capture the NJ certificate.');
         return;
       }
 

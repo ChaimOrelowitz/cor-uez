@@ -49,6 +49,31 @@ async function fail(job, error) {
   await setJob(null);
 }
 
+async function blobToBase64(blob) {
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  return btoa(binary);
+}
+
+async function cropVisibleTabCapture(windowId, rect, viewport) {
+  const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+  const blob = await (await fetch(dataUrl)).blob();
+  const bitmap = await createImageBitmap(blob);
+  const scaleX = bitmap.width / Math.max(1, Number(viewport?.width || bitmap.width));
+  const scaleY = bitmap.height / Math.max(1, Number(viewport?.height || bitmap.height));
+  const sx = Math.max(0, Math.round(Number(rect?.left || 0) * scaleX));
+  const sy = Math.max(0, Math.round(Number(rect?.top || 0) * scaleY));
+  const sw = Math.min(bitmap.width - sx, Math.max(1, Math.round(Number(rect?.width || bitmap.width) * scaleX)));
+  const sh = Math.min(bitmap.height - sy, Math.max(1, Math.round(Number(rect?.height || bitmap.height) * scaleY)));
+  const canvas = new OffscreenCanvas(sw, sh);
+  const context = canvas.getContext('2d');
+  context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+  bitmap.close?.();
+  return blobToBase64(await canvas.convertToBlob({ type: 'image/png' }));
+}
+
 async function uploadPdf(job, documentType, base64, filename) {
   const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
   const body = new FormData();
@@ -200,6 +225,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);
       await setJob(null);
       return { ok: true };
+    }
+    if (message?.type === 'COR_BRC_CAPTURE_REQUEST') {
+      if (job.workflow !== 'brc') return { ok: false, error: 'No matching BRC workflow is active.' };
+      await notify(job, 'saving_brc');
+      try {
+        const windowId = sender.tab?.windowId || job.windowId;
+        if (!windowId) throw new Error('COR could not identify the BRC browser window.');
+        const screenshotBase64 = await cropVisibleTabCapture(windowId, message.rect, message.viewport);
+        await api(job, `/api/uez/brc/${job.applicationId}/admin/captured-certificate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ result: message.result, screenshotBase64 })
+        });
+        await notify(job, 'complete');
+        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1200);
+        await setJob(null);
+        return { ok: true };
+      } catch (err) {
+        await fail(job, err);
+        await setJob(null);
+        return { ok: false, error: err.message };
+      }
     }
     if (message?.type === 'COR_BRC_FOUND') {
       await notify(job, 'saving_brc');
