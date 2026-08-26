@@ -10,20 +10,23 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply live refresh and login patch
-        run: python .github/scripts/fix_live_refresh_and_login.py
-      - name: Verify frontend
+      - name: Apply final UEZ email and auth patch
+        run: python .github/scripts/finish_uez_email_and_auth.py
+      - name: Verify backend and frontend
         run: |
+          node --check backend/routes/uez.js
+          node --check backend/routes/uezEmail.js
+          node --check backend/services/uezEmail.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
-          git config user.name "Chaim Orelowitz"
+          git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx src/AdminPage.jsx src/intakePolish.css
+          git add backend/routes/uez.js src/App.jsx src/AdminPage.jsx
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Fix live refresh and login UX"
+            git commit -m "Finish UEZ email and auth workflow"
             git push
           fi
