@@ -10,20 +10,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply PBS action modal patch
-        run: python .github/scripts/add_pbs_action_modal.py
-      - name: Verify frontend
+      - name: Require owner home address
+        run: python .github/scripts/require_owner_address.py
+      - name: Verify backend and frontend
         run: |
+          node --check backend/routes/uez.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/AdminPage.jsx src/workflow.css
+          git add src/App.jsx src/workflow.css backend/routes/uez.js
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Add PBS admin action modal"
+            git commit -m "Require owner home address"
             git push
           fi
