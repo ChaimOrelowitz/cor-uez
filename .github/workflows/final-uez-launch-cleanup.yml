@@ -1,0 +1,31 @@
+name: Final UEZ launch cleanup
+on:
+  push:
+    paths:
+      - '.github/scripts/final_uez_launch_cleanup.py'
+      - '.github/workflows/final-uez-launch-cleanup.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply cleanup patch
+        run: python .github/scripts/final_uez_launch_cleanup.py
+      - name: Verify backend and frontend
+        run: |
+          node --check backend/routes/uez.js
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "Chaim Orelowitz"
+          git config user.email "chaim@corsolutions.io"
+          git add backend/routes/uez.js src/api.js src/App.jsx src/AdminPage.jsx src/styles.css
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Polish UEZ client and admin workflow"
+            git push
+          fi
