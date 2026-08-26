@@ -10,8 +10,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply BRC client follow-up patch
-        run: python .github/scripts/add_brc_client_flow.py
+      - name: Apply BRC CAPTCHA and formation review fix
+        run: python .github/scripts/fix_brc_captcha_and_formation_review.py
       - name: Verify backend and frontend
         run: |
           node --check backend/routes/uez.js
@@ -23,10 +23,10 @@ jobs:
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add backend/routes/uez.js backend/routes/uezBrc.js src/api.js src/App.jsx src/AdminPage.jsx src/intakePolish.css
+          git add backend/routes/uez.js src/AdminPage.jsx brc-helper-extension/content.js brc-helper-extension/manifest.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Add BRC client follow-up workflow"
+            git commit -m "Fix BRC CAPTCHA overlay and formation review"
             git push
           fi
