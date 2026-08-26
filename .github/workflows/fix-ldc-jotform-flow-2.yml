@@ -1,0 +1,31 @@
+name: Apply JotForm flow fix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-ldc-jotform-flow-2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python .github/scripts/fix_ldc_jotform.py
+      - name: Verify
+        run: |
+          node --check brc-helper-extension/jotform.js
+          node --check brc-helper-extension/background.js
+          python -m json.tool brc-helper-extension/manifest.json >/dev/null
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add -A
+          git commit -m "Fix JotForm Start Filling and address mapping"
+          git push
