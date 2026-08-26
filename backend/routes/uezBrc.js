@@ -179,6 +179,26 @@ async function ownedApplication(id, user) {
   return data;
 }
 
+async function addStatusEvent(applicationId, status, label, message, userId, visible = true) {
+  const { error } = await supabase.from('uez_status_events').insert({
+    application_id: applicationId,
+    status,
+    label,
+    message,
+    visible_to_applicant: visible,
+    created_by: userId || null
+  });
+  if (error) throw error;
+}
+
+async function safeStatusEvent(...args) {
+  try {
+    await addStatusEvent(...args);
+  } catch (err) {
+    console.error('BRC status-event logging failed:', err.message);
+  }
+}
+
 const EXTENSION_KEY = process.env.COR_EXTENSION_KEY || 'cor-uez-extension-sec-2026';
 
 function verifyExtensionKey(req) {
@@ -258,7 +278,7 @@ router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res)
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (updateError) throw updateError;
-    await addStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
+    await safeStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
     await ensureMyNjCredentials(updated, req.user.id);
     res.status(201).json({ application: updated, document, result: brcData });
   } catch (err) {
@@ -284,7 +304,7 @@ router.post('/:id/request-check', async (req, res) => {
       const canonicalName = result.taxpayerName || result.tradeName || application.business_name_input;
       const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: canonicalName, registered_business_name: canonicalName, brc_data: brcData, brc_last_error: null, updated_at: checkedAt }).eq('id', application.id).select('*').single();
       if (error) throw error;
-      await addStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
+      await safeStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
       await ensureMyNjCredentials(data, req.user.id);
       return res.json({ application: data, result: brcData, outcome: 'found' });
     }
@@ -292,14 +312,14 @@ router.post('/:id/request-check', async (req, res) => {
     if (result.status === 'not_found') {
       const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'not_found', brc_checked_at: checkedAt, brc_last_error: null, updated_at: checkedAt }).eq('id', application.id).select('*').single();
       if (error) throw error;
-      await addStatusEvent(application.id, 'waiting_for_brc', 'BRC needed', 'We could not find a current New Jersey Business Registration Certificate. Please register for one, then return here and tell us when it is complete.', req.user.id, true);
+      await safeStatusEvent(application.id, 'waiting_for_brc', 'BRC needed', 'We could not find a current New Jersey Business Registration Certificate. Please register for one, then return here and tell us when it is complete.', req.user.id, true);
       return res.json({ application: data, outcome: 'not_found' });
     }
 
     if (result.status === 'challenge_required') {
       const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'manual_verification_required', brc_checked_at: checkedAt, brc_last_error: 'NJ BRC service requested browser verification.', updated_at: checkedAt }).eq('id', application.id).select('*').single();
       if (error) throw error;
-      await addStatusEvent(application.id, 'brc_manual_verification', 'BRC verification pending', 'The New Jersey BRC service requires a quick manual verification before we can confirm your certificate.', req.user.id, true);
+      await safeStatusEvent(application.id, 'brc_manual_verification', 'BRC verification pending', 'The New Jersey BRC service requires a quick manual verification before we can confirm your certificate.', req.user.id, true);
       return res.json({ application: data, outcome: 'manual_verification_required' });
     }
 
@@ -316,7 +336,7 @@ router.post('/:id/i-registered', async (req, res) => {
     if (!application) return res.status(404).json({ error: 'Application not found' });
     const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'recheck_requested', updated_at: new Date().toISOString() }).eq('id', application.id).select('*').single();
     if (error) throw error;
-    await addStatusEvent(application.id, 'brc_recheck_requested', 'BRC recheck requested', 'Thanks — we’ll check again for your Business Registration Certificate.', req.user.id, true);
+    await safeStatusEvent(application.id, 'brc_recheck_requested', 'BRC recheck requested', 'Thanks — we’ll check again for your Business Registration Certificate.', req.user.id, true);
     res.json(data);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -328,7 +348,7 @@ router.post('/:id/admin/not-found', requireUezAdmin, async (req, res) => {
     const checkedAt = new Date().toISOString();
     const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'not_found', brc_checked_at: checkedAt, updated_at: checkedAt }).eq('id', application.id).select('*').single();
     if (error) throw error;
-    await addStatusEvent(application.id, 'waiting_for_brc', 'BRC needed', 'We could not find a current New Jersey Business Registration Certificate. Please register for one, then return here and tell us when it is complete.', req.user.id, true);
+    await safeStatusEvent(application.id, 'waiting_for_brc', 'BRC needed', 'We could not find a current New Jersey Business Registration Certificate. Please register for one, then return here and tell us when it is complete.', req.user.id, true);
     res.json(data);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -340,7 +360,7 @@ router.post('/:id/admin/found', requireUezAdmin, async (req, res) => {
     const checkedAt = new Date().toISOString();
     const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: req.body?.registeredBusinessName || application.brc_registered_name, registered_business_name: req.body?.registeredBusinessName || application.registered_business_name, brc_storage_path: req.body?.storagePath || application.brc_storage_path, updated_at: checkedAt }).eq('id', application.id).select('*').single();
     if (error) throw error;
-    await addStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
+    await safeStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
     await ensureMyNjCredentials(data, req.user.id);
     res.json(data);
   } catch (err) { res.status(400).json({ error: err.message }); }
