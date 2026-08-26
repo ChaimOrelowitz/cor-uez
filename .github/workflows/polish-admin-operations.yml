@@ -10,8 +10,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply sole prop formation label
-        run: python .github/scripts/label_sole_prop_formation.py
+      - name: Apply PBS action modal patch
+        run: python .github/scripts/add_pbs_action_modal.py
       - name: Verify frontend
         run: |
           npm install --ignore-scripts
@@ -20,10 +20,10 @@ jobs:
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/AdminPage.jsx
+          git add src/AdminPage.jsx src/workflow.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Clarify sole prop formation status"
+            git commit -m "Add PBS admin action modal"
             git push
           fi
