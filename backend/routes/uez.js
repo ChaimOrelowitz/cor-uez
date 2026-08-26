@@ -241,6 +241,9 @@ router.put('/applications/:id/owners', async (req, res) => {
     if (owners.some((owner) => !owner.email || !owner.phone || !owner.dob || !String(owner.ssn || '').replace(/\D/g, ''))) {
       throw new Error('Each owner requires email, phone, date of birth, and SSN');
     }
+    if (owners.some((owner) => !String(owner.addressLine1 || '').trim() || !String(owner.city || '').trim() || !String(owner.state || '').trim() || !String(owner.zip || '').trim())) {
+      throw new Error('Each owner requires a complete home address: street, city, state, and ZIP');
+    }
 
     const { error: deleteError } = await supabase.from('uez_owners').delete().eq('application_id', application.id);
     if (deleteError) throw deleteError;

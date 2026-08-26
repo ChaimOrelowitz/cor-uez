@@ -22,7 +22,7 @@ import {
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
-const blankOwner = () => ({ firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '' });
+const blankOwner = () => ({ firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: 'NJ', zip: '' });
 
 function programNameFromCode(code) {
   if (code === 'lakewood_technology_grant') return 'Lakewood LDC Technology Grant';
@@ -558,10 +558,11 @@ export default function App() {
 
     const incomplete = ownersForSave.some((owner) =>
       !owner.firstName || !owner.lastName || !owner.email || !owner.phone || !owner.dob ||
-      String(owner.ssn || '').replace(/\D/g, '').length !== 9 || !owner.ownershipPercent
+      String(owner.ssn || '').replace(/\D/g, '').length !== 9 || !owner.ownershipPercent ||
+      !owner.addressLine1?.trim() || !owner.city?.trim() || !owner.state?.trim() || !owner.zip?.trim()
     );
     if (incomplete) {
-      setOwnerError('Complete each owner’s name, email, phone, date of birth, 9-digit SSN, and ownership before continuing.');
+      setOwnerError('Complete each owner’s name, email, phone, date of birth, 9-digit SSN, ownership, and home address before continuing.');
       return;
     }
 
@@ -791,6 +792,12 @@ export default function App() {
               <div><label>Date of birth <span className="required-star">*</span></label><input required inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={updateOwner(index, 'dob')} /></div>
               <div><label>SSN <span className="required-star">*</span></label><input required inputMode="numeric" value={owner.ssn} onChange={updateOwner(index, 'ssn')} placeholder="•••-••-••••" /></div>
               {!primaryIs100 && <div><label>Ownership percentage <span className="required-star">*</span></label><input required type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={updateOwner(index, 'ownershipPercent')} /></div>}
+              <div className="owner-address-heading"><strong>Home address</strong></div>
+              <div><label>Street address <span className="required-star">*</span></label><input required autoComplete="street-address" value={owner.addressLine1 || ''} onChange={updateOwner(index, 'addressLine1')} /></div>
+              <div><label>Address line 2</label><input value={owner.addressLine2 || ''} onChange={updateOwner(index, 'addressLine2')} /></div>
+              <div><label>City <span className="required-star">*</span></label><input required value={owner.city || ''} onChange={updateOwner(index, 'city')} /></div>
+              <div><label>State <span className="required-star">*</span></label><input required maxLength="2" value={owner.state || ''} onChange={(e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0,2); updateOwner(index, 'state')(e); }} /></div>
+              <div><label>ZIP <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="5" value={owner.zip || ''} onChange={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0,5); updateOwner(index, 'zip')(e); }} /></div>
             </div>
           </div>)}
           {!primaryIs100 && ownershipTotal < 100 && <button className="secondary add-owner" type="button" onClick={addOwner}>+ Add another owner</button>}
