@@ -23,35 +23,90 @@
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  const cleanCertificateHtml = () => {
-    const candidates = [...document.querySelectorAll('table, div, section, fieldset, form, main')]
-      .filter((element) => {
-        const text = String(element.innerText || '');
-        if (!/BUSINESS REGISTRATION CERTIFICATE/i.test(text) || !/Certificate\s*Number/i.test(text)) return false;
-        const rect = element.getBoundingClientRect();
-        return rect.width >= 350 && rect.height >= 180;
-      })
-      .map((element) => {
-        const rect = element.getBoundingClientRect();
-        return { element, area: rect.width * rect.height };
-      })
-      .sort((a, b) => a.area - b.area);
+  const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not encode image.'));
+    reader.readAsDataURL(blob);
+  });
 
-    const source = candidates[0]?.element || document.body;
-    const clone = source.cloneNode(true);
-    clone.querySelectorAll('#cor-uez-helper-notice, script, button, input[type="button"], input[type="submit"], input[value="Return"], a').forEach((element) => element.remove());
+  const renderedImageDataUrl = async (image) => {
+    if (!image) return '';
+    try {
+      if (image.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        if (dataUrl && dataUrl !== 'data:,') return dataUrl;
+      }
+    } catch (_) {}
 
-    const headAssets = [...document.querySelectorAll('head style, head link[rel="stylesheet"]')]
-      .map((element) => element.outerHTML)
-      .join('\n');
-    const baseHref = escapeHtmlAttribute(location.href);
+    try {
+      const src = image.currentSrc || image.src || image.getAttribute('src');
+      if (!src) return '';
+      const response = await fetch(src, { credentials: 'include', cache: 'force-cache' });
+      if (!response.ok) return '';
+      return await blobToDataUrl(await response.blob());
+    } catch (_) {
+      return '';
+    }
+  };
 
-    return `<!doctype html><html><head><meta charset="utf-8"><base href="${baseHref}">${headAssets}<style>
-      html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-      body { width: auto !important; min-width: 0 !important; }
-      #cor-uez-helper-notice, button, input[type="button"], input[type="submit"], input[value="Return"], a { display: none !important; }
-      @page { margin: 0.3in; }
-    </style></head><body>${clone.outerHTML}</body></html>`;
+  const cleanCertificateHtml = async () => {
+    // Hide our own UI before measuring/cloning so it can never leak into the certificate.
+    const helperNotice = document.getElementById('cor-uez-helper-notice');
+    const previousNoticeDisplay = helperNotice?.style?.display;
+    if (helperNotice) helperNotice.style.display = 'none';
+
+    try {
+      const candidates = [...document.querySelectorAll('table, div, section, fieldset, form, main')]
+        .filter((element) => {
+          if (element.id === 'cor-uez-helper-notice' || element.closest('#cor-uez-helper-notice')) return false;
+          const text = String(element.innerText || '');
+          if (!/BUSINESS REGISTRATION CERTIFICATE/i.test(text) || !/Certificate\s*Number/i.test(text)) return false;
+          const rect = element.getBoundingClientRect();
+          return rect.width >= 350 && rect.height >= 180;
+        })
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return { element, area: rect.width * rect.height };
+        })
+        .sort((a, b) => a.area - b.area);
+
+      const source = candidates[0]?.element || document.body;
+      const clone = source.cloneNode(true);
+      clone.querySelectorAll('#cor-uez-helper-notice, script, button, input[type="button"], input[type="submit"], input[value="Return"], a').forEach((element) => element.remove());
+
+      // Critical: the NJ seal/logo is an image resource. The backend Playwright renderer
+      // does not share this browser's NJ session, so remote image references can become
+      // empty boxes. Embed the actual rendered pixels into the HTML as data URLs.
+      const sourceImages = [...source.querySelectorAll('img')];
+      const clonedImages = [...clone.querySelectorAll('img')];
+      await Promise.all(clonedImages.map(async (clonedImage, index) => {
+        const originalImage = sourceImages[index];
+        const dataUrl = await renderedImageDataUrl(originalImage);
+        if (!dataUrl) return;
+        clonedImage.removeAttribute('srcset');
+        clonedImage.setAttribute('src', dataUrl);
+      }));
+
+      const headAssets = [...document.querySelectorAll('head style, head link[rel="stylesheet"]')]
+        .map((element) => element.outerHTML)
+        .join('\n');
+      const baseHref = escapeHtmlAttribute(location.href);
+
+      return `<!doctype html><html><head><meta charset="utf-8"><base href="${baseHref}">${headAssets}<style>
+        html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+        body { width: auto !important; min-width: 0 !important; }
+        #cor-uez-helper-notice, button, input[type="button"], input[type="submit"], input[value="Return"], a { display: none !important; }
+        @page { margin: 0.3in; }
+      </style></head><body>${clone.outerHTML}</body></html>`;
+    } finally {
+      if (helperNotice) helperNotice.style.display = previousNoticeDisplay || '';
+    }
   };
 
   const notice = (message) => {
@@ -151,7 +206,7 @@
         const address = addressMatch ? addressMatch[1].trim() : '';
         const effectiveDate = effectiveMatch ? effectiveMatch[1].trim() : '';
         const issuanceDate = issuanceMatch ? issuanceMatch[1].trim() : '';
-        const certificateHtml = cleanCertificateHtml();
+        const certificateHtml = await cleanCertificateHtml();
 
         notice('COR found the official BRC certificate! Saving a clean certificate PDF…');
         await send({

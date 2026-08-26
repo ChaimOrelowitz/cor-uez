@@ -599,6 +599,70 @@ router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, asyn
   }
 });
 
+router.post('/admin/applications/:id/documents/:documentId/review', requireUezAdmin, async (req, res) => {
+  try {
+    const decision = String(req.body?.decision || '').trim().toLowerCase();
+    if (!['approved', 'rejected'].includes(decision)) {
+      return res.status(400).json({ error: 'Review decision must be approved or rejected.' });
+    }
+
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const { data: document, error: docError } = await supabase.from('uez_documents')
+      .select('id, document_type, filename')
+      .eq('id', req.params.documentId)
+      .eq('application_id', application.id)
+      .single();
+    if (docError || !document) return res.status(404).json({ error: 'Document not found' });
+
+    const now = new Date().toISOString();
+    let patch = { updated_at: now };
+    let eventStatus;
+    let eventLabel;
+
+    if (document.document_type === 'formation') {
+      if (application.is_sole_proprietorship) return res.status(400).json({ error: 'Formation review is not required for a sole proprietorship.' });
+      patch.formation_review_status = decision;
+      eventStatus = decision === 'approved' ? 'formation_approved' : 'formation_rejected';
+      eventLabel = decision === 'approved' ? 'Certificate of Formation approved' : 'Certificate of Formation needs replacement';
+    } else if (document.document_type === 'uez_approval_email') {
+      patch.uez_approval_review_status = decision;
+      patch.uez_application_status = decision === 'approved' ? 'approved' : 'applied';
+      patch.uez_application_submitted = true;
+      eventStatus = decision === 'approved' ? 'uez_approval_approved' : 'uez_approval_rejected';
+      eventLabel = decision === 'approved' ? 'UEZ approval confirmed' : 'UEZ approval document needs replacement';
+    } else {
+      return res.status(400).json({ error: 'This document does not require admin review.' });
+    }
+
+    const { data: updated, error: updateError } = await supabase.from('uez_applications')
+      .update(patch)
+      .eq('id', application.id)
+      .select('*')
+      .single();
+    if (updateError) throw updateError;
+
+    await addStatusEvent(
+      application.id,
+      eventStatus,
+      eventLabel,
+      decision === 'approved'
+        ? `${document.filename} was reviewed and approved by COR.`
+        : `${document.filename} was reviewed and marked as the wrong document.`,
+      req.user.id,
+      false
+    );
+
+    res.json({ application: updated, document, decision });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (req, res) => {
   try {
     const { data: application, error: appError } = await supabase.from('uez_applications')
@@ -743,7 +807,7 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
       const formationReady = row.is_sole_proprietorship || (types.has('formation') && row.formation_review_status === 'approved');
       const readyCount = (formationReady ? 1 : 0)
         + (types.has('brc') ? 1 : 0)
-        + (types.has('uez_approval_email') ? 1 : 0)
+        + (types.has('uez_approval_email') && row.uez_approval_review_status === 'approved' ? 1 : 0)
         + (types.has('tax_clearance') ? 1 : 0)
         + (types.has('ldc_application') ? 1 : 0);
       return {

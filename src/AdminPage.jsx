@@ -19,6 +19,7 @@ import {
   updateAdminApplicationStatus,
   updateAdminProcessFlags,
   saveAdminPayment,
+  reviewAdminDocument,
   whoAmI
 } from './api';
 
@@ -118,6 +119,7 @@ function packetReady(detail) {
   return formationSatisfied(detail)
     && Boolean(docFor(detail, 'brc'))
     && Boolean(docFor(detail, 'uez_approval_email'))
+    && detail?.application?.uez_approval_review_status === 'approved'
     && Boolean(docFor(detail, 'tax_clearance'))
     && Boolean(docFor(detail, 'ldc_application'));
 }
@@ -125,7 +127,7 @@ function packetReady(detail) {
 function readyDocumentCount(detail) {
   return (formationSatisfied(detail) ? 1 : 0)
     + (docFor(detail, 'brc') ? 1 : 0)
-    + (docFor(detail, 'uez_approval_email') ? 1 : 0)
+    + (docFor(detail, 'uez_approval_email') && detail?.application?.uez_approval_review_status === 'approved' ? 1 : 0)
     + (docFor(detail, 'tax_clearance') ? 1 : 0)
     + (docFor(detail, 'ldc_application') ? 1 : 0);
 }
@@ -369,10 +371,18 @@ export default function AdminPage() {
 
   async function reviewPreviewDoc(result) {
     if (!previewDoc) return;
-    const type = previewDoc.document_type;
-    if (type === 'formation') await setProcessFlag('formationReviewStatus', result);
-    if (type === 'uez_approval_email') await setProcessFlag('uezApprovalReviewStatus', result);
-    closePreview();
+    setBusy(true);
+    setMessage(result === 'approved' ? 'Approving document…' : 'Marking document as wrong…');
+    try {
+      await reviewAdminDocument(detail.application.id, previewDoc.id, result);
+      await refreshList(detail.application.id);
+      setMessage(result === 'approved' ? 'Document approved.' : 'Document marked as wrong.');
+      closePreview();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function openDoc(doc) {

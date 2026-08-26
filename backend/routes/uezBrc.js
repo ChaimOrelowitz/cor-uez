@@ -206,7 +206,8 @@ router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res)
 
     browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage', '--no-sandbox'] });
     const page = await browser.newPage({ javaScriptEnabled: false });
-    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.setContent(html, { waitUntil: 'load', timeout: 15000 });
+    await page.waitForFunction(() => Array.from(document.images || []).every((image) => image.complete && image.naturalWidth > 0), null, { timeout: 5000 }).catch(() => {});
     const pdf = await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.35in', right: '0.35in', bottom: '0.35in', left: '0.35in' } });
     if (!pdf || pdf.length < 100 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
       throw new Error('COR could not render the BRC certificate as a valid PDF.');

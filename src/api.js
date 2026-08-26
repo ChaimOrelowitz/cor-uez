@@ -205,3 +205,10 @@ export function saveAdminPayment(applicationId, payload) {
     method: 'PUT', body: JSON.stringify(payload)
   });
 }
+
+export function reviewAdminDocument(applicationId, documentId, decision) {
+  return request(`/api/uez/admin/applications/${applicationId}/documents/${documentId}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ decision })
+  });
+}
