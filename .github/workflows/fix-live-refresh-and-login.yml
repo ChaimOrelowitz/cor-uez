@@ -1,0 +1,25 @@
+name: Fix live refresh and login UX
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-live-refresh-and-login.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python .github/scripts/fix_live_refresh_and_login.py
+      - name: Verify
+        run: |
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit
+        run: |
+          git config user.name "Chaim Orelowitz"
+          git config user.email "chaim@corsolutions.io"
+          git add src/App.jsx src/AdminPage.jsx src/intakePolish.css
+          git commit -m "Fix live refresh and login UX"
+          git push
