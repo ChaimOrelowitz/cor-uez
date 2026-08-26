@@ -1,0 +1,30 @@
+name: Fix BRC capture actions and landing
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/fix_brc_capture_actions_and_landing.py'
+      - '.github/workflows/fix-brc-capture-actions-and-landing.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixes
+        run: python .github/scripts/fix_brc_capture_actions_and_landing.py
+      - name: Verify backend frontend extension
+        run: |
+          node --check backend/routes/uezBrc.js
+          node --check brc-helper-extension/content.js
+          node --check brc-helper-extension/background.js
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "Chaim Orelowitz"
+          git config user.email "chaim@corsolutions.io"
+          git add src/App.jsx src/styles.css backend/routes/uezBrc.js brc-helper-extension/content.js brc-helper-extension/background.js brc-helper-extension/manifest.json
+          git commit -m "Capture BRC faithfully and tighten applicant landing" || exit 0
+          git push
