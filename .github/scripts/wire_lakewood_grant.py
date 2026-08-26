@@ -1,0 +1,186 @@
+from pathlib import Path
+import json
+
+
+def repl(path, old, new, label):
+    p = Path(path)
+    s = p.read_text()
+    if old not in s:
+        raise SystemExit(f'{label} anchor not found in {path}')
+    p.write_text(s.replace(old, new, 1))
+
+
+m = Path('brc-helper-extension/manifest.json')
+data = json.loads(m.read_text())
+data['version'] = '1.3.0'
+data['description'] = 'Runs BRC, tax-clearance, Lakewood LDC, and Lakewood grant-submission workflows from the COR UEZ admin app.'
+for host in ['https://www.uezapps.lakewoodnj.gov/*']:
+    if host not in data['host_permissions']:
+        data['host_permissions'].append(host)
+script_entry = {
+    'matches': ['https://form.jotform.com/222748639284165*', 'https://submit.jotform.com/*'],
+    'js': ['grant-jotform.js'],
+    'run_at': 'document_idle',
+    'all_frames': True,
+    'match_about_blank': True,
+    'match_origin_as_fallback': True
+}
+if not any(entry.get('js') == ['grant-jotform.js'] for entry in data['content_scripts']):
+    data['content_scripts'].append(script_entry)
+m.write_text(json.dumps(data, indent=2) + '\n')
+
+repl(
+    'brc-helper-extension/background.js',
+    "if (!['brc', 'tax_clearance', 'ldc_jotform'].includes(message.workflow)) throw new Error('Unknown COR workflow.');",
+    "if (!['brc', 'tax_clearance', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');",
+    'workflow allowlist'
+)
+
+repl(
+    'brc-helper-extension/background.js',
+    "      : 'https://form.jotform.com/241936732268060';",
+    "      : job.workflow === 'ldc_jotform'\n        ? 'https://form.jotform.com/241936732268060'\n        : 'https://form.jotform.com/222748639284165';",
+    'workflow URL'
+)
+
+repl(
+    'brc-helper-extension/background.js',
+    "  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : 'opening_ldc_form';",
+    "  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';",
+    'opening status'
+)
+
+repl(
+    'brc-helper-extension/background.js',
+    "  if (tab?.id && job.workflow !== 'ldc_jotform') await injectNjHelper(tab.id).catch(() => {});",
+    "  if (tab?.id && !['ldc_jotform', 'lakewood_portal'].includes(job.workflow)) await injectNjHelper(tab.id).catch(() => {});",
+    'helper injection'
+)
+
+anchor = """    if (message?.type === 'COR_JOTFORM_GET_DATA') {
+      if (job.workflow !== 'ldc_jotform' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching LDC form workflow is active.' };
+      const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
+      return { ok: true, detail };
+    }
+"""
+addition = anchor + """    if (message?.type === 'COR_LAKEWOOD_GET_DATA') {
+      if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };
+      const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
+      const application = detail.application || {};
+      const owners = detail.owners || [];
+      const primary = owners[0] || {};
+      return {
+        ok: true,
+        detail: {
+          application: {
+            businessName: application.registered_business_name || application.brc_registered_name || application.business_name_input || '',
+            businessPhone: application.contact_phone || primary.phone || '',
+            businessEmail: application.contact_email || primary.email || '',
+            addressLine1: application.address_line1 || '',
+            addressLine2: application.address_line2 || '',
+            city: application.city || '',
+            state: application.state || 'NJ',
+            zip: application.zip || ''
+          },
+          contact: {
+            firstName: primary.firstName || '',
+            lastName: primary.lastName || '',
+            phone: primary.phone || application.contact_phone || '',
+            email: primary.email || application.contact_email || ''
+          },
+          documents: (detail.documents || []).map((doc) => ({
+            id: doc.id,
+            documentType: doc.document_type,
+            filename: doc.filename,
+            createdAt: doc.created_at
+          }))
+        }
+      };
+    }
+    if (message?.type === 'COR_LAKEWOOD_GET_DOCUMENT') {
+      if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };
+      const documentId = String(message.documentId || '');
+      const signed = await api(job, `/api/uez/applications/${job.applicationId}/documents/${encodeURIComponent(documentId)}/url`);
+      const response = await fetch(signed.url);
+      if (!response.ok) throw new Error(`COR could not download ${signed.filename || 'the document'}.`);
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      return {
+        ok: true,
+        base64: btoa(binary),
+        filename: signed.filename || 'document',
+        mimeType: response.headers.get('content-type') || 'application/octet-stream'
+      };
+    }
+    if (message?.type === 'COR_LAKEWOOD_SUBMITTED') {
+      if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };
+      await api(job, `/api/uez/admin/applications/${job.applicationId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'grant_submitted',
+          label: 'Grant application submitted',
+          message: 'The Lakewood UEZ Technology Grant application was submitted successfully.'
+        })
+      });
+      await notify(job, 'complete');
+      if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
+      await setJob(null);
+      return { ok: true };
+    }
+"""
+repl('brc-helper-extension/background.js', anchor, addition, 'Lakewood message handlers')
+
+repl(
+    'src/AdminPage.jsx',
+    "      uploading_ldc_application: 'Saving the signed LDC application PDF to this UEZ file…'",
+    "      uploading_ldc_application: 'Saving the signed LDC application PDF to this UEZ file…',\n      opening_lakewood_portal: 'Opening the Lakewood UEZ grant application…',\n      filling_lakewood_portal: 'COR is filling the Lakewood grant application…',\n      attaching_lakewood_documents: 'COR is attaching the required grant documents…',\n      waiting_for_lakewood_submit: 'Grant packet ready. Review it and click the final Submit Form button.'",
+    'admin status messages'
+)
+
+marker = "  function updateApplicationDraft(field, value) {\n"
+fn = """  async function runLakewoodGrantPortal() {
+    setBusy(true);
+    setMessage('Starting the COR Chrome extension…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the Lakewood grant application.');
+
+      const outcome = await runExtensionWorkflow('lakewood_portal', {
+        applicationId: detail.application.id,
+        businessName: detail.application.registered_business_name || detail.application.business_name_input,
+        accessToken: currentSession.access_token
+      });
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The Lakewood grant workflow did not finish.');
+      await refreshList(detail.application.id);
+      setMessage('Lakewood UEZ Technology Grant submitted successfully.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+""" + marker
+repl('src/AdminPage.jsx', marker, fn, 'Lakewood run function')
+
+repl(
+    'src/AdminPage.jsx',
+    "    ldc_submitted: 'LDC submitted',\n    approved: 'Approved'",
+    "    ldc_submitted: 'LDC submitted',\n    grant_submitted: 'Grant submitted',\n    approved: 'Approved'",
+    'grant status label'
+)
+
+old = """              <p className=\"admin-help\">COR fills the Lakewood JotForm, pauses for the required signature, then saves JotForm’s completed signed PDF here after final submission.</p>
+              <div className=\"admin-timeline\">"""
+new = """              <p className=\"admin-help\">COR fills the Lakewood JotForm, pauses for the required signature, then saves JotForm’s completed signed PDF here after final submission.</p>
+              <button
+                className=\"primary admin-full-button\"
+                onClick={runLakewoodGrantPortal}
+                disabled={busy || !detail.documents.some((doc) => doc.document_type === 'ldc_application') || !detail.documents.some((doc) => doc.document_type === 'formation') || !detail.documents.some((doc) => doc.document_type === 'tax_clearance') || !detail.documents.some((doc) => doc.document_type === 'uez_approval_email') || !detail.documents.some((doc) => doc.document_type === 'brc') || detail.application.status === 'grant_submitted'}
+              >{detail.application.status === 'grant_submitted' ? '✓ Grant application submitted' : 'Fill & submit Lakewood grant'}</button>
+              <p className=\"admin-help\">COR fills the Lakewood grant form and attaches the signed LDC application, formation certificate, tax clearance, UEZ approval, and BRC. Review the completed packet before the final Submit Form click.</p>
+              <div className=\"admin-timeline\">"""
+repl('src/AdminPage.jsx', old, new, 'Lakewood admin button')
