@@ -1,0 +1,30 @@
+name: Fix approval review and BRC fidelity
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/fix_approval_review_and_brc_fidelity.py'
+      - '.github/workflows/fix-approval-review-and-brc-fidelity.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixes
+        run: python .github/scripts/fix_approval_review_and_brc_fidelity.py
+      - name: Verify backend, frontend, extension
+        run: |
+          node --check backend/routes/uez.js
+          node --check backend/routes/uezBrc.js
+          node --check brc-helper-extension/content.js
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "Chaim Orelowitz"
+          git config user.email "chaim@corsolutions.io"
+          git add backend/routes/uez.js backend/routes/uezBrc.js src/api.js src/AdminPage.jsx brc-helper-extension/content.js brc-helper-extension/manifest.json
+          git commit -m "Fix approval review and preserve BRC certificate assets" || exit 0
+          git push
