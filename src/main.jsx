@@ -6,6 +6,7 @@ import BrcLiveTestPage from './BrcLiveTestPage';
 import './styles.css';
 import './workflow.css';
 import './brcLive.css';
+import './clientDashboard.css';
 
 const path = window.location.pathname;
 const Root = path === '/admin' ? AdminPage : path === '/brc-test' ? BrcLiveTestPage : App;
