@@ -91,6 +91,21 @@
     return true;
   }
 
+  function setNativeValue(element, value) {
+    if (!element) return false;
+    const next = String(value ?? '');
+    const prototype = element instanceof HTMLInputElement
+      ? HTMLInputElement.prototype
+      : element instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : null;
+    const descriptor = prototype ? Object.getOwnPropertyDescriptor(prototype, 'value') : null;
+    if (descriptor?.set) descriptor.set.call(element, next);
+    else element.value = next;
+    dispatch(element);
+    return true;
+  }
+
   function formatPhone(value) {
     const digits = String(value || '').replace(/\D/g, '').slice(-10);
     if (digits.length !== 10) return String(value || '');
@@ -105,11 +120,33 @@
 
   function dateParts(value) {
     const text = String(value || '').trim();
-    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (iso) return { year: iso[1], month: iso[2], day: iso[3] };
-    const us = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (us) return { year: us[3], month: us[1].padStart(2, '0'), day: us[2].padStart(2, '0') };
-    return { year: '', month: '', day: '' };
+    if (!text) return { year: '', month: '', day: '', formatted: '' };
+
+    let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
+    if (match) {
+      const month = match[2].padStart(2, '0');
+      const day = match[3].padStart(2, '0');
+      const year = match[1];
+      return { year, month, day, formatted: `${month}/${day}/${year}` };
+    }
+
+    match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[T\s].*)?$/);
+    if (match) {
+      const month = match[1].padStart(2, '0');
+      const day = match[2].padStart(2, '0');
+      const year = match[3];
+      return { year, month, day, formatted: `${month}/${day}/${year}` };
+    }
+
+    const digits = text.replace(/\D/g, '');
+    if (digits.length === 8) {
+      const month = digits.slice(0, 2);
+      const day = digits.slice(2, 4);
+      const year = digits.slice(4);
+      return { year, month, day, formatted: `${month}/${day}/${year}` };
+    }
+
+    return { year: '', month: '', day: '', formatted: '' };
   }
 
   function todayParts() {
@@ -168,6 +205,28 @@
     setField(`${prefix}[year]`, parts.year || '');
   }
 
+  function setJotformDate(questionId, prefix, value) {
+    const parts = dateParts(value);
+    if (!parts.formatted) return false;
+
+    setField(`${prefix}[month]`, parts.month);
+    setField(`${prefix}[day]`, parts.day);
+    setField(`${prefix}[year]`, parts.year);
+
+    const combinedCandidates = [
+      document.getElementsByName(prefix)[0],
+      document.getElementById(`input_${questionId}`),
+      document.getElementById(`lite_mode_${questionId}`)
+    ].filter(Boolean);
+    combinedCandidates.forEach((element) => setNativeValue(element, parts.formatted));
+
+    setNativeValue(document.getElementById(`month_${questionId}`), parts.month);
+    setNativeValue(document.getElementById(`day_${questionId}`), parts.day);
+    setNativeValue(document.getElementById(`year_${questionId}`), parts.year);
+
+    return true;
+  }
+
   function fillApplication(detail) {
     const application = detail.application || {};
     const owners = detail.owners || [];
@@ -197,7 +256,7 @@
     setField('q29_applicantPhone[full]', formatPhone(primary.phone));
     setField('q71_cell71[full]', formatPhone(primary.phone));
     setField('q35_applicantSsn', formatSsn(primary.ssn));
-    setDate('q84_applicantDob', dateParts(primary.dob));
+    setJotformDate(84, 'q84_applicantDob', primary.dob);
     setField('q72_applicantPercentage', primary.ownershipPercent ?? '');
 
     if (secondary) {
@@ -208,9 +267,8 @@
       setAddress('q69_address80', secondary);
       setField('q32_phone32[full]', formatPhone(secondary.phone));
       setField('q70_cell70[full]', formatPhone(secondary.phone));
-      // JotForm's internal field name is misleading; the HAR confirms q37_dob37 is Co-Applicant SSN.
       setField('q37_dob37', formatSsn(secondary.ssn));
-      setDate('q85_coapplicantDob', dateParts(secondary.dob));
+      setJotformDate(85, 'q85_coapplicantDob', secondary.dob);
       setField('q73_coapplicantPercentage', secondary.ownershipPercent ?? '');
     }
 
