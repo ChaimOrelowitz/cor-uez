@@ -755,7 +755,7 @@ export default function AdminPage() {
     try {
       await markAdminBrcNotFound(detail.application.id);
       await refreshList(detail.application.id);
-      setMessage('BRC marked not found. The applicant can see the BRC instructions and upload button.');
+      setMessage('BRC marked not found. COR will handle the follow-up; the applicant is not being asked to upload a BRC.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1025,7 +1025,6 @@ export default function AdminPage() {
                 <button className="warning-button" onClick={saveBrcNotFound} disabled={busy}>No BRC found</button>
               </div>
 
-              {detail.application.brc_status === 'not_found' && <a className="secondary admin-email-button" href={emailApplicantHref}>Email applicant BRC instructions</a>}
             </section></details>
 
             <details className="admin-accordion"><summary><strong>MyNJ / PBS</strong><span>{myNjCredentials ? 'Login ready' : 'Not created'}</span></summary><section className="admin-card mynj-card admin-account-card admin-secondary-card">

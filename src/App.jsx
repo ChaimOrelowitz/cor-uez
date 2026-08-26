@@ -95,21 +95,6 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [app.id, onRefresh]);
 
-  async function uploadBrc(file) {
-    if (!file) return;
-    setUploading(true);
-    setMessage('');
-    try {
-      await uploadApplicationDocument(app.id, 'brc', file);
-      await onRefresh();
-      setMessage('BRC uploaded. COR will review it.');
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setUploading(false);
-    }
-  }
-
   async function uploadApprovalEmail(file) {
     if (!file) return;
     setUploading(true);
@@ -166,23 +151,6 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
             </div>
             <span className={`status-pill ${brcConfirmed ? 'good' : needsBrc ? 'warn' : ''}`}>{statusLabel(app.status)}</span>
           </div>
-
-          {needsBrc && <div className="action-panel warn-panel">
-            <h3>We need your New Jersey BRC</h3>
-            <p>COR could not locate a current Business Registration Certificate. Complete New Jersey business/tax registration, then upload the BRC here.</p>
-            <div className="action-row">
-              <a className="primary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Register with New Jersey</a>
-              <label className="secondary inline-button file-button">
-                {uploading ? 'Uploading…' : 'Upload completed BRC'}
-                <input type="file" accept=".pdf,image/*" disabled={uploading} onChange={(e) => uploadBrc(e.target.files?.[0])} />
-              </label>
-            </div>
-          </div>}
-
-          {brcUploaded && <div className="action-panel">
-            <h3>BRC received</h3>
-            <p>Your certificate is in your account. COR will verify it and continue your application.</p>
-          </div>}
 
           {brcConfirmed && <div className="action-panel good-panel">
             <h3>✓ BRC confirmed</h3>
@@ -259,7 +227,7 @@ export default function App() {
   const [bundle, setBundle] = useState(null);
   const [portalBundle, setPortalBundle] = useState(null);
   const [ownerError, setOwnerError] = useState('');
-  const [signInMode, setSignInMode] = useState(false);
+  const [signInMode, setSignInMode] = useState(() => new URLSearchParams(window.location.search).get('login') === '1');
   const [session, setSession] = useState(null);
   const [authResolved, setAuthResolved] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -285,8 +253,12 @@ export default function App() {
     let active = true;
     getApplicantSession().then(async (current) => {
       if (!active) return;
-      setSession(current || null);
-      if (current) await loadLatestApplication().catch(() => {});
+      if (current) {
+        await loadLatestApplication().catch(() => {});
+        if (active) setSession(current);
+      } else if (active) {
+        setSession(null);
+      }
     }).catch(() => {}).finally(() => { if (active) setAuthResolved(true); });
     return () => { active = false; };
   }, []);
@@ -470,11 +442,12 @@ export default function App() {
       return;
     }
     setBusy(true);
+    setAuthResolved(false);
     setMessage('');
     try {
       const auth = await signInApplicant(form.email.trim(), form.password);
-      setSession(auth.session || null);
       const loaded = await loadLatestApplication();
+      setSession(auth.session || null);
       if (!loaded) {
         let pending = null;
         try {
@@ -517,6 +490,7 @@ export default function App() {
     } catch (err) {
       setMessage(err.message);
     } finally {
+      setAuthResolved(true);
       setBusy(false);
     }
   }
@@ -698,6 +672,7 @@ export default function App() {
               <label>Email</label><input type="email" value={form.email} onChange={update('email')} autoComplete="email" required />
               <label>Password</label><input type="password" value={form.password} onChange={update('password')} autoComplete="current-password" required />
               <button type="submit" className="primary login-submit" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</button>
+              <a className="forgot-password-link" href="/forgot-password">Forgot password?</a>
             </form>
             {message && <div className="form-message">{message}</div>}
           </div>
@@ -752,7 +727,7 @@ export default function App() {
           <h3>Your business is eligible.</h3>
           <div className="offer-row"><span>Available program</span><strong>{eligibleProgramName}</strong></div>
           <div className="offer-row"><span>Available COR Solutions services</span><strong>{eligibility?.programs?.length ? 'UEZ enrollment & grant application · $500' : 'UEZ enrollment support'}</strong></div>
-          <p className="offer-description">Complete one intake. COR will review your documents, verify your New Jersey Business Registration Certificate after submission, enroll the business in the UEZ, and handle the available grant application when applicable. If a BRC is missing, we’ll tell you exactly what to do next.</p>
+          <p className="offer-description">Complete one intake. COR will review your documents, handle the New Jersey verification steps, enroll the business in the UEZ, and process the available grant application when applicable.</p>
         </div>}
 
         {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); createAccountAndCase(); }}>
@@ -772,13 +747,13 @@ export default function App() {
           <label>Business name <span className="required-star">*</span></label><input required value={form.businessName} onChange={update('businessName')} />
           <label>In a few words, what does the business do? <span className="required-star">*</span></label><textarea value={form.businessDescription} onChange={update('businessDescription')} placeholder="Example: HVAC installation and repair" required />
           <div className="field-grid">
-            <div><label>EIN <span className="required-star">*</span></label><input required value={form.ein} onChange={update('ein')} placeholder="12-3456789" /></div>
-            <div><label>Year founded <span className="required-star">*</span></label><input required value={form.yearFounded} onChange={update('yearFounded')} /></div>
-            <div><label>Is this business a sole proprietorship? <span className="required-star">*</span></label><select required value={form.isSoleProprietorship} onChange={update('isSoleProprietorship')}><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
-            <div><label>Does the business have a DBA? <span className="required-star">*</span></label><select value={form.hasDba} onChange={(e) => setForm((old) => ({ ...old, hasDba: e.target.value, dbaName: e.target.value === 'yes' ? old.dbaName : '' }))} required><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+            <div><label>EIN <span className="required-star">*</span></label><input required inputMode="numeric" value={form.ein} onChange={(e) => { const d=e.target.value.replace(/\D/g,'').slice(0,9); setForm((old)=>({...old,ein:d.length>2?`${d.slice(0,2)}-${d.slice(2)}`:d})); }} maxLength="10" placeholder="12-3456789" /></div>
+            <div><label>Year founded <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="4" value={form.yearFounded} onChange={(e) => setForm((old)=>({...old,yearFounded:e.target.value.replace(/\D/g,'').slice(0,4)}))} /></div>
+            <div><label>Is this business a sole proprietorship? <span className="required-star">*</span></label><div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="soleProp" value="yes" checked={form.isSoleProprietorship==='yes'} onChange={update('isSoleProprietorship')} required />Yes</label><label className="cor-radio-option"><input type="radio" name="soleProp" value="no" checked={form.isSoleProprietorship==='no'} onChange={update('isSoleProprietorship')} />No</label></div></div>
+            <div><label>Does the business have a DBA? <span className="required-star">*</span></label><div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasDba" value="yes" checked={form.hasDba==='yes'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasDba" value="no" checked={form.hasDba==='no'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value,dbaName:''}))} />No</label></div></div>
             {form.hasDba === 'yes' && <div><label>What is the DBA name? <span className="required-star">*</span></label><input value={form.dbaName} onChange={update('dbaName')} required /></div>}
-            <div><label>Full-time employees <span className="required-star">*</span></label><input required type="number" min="0" value={form.fullTimeEmployees} onChange={update('fullTimeEmployees')} placeholder="0" /></div>
-            <div><label>Part-time employees <span className="required-star">*</span></label><input required type="number" min="0" value={form.partTimeEmployees} onChange={update('partTimeEmployees')} placeholder="0" /></div>
+            <div><label>Full-time employees <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="3" value={form.fullTimeEmployees} onChange={(e)=>setForm((old)=>({...old,fullTimeEmployees:e.target.value.replace(/\D/g,'').slice(0,3)}))} /></div>
+            <div><label>Part-time employees <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="3" value={form.partTimeEmployees} onChange={(e)=>setForm((old)=>({...old,partTimeEmployees:e.target.value.replace(/\D/g,'').slice(0,3)}))} /></div>
           </div>
         </div>}
 
@@ -804,21 +779,13 @@ export default function App() {
         </div>}
 
         {step === 5 && <div className="content-block">
-          <div className="intro-copy"><h3>Documents</h3><p>Upload what you already have. COR will handle the BRC check after you submit.</p></div>
+          <div className="intro-copy"><h3>Documents</h3><p>Upload your formation document and any other supporting documents you want COR to have.</p></div>
 
           <div className="upload-card">
             <div><strong>Certificate of Formation / formation document {form.isSoleProprietorship !== 'yes' && <span className="required-star">*</span>}</strong><p>{form.isSoleProprietorship === 'yes' ? 'Optional for a sole proprietorship.' : 'Required before submission.'}</p></div>
             <label className="secondary inline-button file-button">
               {uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload document'}
               <input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} />
-            </label>
-          </div>
-
-          <div className="upload-card">
-            <div><strong>Business Registration Certificate (BRC)</strong><p>Optional. If you already have it, upload it. If not, COR will check after submission.</p></div>
-            <label className="secondary inline-button file-button">
-              {uploadingType === 'brc' ? 'Uploading…' : 'Upload BRC'}
-              <input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('brc', e.target.files?.[0])} />
             </label>
           </div>
 
@@ -837,7 +804,7 @@ export default function App() {
         </div>}
 
         {step === 6 && <div className="content-block review-block">
-          <div className="intro-copy"><h3>Review and submit</h3><p>Make sure the information below looks right. COR will verify the BRC after submission.</p></div>
+          <div className="intro-copy"><h3>Review and submit</h3><p>Make sure the information below looks right. COR will handle the remaining state verification steps after submission.</p></div>
           <div className="review-grid">
             <div><span>Business</span><strong>{form.businessName}</strong><small>{form.address}</small></div>
             <div><span>Program</span><strong>{eligibleProgramName}</strong></div>

@@ -5,10 +5,12 @@ const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
+const { safeSendApplicationEmail } = require('../services/uezEmail');
 
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
 router.use('/brc-live', require('./uezBrcLive'));
+router.use('/email', require('./uezEmail'));
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -274,6 +276,9 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     }
 
     const documentType = String(req.body?.documentType || 'supporting').trim().toLowerCase();
+    if (documentType === 'brc' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'COR handles the Business Registration Certificate lookup for you.' });
+    }
     if (documentType === 'tax_clearance' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only a UEZ admin can add the tax-clearance letter.' });
     }
@@ -465,10 +470,13 @@ router.post('/applications/:id/submit', async (req, res) => {
       application.id,
       'submitted_for_review',
       'Application submitted',
-      'COR received your application and will review your documents and verify your Business Registration Certificate.',
+      'COR received your application and will begin processing after payment is confirmed.',
       req.user.id,
       true
     );
+    await safeSendApplicationEmail(data, 'submission_received', {
+      dedupeKey: `submission_received:${application.id}`
+    });
 
     res.json(data);
   } catch (err) {
@@ -567,7 +575,7 @@ router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, asyn
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
     const { data: credential, error: credentialError } = await supabase.from('uez_credentials')
-      .select('id')
+      .select('*')
       .eq('application_id', application.id)
       .eq('provider', 'mynj')
       .maybeSingle();
@@ -591,6 +599,16 @@ router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, asyn
         req.user.id,
         true
       );
+      const credentials = decryptCredential(credential);
+      await safeSendApplicationEmail(data, 'pbs_account_created', {
+        dedupeKey: `pbs_account_created:${application.id}`,
+        extra: {
+          pbs_username: credentials.username,
+          pbs_password: credentials.password,
+          challenge_question: credentials.challengeQuestion,
+          challenge_answer: credentials.challengeAnswer
+        }
+      });
     }
 
     res.json(data);
@@ -656,6 +674,11 @@ router.post('/admin/applications/:id/documents/:documentId/review', requireUezAd
       req.user.id,
       false
     );
+    if (document.document_type === 'formation' && decision === 'rejected') {
+      await safeSendApplicationEmail(updated, 'formation_rejected', {
+        dedupeKey: `formation_rejected:${application.id}:${document.id}`
+      });
+    }
 
     res.json({ application: updated, document, decision });
   } catch (err) {
@@ -699,6 +722,11 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
     if (Object.keys(patch).length === 1) return res.status(400).json({ error: 'No process status was supplied.' });
     const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();
     if (error) throw error;
+    if (body.uezApplicationStatus === 'applied' && application.uez_application_status !== 'applied') {
+      await safeSendApplicationEmail(data, 'uez_application_submitted', {
+        dedupeKey: `uez_application_submitted:${application.id}`
+      });
+    }
     res.json(data);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -766,7 +794,14 @@ router.put('/admin/applications/:id/payment', requireUezAdmin, async (req, res) 
       result = data;
     }
 
-    if (status === 'paid') await addStatusEvent(application.id, 'payment_recorded', 'Client payment recorded', 'COR confirmed that your payment was received.', req.user.id, true);
+    if (status === 'paid') {
+      await addStatusEvent(application.id, 'payment_recorded', 'Client payment recorded', 'COR confirmed that your payment was received.', req.user.id, true);
+      if (existing?.status !== 'paid') {
+        await safeSendApplicationEmail(application, 'payment_received', {
+          dedupeKey: `payment_received:${application.id}`
+        });
+      }
+    }
     res.json(result);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -1038,10 +1073,10 @@ router.post('/admin/applications/:id/brc-not-found', requireUezAdmin, async (req
     await addStatusEvent(
       application.id,
       'waiting_for_brc',
-      'Business Registration Certificate needed',
-      'We could not locate your New Jersey Business Registration Certificate. Please complete NJ business/tax registration, then upload your BRC in your COR account.',
+      'BRC follow-up in progress',
+      'COR is handling the New Jersey Business Registration Certificate follow-up.',
       req.user.id,
-      true
+      false
     );
 
     res.json(data);
@@ -1079,6 +1114,11 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
       req.user.id,
       req.body?.visibleToApplicant !== false
     );
+    if (status === 'grant_submitted') {
+      await safeSendApplicationEmail(data, 'grant_submitted', {
+        dedupeKey: `grant_submitted:${application.id}`
+      });
+    }
 
     res.json(data);
   } catch (err) {
