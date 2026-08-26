@@ -27,3 +27,4 @@ jobs:
           git add src/App.jsx src/styles.css brc-helper-extension/manifest.json
           git commit -m "Fix BRC capture permission and simplify client dashboard" || exit 0
           git push
+# retrigger
