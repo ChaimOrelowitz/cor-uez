@@ -86,6 +86,15 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     return () => { active = false; };
   }, [app.id]);
 
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { if (active && document.visibilityState === 'visible') onRefresh().catch(() => {}); };
+    const timer = window.setInterval(refresh, 4000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [app.id, onRefresh]);
+
   async function uploadBrc(file) {
     if (!file) return;
     setUploading(true);
@@ -139,7 +148,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     <header className="topbar">
       <div className="brand-mark">COR</div>
       <div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Application Portal</div></div>
-      <button className="signin-link" onClick={onSignOut}>Sign out</button>
+      <button className="signin-link" onClick={onSignOut}>Log out</button>
     </header>
     <main className="page-wrap portal-wrap">
       <section className="hero portal-hero">
@@ -252,6 +261,7 @@ export default function App() {
   const [ownerError, setOwnerError] = useState('');
   const [signInMode, setSignInMode] = useState(false);
   const [session, setSession] = useState(null);
+  const [authResolved, setAuthResolved] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [addressMagicKey, setAddressMagicKey] = useState(null);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
@@ -272,10 +282,13 @@ export default function App() {
   const update = (key) => (e) => setForm((old) => ({ ...old, [key]: e.target.value }));
 
   useEffect(() => {
-    getApplicantSession().then((current) => {
+    let active = true;
+    getApplicantSession().then(async (current) => {
+      if (!active) return;
       setSession(current || null);
-      if (current) loadLatestApplication().catch(() => {});
-    }).catch(() => {});
+      if (current) await loadLatestApplication().catch(() => {});
+    }).catch(() => {}).finally(() => { if (active) setAuthResolved(true); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -664,7 +677,33 @@ export default function App() {
   function openSignIn() {
     setSignInMode(true);
     setMessage('');
-    setStep(2);
+  }
+
+  if (!authResolved) {
+    return <div className="app-shell auth-loading-shell"><div className="auth-loading-card">Loading…</div></div>;
+  }
+
+  if (!session && signInMode) {
+    return <div className="app-shell">
+      <header className="topbar">
+        <div className="brand-mark">COR</div>
+        <div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Enrollment & Grant Support</div></div>
+        <button className="signin-link" onClick={() => { setSignInMode(false); setMessage(''); }}>Back to signup</button>
+      </header>
+      <main className="login-page-wrap">
+        <section className="wizard-card login-card">
+          <div className="content-block">
+            <div className="intro-copy"><h3>Log in</h3><p>Access your UEZ application, documents, payment status, and updates.</p></div>
+            <form onSubmit={(e) => { e.preventDefault(); signInAndResume(); }}>
+              <label>Email</label><input type="email" value={form.email} onChange={update('email')} autoComplete="email" required />
+              <label>Password</label><input type="password" value={form.password} onChange={update('password')} autoComplete="current-password" required />
+              <button type="submit" className="primary login-submit" disabled={busy}>{busy ? 'Logging in…' : 'Log in'}</button>
+            </form>
+            {message && <div className="form-message">{message}</div>}
+          </div>
+        </section>
+      </main>
+    </div>;
   }
 
   if (portalBundle) {
@@ -675,8 +714,8 @@ export default function App() {
     <header className="topbar">
       <div className="brand-mark">COR</div>
       <div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Enrollment & Grant Support</div></div>
-      {!session && <button className="signin-link" onClick={openSignIn}>Already registered? Sign in</button>}
-      {session && <button className="signin-link" onClick={handleSignOut}>Sign out</button>}
+      {!session && <button className="signin-link" onClick={openSignIn}>Log in</button>}
+      {session && <button className="signin-link" onClick={handleSignOut}>Log out</button>}
     </header>
 
     <main className={`page-wrap intake-page ${step === 0 ? 'intake-first-screen' : ''}`}>
@@ -716,17 +755,16 @@ export default function App() {
           <p className="offer-description">Complete one intake. COR will review your documents, verify your New Jersey Business Registration Certificate after submission, enroll the business in the UEZ, and handle the available grant application when applicable. If a BRC is missing, we’ll tell you exactly what to do next.</p>
         </div>}
 
-        {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); (signInMode ? signInAndResume : createAccountAndCase)(); }}>
+        {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); createAccountAndCase(); }}>
           <div className="intro-copy">
-            <h3>{signInMode ? 'Sign in to your COR account' : 'Create your COR account'}</h3>
-            <p>{signInMode ? 'Use your email and password to continue your application.' : 'Your account keeps your application, documents, and status in one place.'}</p>
+            <h3>Create your COR account</h3>
+            <p>Your account keeps your application, documents, and status in one place.</p>
           </div>
           <div className="field-grid">
             <div><label>Email <span className="required-star">*</span></label><input type="email" value={form.email} onChange={update('email')} required /></div>
             <div><label>Password <span className="required-star">*</span></label><input type="password" value={form.password} onChange={update('password')} required minLength="6" /></div>
           </div>
-          <button type="button" className="text-button" onClick={() => { setSignInMode((old) => !old); setMessage(''); }}>{signInMode ? 'Need to create an account?' : 'Already have an account?'}</button>
-          <button type="submit" className="primary account-submit" disabled={busy}>{busy ? 'Please wait…' : signInMode ? 'Sign in' : 'Create account'}</button>
+          <button type="submit" className="primary account-submit" disabled={busy}>{busy ? 'Please wait…' : 'Create account'}</button>
         </form>}
 
         {step === 3 && <div className="content-block">

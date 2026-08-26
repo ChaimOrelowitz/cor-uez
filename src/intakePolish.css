@@ -5,3 +5,6 @@
 .intake-page .content-block>.upload-card:nth-of-type(3){display:none!important}
 .portal-card .action-panel:has(a[href*="njportal.com/dor/businessregistration"]){display:none!important}
 @media(max-width:760px){.cor-inline-radios{gap:8px}.cor-radio-option{flex:1;justify-content:center;min-width:0;padding:10px 12px}.portal-grid .portal-card>.muted{margin-left:16px;margin-right:16px}.portal-grid .portal-card>.admin-full-button{width:calc(100% - 32px);margin-left:16px;margin-right:16px}.portal-grid .portal-card>.action-panel{margin-left:16px;margin-right:16px}}
+
+.auth-loading-shell{min-height:100vh;display:grid;place-items:center;background:#f7f8fb}.auth-loading-card{font:600 14px/1.4 system-ui;color:#687184}.login-page-wrap{width:min(460px,calc(100% - 28px));margin:54px auto}.login-card{overflow:hidden}.login-card .content-block{padding:30px}.login-card form{display:grid;gap:8px}.login-card input{margin-bottom:10px}.login-submit{width:100%;margin-top:8px}
+@media(max-width:760px){.login-page-wrap{margin:28px auto}.login-card .content-block{padding:22px}}

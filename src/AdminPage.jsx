@@ -225,6 +225,7 @@ function openOfficialBrcLookup(application) {
 
 export default function AdminPage() {
   const [session, setSession] = useState(null);
+  const [authResolved, setAuthResolved] = useState(false);
   const [profile, setProfile] = useState(null);
   const [login, setLogin] = useState({ email: '', password: '' });
   const [applications, setApplications] = useState([]);
@@ -255,12 +256,36 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
+    let active = true;
     getApplicantSession().then(async (current) => {
-      if (!current) return;
-      setSession(current);
-      await bootstrap();
-    }).catch(() => {});
+      if (!active) return;
+      if (current) {
+        setSession(current);
+        await bootstrap();
+      }
+    }).catch(() => {}).finally(() => { if (active) setAuthResolved(true); });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!session || profile?.role !== 'admin') return undefined;
+    let active = true;
+    const refresh = async () => {
+      if (!active || document.visibilityState !== 'visible' || busy || editMode || myNjEditMode || previewDoc) return;
+      try {
+        const rows = await getAdminApplications();
+        if (!active) return;
+        setApplications(rows || []);
+        if (selectedId) {
+          const data = await getAdminApplication(selectedId);
+          if (active) setDetail(data);
+        }
+      } catch (_) {}
+    };
+    const timer = window.setInterval(refresh, 4000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [session, profile?.role, selectedId, busy, editMode, myNjEditMode, previewDoc]);
 
   async function bootstrap() {
     setBusy(true);
@@ -803,6 +828,10 @@ export default function AdminPage() {
     `Hi,\n\nWe reviewed your COR UEZ application and could not locate a current New Jersey Business Registration Certificate (BRC).\n\nPlease complete New Jersey business/tax registration here:\n${NJ_REGISTRATION_URL}\n\nOnce your BRC is available, sign back into your COR account and upload it. We will continue your application from there.\n\nCOR Solutions`
   )}` : '#';
 
+  if (!authResolved || (session && !profile)) {
+    return <div className="app-shell auth-loading-shell"><div className="auth-loading-card">Loading admin…</div></div>;
+  }
+
   if (!session || profile?.role !== 'admin') {
     return <div className="app-shell admin-login-shell">
       <header className="topbar"><div className="brand-mark">COR</div><div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Admin</div></div></header>
@@ -825,7 +854,7 @@ export default function AdminPage() {
   return <div className="admin-shell">
     <header className="admin-topbar">
       <div className="admin-brand"><div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div></div>
-      <div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button onClick={handleSignOut}>Sign out</button></div>
+      <div className="admin-top-actions"><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button onClick={handleSignOut}>Log out</button></div>
     </header>
 
     <main className="admin-layout">
