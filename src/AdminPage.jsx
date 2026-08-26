@@ -139,7 +139,7 @@ function attentionItems(detail) {
   if (payment?.status === 'client_reported') items.push('Client says payment was sent');
   if (!detail.application.is_sole_proprietorship && formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
   if (!detail.application.is_sole_proprietorship && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
-  if (approval && detail.application.uez_application_status !== 'approved') items.push('Review UEZ approval email');
+  if (approval && (detail.application.uez_approval_review_status || 'not_reviewed') === 'not_reviewed') items.push('Review UEZ approval email');
   return items;
 }
 
@@ -241,6 +241,16 @@ export default function AdminPage() {
   const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [brcForm, setBrcForm] = useState({ registeredBusinessName: '', tradeName: '', address: '' });
   const [paymentDraft, setPaymentDraft] = useState({ amount: '500', paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Zelle', reference: '', notes: '' });
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [dragStatusKey, setDragStatusKey] = useState(null);
+  const [statusOrder, setStatusOrder] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('cor_uez_admin_status_order') || 'null');
+      return Array.isArray(stored) && stored.length === 4 ? stored : ['pbs','uez','tax','payment'];
+    } catch (_) { return ['pbs','uez','tax','payment']; }
+  });
 
   useEffect(() => {
     getApplicantSession().then(async (current) => {
@@ -322,6 +332,47 @@ export default function AdminPage() {
   async function handleSignOut() {
     await signOutApplicant();
     window.location.href = '/admin';
+  }
+
+  function saveStatusOrder(next) {
+    setStatusOrder(next);
+    localStorage.setItem('cor_uez_admin_status_order', JSON.stringify(next));
+  }
+
+  function dropStatus(targetKey) {
+    if (!dragStatusKey || dragStatusKey === targetKey) return setDragStatusKey(null);
+    const next = statusOrder.filter((key) => key !== dragStatusKey);
+    next.splice(next.indexOf(targetKey), 0, dragStatusKey);
+    saveStatusOrder(next);
+    setDragStatusKey(null);
+  }
+
+  async function previewDocument(doc) {
+    if (!doc) return;
+    setPreviewDoc(doc);
+    setPreviewUrl('');
+    setPreviewBusy(true);
+    try {
+      const result = await getDocumentUrl(detail.application.id, doc.id);
+      setPreviewUrl(result.url);
+    } catch (err) {
+      setMessage(err.message);
+      setPreviewDoc(null);
+    } finally { setPreviewBusy(false); }
+  }
+
+  function closePreview() {
+    setPreviewDoc(null);
+    setPreviewUrl('');
+    setPreviewBusy(false);
+  }
+
+  async function reviewPreviewDoc(result) {
+    if (!previewDoc) return;
+    const type = previewDoc.document_type;
+    if (type === 'formation') await setProcessFlag('formationReviewStatus', result);
+    if (type === 'uez_approval_email') await setProcessFlag('uezApprovalReviewStatus', result);
+    closePreview();
   }
 
   async function openDoc(doc) {
@@ -785,7 +836,7 @@ export default function AdminPage() {
           {filtered.map((app) => {
             const needsAttention = app.payment_status === 'client_reported'
               || (!app.is_sole_proprietorship && (app.document_types || []).includes('formation') && app.formation_review_status !== 'approved')
-              || ((app.document_types || []).includes('uez_approval_email') && app.uez_application_status !== 'approved');
+              || ((app.document_types || []).includes('uez_approval_email') && (app.uez_approval_review_status || 'not_reviewed') === 'not_reviewed');
             return <button key={app.id} className={`application-list-item ops-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => openApplication(app.id)}>
               <div className="ops-list-main"><strong>{app.business_name_input || 'Unnamed business'}{needsAttention && <i className="attention-dot" title="Needs attention" />}</strong><small>{app.required_document_ready_count || 0}/5 docs · UEZ {uezStatusLabel(app.uez_application_status)}</small></div>
               <div className="list-item-meta"><span className={`mini-status ${app.payment_status === 'paid' ? 'good' : app.payment_status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(app.payment_status)}</span><small>{statusLabel(app.status)}</small></div>
@@ -801,7 +852,7 @@ export default function AdminPage() {
 
         {detail && <>
           <div className="admin-detail-header cockpit-header">
-            <div><span className="eyebrow">UEZ APPLICATION</span><h1>{detail.application.business_name_input}</h1><p>{detail.application.contact_email} · {detail.application.contact_phone || 'No phone'}</p></div>
+            <div><span className="eyebrow">UEZ APPLICATION</span><h1>{detail.application.business_name_input}</h1><p>{detail.application.contact_email} · {detail.application.contact_phone || 'No phone'}{detail.owners?.[0] ? ` · ${detail.owners[0].firstName} ${detail.owners[0].lastName}` : ''}</p></div>
             <div className="cockpit-header-chips">
               <span className={`cockpit-chip ${detail.application.status === 'applied' ? 'good' : ''}`}>{statusLabel(detail.application.status)}</span>
               <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
@@ -826,11 +877,14 @@ export default function AdminPage() {
             <div className="ops-cockpit-grid">
               <div className="ops-panel status-panel">
                 <div className="ops-panel-head"><h3>Status</h3></div>
-                <div className="compact-status-grid">
-                  <div className="compact-status-item"><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></div>
-                  <div className="compact-status-item"><span>UEZ</span><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></div>
-                  <div className="compact-status-item"><span>Tax clearance</span><div className="tiny-toggle"><button className={detail.application.tax_clearance_good ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceGood', true)} disabled={busy}>Good</button><button className={!detail.application.tax_clearance_good ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceGood', false)} disabled={busy}>No</button></div></div>
-                  <div className="compact-status-item"><span>Payment</span><strong className={detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'text-good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'text-warn' : ''}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</strong>{detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <button className="tiny-confirm" onClick={confirmPayment} disabled={busy}>Confirm</button>}</div>
+                <div className="compact-status-grid status-sort-list">
+                  {statusOrder.map((key) => {
+                    const row = key === 'pbs' ? <><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></>
+                      : key === 'uez' ? <><span>UEZ</span><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></>
+                      : key === 'tax' ? <><span>Tax clearance</span><div className="tiny-toggle"><button className={detail.application.tax_clearance_good ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceGood', true)} disabled={busy}>Good</button><button className={!detail.application.tax_clearance_good ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceGood', false)} disabled={busy}>No</button></div></>
+                      : <><span>Payment</span><div className="status-payment-value"><strong className={detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'text-good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'text-warn' : ''}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</strong>{detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <button className="tiny-confirm" onClick={confirmPayment} disabled={busy}>Confirm</button>}</div></>;
+                    return <div key={key} className="compact-status-item sortable-status-row" draggable onDragStart={() => setDragStatusKey(key)} onDragOver={(e) => e.preventDefault()} onDrop={() => dropStatus(key)}><i className="drag-handle" title="Drag to reorder">⋮⋮</i>{row}</div>;
+                  })}
                 </div>
               </div>
 
@@ -840,30 +894,31 @@ export default function AdminPage() {
                   {(() => {
                     const formation = docFor(detail, 'formation');
                     const sole = detail.application.is_sole_proprietorship;
-                    return <div className={`ops-doc-row ${formationSatisfied(detail) ? 'ready' : detail.application.formation_review_status === 'rejected' ? 'bad' : ''}`}>
-                      <button className="ops-doc-name" onClick={() => formation && openDoc(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : '○'}</b><span>Certificate of Formation</span></button>
-                      {sole ? <small>Not required</small> : !formation ? <small>Missing</small> : <div className="formation-inline-review"><button className={detail.application.formation_review_status === 'approved' ? 'selected-good' : ''} onClick={() => setProcessFlag('formationReviewStatus', 'approved')} disabled={busy}>Approve</button><button className={detail.application.formation_review_status === 'rejected' ? 'selected-bad' : ''} onClick={() => setProcessFlag('formationReviewStatus', 'rejected')} disabled={busy}>Wrong</button></div>}
-                    </div>;
+                    const review = detail.application.formation_review_status || 'not_reviewed';
+                    return <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : '○'}</b><span>Certificate of Formation</span></button><small>{sole ? 'Not required' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
+                  })()}
+                  {(() => {
+                    const approval = docFor(detail, 'uez_approval_email');
+                    const review = detail.application.uez_approval_review_status || 'not_reviewed';
+                    return <div className={`ops-doc-row reviewable-doc ${review === 'approved' ? 'ready' : review === 'rejected' ? 'bad' : approval ? 'review-pending' : ''}`}><button className="ops-doc-name" onClick={() => approval && previewDocument(approval)} disabled={!approval}><b>{review === 'approved' ? '✓' : approval ? '!' : '○'}</b><span>UEZ Approval Email</span></button><small>{!approval ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
                   })()}
                   {[
                     ['brc', 'BRC'],
-                    ['uez_approval_email', 'UEZ Approval Email'],
                     ['tax_clearance', 'Tax Clearance'],
                     ['ldc_application', 'Signed LDC Application']
                   ].map(([type, label]) => {
                     const doc = docFor(detail, type);
-                    return <div key={type} className={`ops-doc-row ${doc ? 'ready' : ''}`}><button className="ops-doc-name" onClick={() => doc && openDoc(doc)} disabled={!doc}><b>{doc ? '✓' : '○'}</b><span>{label}</span></button><small>{doc ? 'Received' : 'Missing'}</small></div>;
+                    return <div key={type} className={`ops-doc-row ${doc ? 'ready' : ''}`}><button className="ops-doc-name" onClick={() => doc && previewDocument(doc)} disabled={!doc}><b>{doc ? '✓' : '○'}</b><span>{label}</span></button><small>{doc ? 'Received' : 'Missing'}</small></div>;
                   })}
                 </div>
               </div>
 
               <div className="ops-panel actions-panel">
-                <div className="ops-panel-head"><h3>Actions</h3></div>
-                <div className="ops-action-grid">
-                  <button className="ops-action primary" onClick={runBrcLookup} disabled={busy}><span>BRC</span><strong>Look up & import</strong></button>
-                  <button className="ops-action primary" onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>Tax clearance</span><strong>{myNjCredentials ? 'Retrieve from PBS' : 'Needs MyNJ login'}</strong></button>
-                  <button className="ops-action primary" onClick={runLdcJotform} disabled={busy}><span>LDC application</span><strong>{docFor(detail, 'ldc_application') ? 'Run again' : 'Fill & sign'}</strong></button>
-                  <button className={`ops-action ${packetReady(detail) ? 'success-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>Lakewood grant</span><strong>{detail.application.status === 'applied' ? 'Submitted ✓' : packetReady(detail) ? 'Submit grant' : `${readyDocumentCount(detail)}/5 docs ready`}</strong></button>
+                <div className="ops-action-grid clean-action-grid">
+                  <button className={`ops-action ${docFor(detail, 'brc') ? 'success-action' : 'primary'}`} onClick={runBrcLookup} disabled={busy}><span>FETCH</span><strong>BRC</strong></button>
+                  <button className={`ops-action ${docFor(detail, 'tax_clearance') ? 'success-action' : 'primary'}`} onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>FETCH</span><strong>TAX CLEARANCE</strong></button>
+                  <button className={`ops-action ${docFor(detail, 'ldc_application') ? 'success-action' : 'primary'}`} onClick={runLdcJotform} disabled={busy}><span>FILL OUT</span><strong>LDC APP</strong></button>
+                  <button className={`ops-action ${detail.application.status === 'applied' ? 'success-action' : packetReady(detail) ? 'ready-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>SUBMIT</span><strong>GRANT APP</strong></button>
                 </div>
               </div>
             </div>
@@ -872,7 +927,7 @@ export default function AdminPage() {
           <div className="admin-details-heading"><span>DETAILS</span><small>Reference information and manual overrides</small></div>
 
           <div className="admin-card-grid">
-            <section className="admin-card admin-business-card admin-secondary-card">
+            <details className="admin-accordion"><summary><strong>Business details</strong><span>{detail.application.ein || 'No EIN'}</span></summary><section className="admin-card admin-business-card admin-secondary-card">
               <div className="admin-card-head"><h3>Business</h3><span>{programLabel(detail.application.program_code)}</span></div>
               {editMode ? <div className="admin-edit-grid">
                 <div><label>Business name <span className="required-star">*</span></label><input value={applicationDraft.businessName} onChange={(e) => updateApplicationDraft('businessName', e.target.value)} /></div>
@@ -908,16 +963,16 @@ export default function AdminPage() {
                 <div><dt>Grant amount</dt><dd>{detail.application.grant_amount_requested == null ? '—' : `$${Number(detail.application.grant_amount_requested).toLocaleString()}`}</dd></div>
                 <div className="data-wide"><dt>Description</dt><dd>{detail.application.business_description || '—'}</dd></div>
               </dl>}
-            </section>
+            </section></details>
 
-            <section className="admin-card payment-admin-card admin-secondary-card">
+            <details className="admin-accordion"><summary><strong>Payment details</strong><span>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span></summary><section className="admin-card payment-admin-card admin-secondary-card">
               <div className="admin-card-head"><h3>Payment details</h3><span>{detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'PAID' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'CLIENT SAYS PAID' : 'NOT RECORDED'}</span></div>
               {detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <div className="admin-alert">Client says payment was sent. Check your bank before confirming.</div>}
               <div className="admin-edit-grid"><div><label>Amount</label><input type="number" value={paymentDraft.amount} onChange={(e) => setPaymentDraft((old) => ({...old, amount:e.target.value}))} /></div><div><label>Date</label><input type="date" value={paymentDraft.paymentDate} onChange={(e) => setPaymentDraft((old) => ({...old, paymentDate:e.target.value}))} /></div><div><label>Method</label><input value={paymentDraft.paymentMethod} onChange={(e) => setPaymentDraft((old) => ({...old, paymentMethod:e.target.value}))} /></div><div><label>Reference</label><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft((old) => ({...old, reference:e.target.value}))} /></div><div className="admin-edit-wide"><label>Notes</label><input value={paymentDraft.notes} onChange={(e) => setPaymentDraft((old) => ({...old, notes:e.target.value}))} /></div></div>
               {detail.payments?.[detail.payments.length - 1]?.status !== 'paid' && <button className="success-button admin-full-button" onClick={confirmPayment} disabled={busy}>✓ Confirm payment received</button>}
-            </section>
+            </section></details>
 
-            <section className="admin-card brc-admin-card admin-secondary-card">
+            <details className="admin-accordion"><summary><strong>BRC details</strong><span>{detail.application.brc_status === 'found' ? 'Found' : (detail.application.brc_status || 'Pending')}</span></summary><section className="admin-card brc-admin-card admin-secondary-card">
               <div className="admin-card-head"><h3>BRC details</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
 
               <div className="brc-result-form">
@@ -932,9 +987,9 @@ export default function AdminPage() {
               </div>
 
               {detail.application.brc_status === 'not_found' && <a className="secondary admin-email-button" href={emailApplicantHref}>Email applicant BRC instructions</a>}
-            </section>
+            </section></details>
 
-            <section className="admin-card mynj-card admin-account-card admin-secondary-card">
+            <details className="admin-accordion"><summary><strong>MyNJ / PBS</strong><span>{myNjCredentials ? 'Login ready' : 'Not created'}</span></summary><section className="admin-card mynj-card admin-account-card admin-secondary-card">
               <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{detail.application.pbs_status === 'account_created' || detail.application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span></div>
               {myNjCredentials ? <>
                 {myNjEditMode ? <div className="credential-edit-grid">
@@ -969,9 +1024,9 @@ export default function AdminPage() {
                 >Generate missing MyNJ login</button>
                 {detail.application.brc_status !== 'found' && <p className="admin-help">The BRC must be confirmed first.</p>}
               </>}
-            </section>
+            </section></details>
 
-            <section className="admin-card admin-wide admin-owners-card admin-secondary-card">
+            <details className="admin-accordion"><summary><strong>Owners</strong><span>{`${detail.owners.length} owner${detail.owners.length === 1 ? '' : 's'}`}</span></summary><section className="admin-card admin-wide admin-owners-card admin-secondary-card">
               <div className="admin-card-head"><h3>Owners</h3><span>{editMode ? ownerDrafts.length : detail.owners.length}</span></div>
               {editMode ? <>
                 <div className="owner-admin-list owner-edit-list">
@@ -1011,9 +1066,9 @@ export default function AdminPage() {
                   </dl>
                 </div>)}
               </div>}
-            </section>
+            </section></details>
 
-            <section className="admin-card admin-documents-card admin-secondary-card">
+            <details className="admin-accordion"><summary><strong>Documents</strong><span>{`${detail.documents.length} files`}</span></summary><section className="admin-card admin-documents-card admin-secondary-card">
               <div className="admin-card-head"><h3>Documents</h3><span>{detail.documents.length}</span></div>
               <div className="admin-document-list">
                 {detail.documents.map((doc) => (
@@ -1029,9 +1084,19 @@ export default function AdminPage() {
                 ))}
                 {detail.documents.length === 0 && <p className="muted">No documents uploaded.</p>}
               </div>
-            </section>
+            </section></details>
           </div>
         </>}
+        {previewDoc && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closePreview(); }}>
+          <div className="document-modal" role="dialog" aria-modal="true" aria-label={documentLabel(previewDoc.document_type)}>
+            <div className="document-modal-head"><div><strong>{documentLabel(previewDoc.document_type)}</strong><small>{previewDoc.filename}</small></div><button onClick={closePreview} aria-label="Close document">×</button></div>
+            <div className="document-modal-body">{previewBusy ? <div className="document-modal-loading">Loading document…</div> : previewUrl ? <iframe src={previewUrl} title={previewDoc.filename} /> : null}</div>
+            <div className="document-modal-footer">
+              <div>{previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer">Open in new tab</a>}</div>
+              {(previewDoc.document_type === 'formation' || previewDoc.document_type === 'uez_approval_email') && <div className="document-review-actions"><button className="warning-button" onClick={() => reviewPreviewDoc('rejected')} disabled={busy}>Wrong document</button><button className="success-button" onClick={() => reviewPreviewDoc('approved')} disabled={busy}>✓ Approve</button></div>}
+            </div>
+          </div>
+        </div>}
       </section>
     </main>
   </div>;

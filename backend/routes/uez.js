@@ -326,7 +326,8 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
       const { error: appError } = await supabase.from('uez_applications').update({
         pbs_status: 'uez_approval_uploaded',
         uez_application_submitted: true,
-        uez_application_status: application.uez_application_status === 'approved' ? 'approved' : 'applied',
+        uez_application_status: 'applied',
+        uez_approval_review_status: 'not_reviewed',
         updated_at: now
       }).eq('id', application.id);
       if (appError) throw appError;
@@ -400,6 +401,14 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
 
     if (doc.document_type === 'formation') {
       await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
+    }
+
+    if (doc.document_type === 'uez_approval_email') {
+      await supabase.from('uez_applications').update({
+        uez_approval_review_status: 'not_reviewed',
+        uez_application_status: application.uez_application_status === 'approved' ? 'applied' : application.uez_application_status,
+        updated_at: new Date().toISOString()
+      }).eq('id', application.id);
     }
 
     if (doc.document_type === 'brc' && req.user.role === 'admin') {
@@ -611,6 +620,16 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
     }
     if (['not_reviewed', 'approved', 'rejected'].includes(body.formationReviewStatus)) {
       patch.formation_review_status = body.formationReviewStatus;
+    }
+    if (['not_reviewed', 'approved', 'rejected'].includes(body.uezApprovalReviewStatus)) {
+      patch.uez_approval_review_status = body.uezApprovalReviewStatus;
+      if (body.uezApprovalReviewStatus === 'approved') {
+        patch.uez_application_status = 'approved';
+        patch.uez_application_submitted = true;
+      } else if (body.uezApprovalReviewStatus === 'rejected') {
+        patch.uez_application_status = 'applied';
+        patch.uez_application_submitted = true;
+      }
     }
 
     if (Object.keys(patch).length === 1) return res.status(400).json({ error: 'No process status was supplied.' });
