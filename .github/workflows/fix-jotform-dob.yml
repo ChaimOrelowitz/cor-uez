@@ -1,0 +1,146 @@
+name: Fix JotForm DOB handling
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-jotform-dob.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch DOB handling
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('brc-helper-extension/jotform.js')
+          s = p.read_text()
+
+          old = '''  function dateParts(value) {
+    const text = String(value || '').trim();
+    const iso = text.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+    if (iso) return { year: iso[1], month: iso[2], day: iso[3] };
+    const us = text.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/);
+    if (us) return { year: us[3], month: us[1].padStart(2, '0'), day: us[2].padStart(2, '0') };
+    return { year: '', month: '', day: '' };
+  }
+'''
+          new = '''  function dateParts(value) {
+    const text = String(value || '').trim();
+    if (!text) return { year: '', month: '', day: '', formatted: '' };
+
+    let match = text.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})(?:[T\\s].*)?$/);
+    if (match) {
+      const month = match[2].padStart(2, '0');
+      const day = match[3].padStart(2, '0');
+      const year = match[1];
+      return { year, month, day, formatted: `${month}/${day}/${year}` };
+    }
+
+    match = text.match(/^(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{4})(?:[T\\s].*)?$/);
+    if (match) {
+      const month = match[1].padStart(2, '0');
+      const day = match[2].padStart(2, '0');
+      const year = match[3];
+      return { year, month, day, formatted: `${month}/${day}/${year}` };
+    }
+
+    const digits = text.replace(/\\D/g, '');
+    if (digits.length === 8) {
+      // Prefer MMDDYYYY for an eight-digit user-entered date.
+      const month = digits.slice(0, 2);
+      const day = digits.slice(2, 4);
+      const year = digits.slice(4);
+      return { year, month, day, formatted: `${month}/${day}/${year}` };
+    }
+
+    return { year: '', month: '', day: '', formatted: '' };
+  }
+'''
+          if old not in s:
+              raise SystemExit('dateParts anchor not found')
+          s = s.replace(old, new, 1)
+
+          old = '''  function setDate(prefix, parts) {
+    setField(`${prefix}[month]`, parts.month || '');
+    setField(`${prefix}[day]`, parts.day || '');
+    setField(`${prefix}[year]`, parts.year || '');
+  }
+'''
+          new = '''  function setNativeValue(element, value) {
+    if (!element) return false;
+    const next = String(value ?? '');
+    const prototype = element instanceof HTMLInputElement
+      ? HTMLInputElement.prototype
+      : element instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : null;
+    const descriptor = prototype ? Object.getOwnPropertyDescriptor(prototype, 'value') : null;
+    if (descriptor?.set) descriptor.set.call(element, next);
+    else element.value = next;
+    dispatch(element);
+    return true;
+  }
+
+  function setJotformDate(questionId, prefix, value) {
+    const parts = dateParts(value);
+    if (!parts.formatted) return false;
+
+    // HAR submission shape: qXX_field[month], [day], [year].
+    setField(`${prefix}[month]`, parts.month);
+    setField(`${prefix}[day]`, parts.day);
+    setField(`${prefix}[year]`, parts.year);
+
+    // JotForm can also render a visible combined MM/DD/YYYY control.
+    // Populate it too so client-side validation sees the same normalized date.
+    const combinedCandidates = [
+      document.getElementsByName(prefix)[0],
+      document.getElementById(`input_${questionId}`),
+      document.getElementById(`lite_mode_${questionId}`)
+    ].filter(Boolean);
+    combinedCandidates.forEach((element) => setNativeValue(element, parts.formatted));
+
+    // Standard JotForm date-part IDs, when present.
+    setNativeValue(document.getElementById(`month_${questionId}`), parts.month);
+    setNativeValue(document.getElementById(`day_${questionId}`), parts.day);
+    setNativeValue(document.getElementById(`year_${questionId}`), parts.year);
+
+    return true;
+  }
+'''
+          if old not in s:
+              raise SystemExit('setDate anchor not found')
+          s = s.replace(old, new, 1)
+
+          s = s.replace("    setDate('q84_applicantDob', dateParts(primary.dob));", "    setJotformDate(84, 'q84_applicantDob', primary.dob);", 1)
+          s = s.replace("      setDate('q85_coapplicantDob', dateParts(secondary.dob));", "      setJotformDate(85, 'q85_coapplicantDob', secondary.dob);", 1)
+          s = s.replace("    setDate('q58_applicantSignature58', today);", "    setJotformDate(58, 'q58_applicantSignature58', `${today.month}/${today.day}/${today.year}`);", 1)
+          s = s.replace("    if (owners.length > 1) setDate('q60_date60', today);", "    if (owners.length > 1) setJotformDate(60, 'q60_date60', `${today.month}/${today.day}/${today.year}`);", 1)
+
+          p.write_text(s)
+
+          m = Path('brc-helper-extension/manifest.json')
+          ms = m.read_text()
+          if '"version": "1.2.1"' not in ms:
+              raise SystemExit('manifest is not at 1.2.1')
+          m.write_text(ms.replace('"version": "1.2.1"', '"version": "1.2.2"', 1))
+
+          Path('.github/workflows/fix-jotform-dob.yml').unlink()
+          PY
+
+      - name: Verify
+        run: |
+          node --check brc-helper-extension/jotform.js
+          python -m json.tool brc-helper-extension/manifest.json >/dev/null
+
+      - name: Commit
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add brc-helper-extension/jotform.js brc-helper-extension/manifest.json .github/workflows/fix-jotform-dob.yml
+          git commit -m "Fix JotForm DOB MM/DD/YYYY handling"
+          git push
