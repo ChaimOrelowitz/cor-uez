@@ -1,0 +1,30 @@
+name: Polish UEZ admin operations
+on:
+  push:
+    paths:
+      - '.github/workflows/polish-admin-operations.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply polish patch
+        run: python .github/scripts/polish_admin_operations.py
+      - name: Verify backend and frontend
+        run: |
+          node --check backend/routes/uez.js
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "Chaim Orelowitz"
+          git config user.email "chaim@corsolutions.io"
+          git add backend/routes/uez.js src/AdminPage.jsx src/styles.css
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Polish UEZ admin operations"
+            git push
+          fi
