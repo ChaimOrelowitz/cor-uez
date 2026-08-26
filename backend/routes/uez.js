@@ -133,7 +133,7 @@ router.post('/applications', async (req, res) => {
       zone_eligible: body.zoneEligible === true,
       program_code: body.programCode || null,
       grant_amount_requested: body.programCode === 'lakewood_technology_grant' ? 5000 : null,
-      status: 'intake_in_progress'
+      status: 'in_progress'
     };
 
     const { data, error } = await supabase.from('uez_applications').insert(payload).select('*').single();
@@ -254,14 +254,8 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     }
 
     const documentType = String(req.body?.documentType || 'supporting').trim().toLowerCase();
-    if (documentType === 'uez_approval_email' && application.pbs_status !== 'account_created' && application.status !== 'waiting_for_uez_approval') {
-      return res.status(400).json({ error: 'The PBS account must be marked created before uploading the UEZ approval email.' });
-    }
     if (documentType === 'tax_clearance' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only a UEZ admin can add the tax-clearance letter.' });
-    }
-    if (documentType === 'tax_clearance' && !['account_created', 'uez_approval_uploaded'].includes(application.pbs_status)) {
-      return res.status(400).json({ error: 'The PBS account must be created before retrieving tax clearance.' });
     }
     const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${safeFilename(req.file.originalname)}`;
 
@@ -288,10 +282,8 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     if (error) throw error;
 
     if (documentType === 'brc') {
-      const nextStatus = application.submitted_at ? 'brc_uploaded' : application.status;
       await supabase.from('uez_applications').update({
         brc_status: 'uploaded',
-        status: nextStatus,
         updated_at: new Date().toISOString()
       }).eq('id', application.id);
 
@@ -309,7 +301,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
       const now = new Date().toISOString();
       const { error: appError } = await supabase.from('uez_applications').update({
         pbs_status: 'uez_approval_uploaded',
-        status: 'uez_approval_uploaded',
+        uez_application_submitted: true,
         updated_at: now
       }).eq('id', application.id);
       if (appError) throw appError;
@@ -325,6 +317,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     }
 
     if (documentType === 'tax_clearance') {
+      await supabase.from('uez_applications').update({ tax_clearance_good: true, updated_at: new Date().toISOString() }).eq('id', application.id);
       await addStatusEvent(
         application.id,
         'tax_clearance_received',
@@ -424,7 +417,7 @@ router.post('/applications/:id/submit', async (req, res) => {
 
     const submittedAt = new Date().toISOString();
     const { data, error } = await supabase.from('uez_applications').update({
-      status: 'submitted_for_review',
+      status: 'in_progress',
       submitted_at: submittedAt,
       updated_at: submittedAt
     }).eq('id', application.id).select('*').single();
@@ -480,7 +473,7 @@ router.post('/admin/applications/:id/credentials/mynj', requireUezAdmin, async (
       .eq('id', req.params.id)
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
-    if (application.brc_status !== 'found' && application.status !== 'brc_confirmed') {
+    if (application.brc_status !== 'found') {
       return res.status(400).json({ error: 'Confirm the BRC before creating MyNJ credentials.' });
     }
 
@@ -546,12 +539,12 @@ router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, asyn
     const now = new Date().toISOString();
     const { data, error } = await supabase.from('uez_applications').update({
       pbs_status: 'account_created',
-      status: 'waiting_for_uez_approval',
+      pbs_account_created: true,
       updated_at: now
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
 
-    if (application.pbs_status !== 'account_created' && application.status !== 'waiting_for_uez_approval') {
+    if (!application.pbs_account_created && application.pbs_status !== 'account_created') {
       await addStatusEvent(
         application.id,
         'waiting_for_uez_approval',
@@ -562,6 +555,32 @@ router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, asyn
       );
     }
 
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const body = req.body || {};
+    const patch = { updated_at: new Date().toISOString() };
+    if (typeof body.pbsAccountCreated === 'boolean') {
+      patch.pbs_account_created = body.pbsAccountCreated;
+      patch.pbs_status = body.pbsAccountCreated ? 'account_created' : null;
+    }
+    if (typeof body.uezApplicationSubmitted === 'boolean') patch.uez_application_submitted = body.uezApplicationSubmitted;
+    if (typeof body.taxClearanceGood === 'boolean') patch.tax_clearance_good = body.taxClearanceGood;
+
+    if (Object.keys(patch).length === 1) return res.status(400).json({ error: 'No process status was supplied.' });
+    const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();
+    if (error) throw error;
     res.json(data);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -840,12 +859,12 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
-    if (status === 'ready_for_ldc' && application.pbs_status !== 'uez_approval_uploaded') {
-      return res.status(400).json({ error: 'The applicant must upload the UEZ approval email before grant processing can begin.' });
-    }
+    const overallStatus = ['grant_submitted', 'applied'].includes(status)
+      ? 'applied'
+      : application.status === 'applied' ? 'applied' : 'in_progress';
 
     const { data, error } = await supabase.from('uez_applications').update({
-      status,
+      status: overallStatus,
       updated_at: new Date().toISOString()
     }).eq('id', application.id).select('*').single();
     if (error) throw error;

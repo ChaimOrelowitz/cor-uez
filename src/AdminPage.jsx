@@ -17,6 +17,7 @@ import {
   updateAdminApplication,
   updateAdminMyNjCredentials,
   updateAdminApplicationStatus,
+  updateAdminProcessFlags,
   whoAmI
 } from './api';
 
@@ -24,21 +25,16 @@ const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCL
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
 
 function statusLabel(status) {
-  const labels = {
-    intake_in_progress: 'In progress',
-    submitted_for_review: 'Submitted',
-    waiting_for_brc: 'Waiting for BRC',
-    brc_uploaded: 'BRC uploaded',
-    brc_confirmed: 'BRC confirmed',
-    pbs_account_pending: 'Creating PBS account',
-    waiting_for_uez_approval: 'Waiting for UEZ approval email',
-    uez_approval_uploaded: 'UEZ approval email uploaded',
-    ldc_submitted: 'LDC submitted',
-    grant_submitted: 'Grant submitted',
-    approved: 'Approved'
-  };
-  return labels[status] || String(status || '').replace(/_/g, ' ');
+  return status === 'applied' || status === 'grant_submitted' ? 'Applied' : 'In Progress';
 }
+
+const REQUIRED_GRANT_DOCUMENTS = [
+  ['formation', 'Certificate of Formation'],
+  ['tax_clearance', 'Tax Clearance Letter'],
+  ['ldc_application', 'Signed LDC Application'],
+  ['brc', 'Business Registration Certificate'],
+  ['uez_approval_email', 'UEZ Approval Email']
+];
 
 function programLabel(code) {
   return code === 'lakewood_technology_grant' ? 'Lakewood LDC Technology Grant' : (code || 'UEZ enrollment');
@@ -182,7 +178,7 @@ export default function AdminPage() {
   const [applications, setApplications] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [filter, setFilter] = useState('submitted');
+  const [filter, setFilter] = useState('progress');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -634,6 +630,20 @@ export default function AdminPage() {
     }
   }
 
+  async function setProcessFlag(key, value) {
+    setBusy(true);
+    setMessage('Saving process status…');
+    try {
+      await updateAdminProcessFlags(detail.application.id, { [key]: value });
+      await refreshList(detail.application.id);
+      setMessage('Process status updated.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function markReadyForLdc() {
     setBusy(true);
     setMessage('');
@@ -659,17 +669,15 @@ export default function AdminPage() {
         .some((value) => String(value || '').toLowerCase().includes(q));
       if (!matchesSearch) return false;
       if (filter === 'all') return true;
-      if (filter === 'submitted') return ['submitted_for_review', 'brc_uploaded'].includes(app.status);
-      if (filter === 'brc') return app.status === 'waiting_for_brc';
-      if (filter === 'confirmed') return app.brc_status === 'found' || app.status === 'brc_confirmed';
+      if (filter === 'progress') return app.status !== 'applied';
+      if (filter === 'applied') return app.status === 'applied';
       return true;
     });
   }, [applications, filter, search]);
 
   const counts = useMemo(() => ({
-    submitted: applications.filter((app) => ['submitted_for_review', 'brc_uploaded'].includes(app.status)).length,
-    brc: applications.filter((app) => app.status === 'waiting_for_brc').length,
-    confirmed: applications.filter((app) => app.brc_status === 'found' || app.status === 'brc_confirmed').length,
+    progress: applications.filter((app) => app.status !== 'applied').length,
+    applied: applications.filter((app) => app.status === 'applied').length,
     all: applications.length
   }), [applications]);
 
@@ -710,9 +718,8 @@ export default function AdminPage() {
         </div>
         <div className="admin-filter-row">
           {[
-            ['submitted', 'New', counts.submitted],
-            ['brc', 'Needs BRC', counts.brc],
-            ['confirmed', 'BRC ✓', counts.confirmed],
+            ['progress', 'In Progress', counts.progress],
+            ['applied', 'Applied', counts.applied],
             ['all', 'All', counts.all]
           ].map(([key, label, count]) => <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}<span>{count}</span></button>)}
         </div>
@@ -720,7 +727,7 @@ export default function AdminPage() {
         <div className="application-list">
           {filtered.map((app) => <button key={app.id} className={`application-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => openApplication(app.id)}>
             <div><strong>{app.business_name_input || 'Unnamed business'}</strong><small>{app.contact_email || 'No email'}</small></div>
-            <div className="list-item-meta"><span className={`mini-status ${app.status === 'waiting_for_brc' ? 'warn' : app.brc_status === 'found' ? 'good' : ''}`}>{statusLabel(app.status)}</span><small>{new Date(app.created_at).toLocaleDateString()}</small></div>
+            <div className="list-item-meta"><span className={`mini-status ${app.status === 'applied' ? 'good' : ''}`}>{statusLabel(app.status)}</span><small>{new Date(app.created_at).toLocaleDateString()}</small></div>
           </button>)}
           {filtered.length === 0 && <div className="empty-list">No applications in this view.</div>}
         </div>
@@ -839,9 +846,9 @@ export default function AdminPage() {
                 <button
                   className="primary admin-full-button"
                   onClick={createMyNjCredentials}
-                  disabled={busy || (detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed')}
+                  disabled={busy || detail.application.brc_status !== 'found'}
                 >Generate missing MyNJ login</button>
-                {detail.application.brc_status !== 'found' && detail.application.status !== 'brc_confirmed' && <p className="admin-help">The BRC must be confirmed first.</p>}
+                {detail.application.brc_status !== 'found' && <p className="admin-help">The BRC must be confirmed first.</p>}
               </>}
             </section>
 
@@ -855,10 +862,9 @@ export default function AdminPage() {
                 <button
                   className="primary admin-full-button"
                   onClick={runTaxClearance}
-                  disabled={busy || !myNjCredentials || !['account_created', 'uez_approval_uploaded'].includes(detail.application.pbs_status)}
+                  disabled={busy || !myNjCredentials}
                 >Retrieve tax clearance from PBS</button>
                 {!myNjCredentials && <p className="admin-help">MyNJ / PBS login information is required first.</p>}
-                {myNjCredentials && !['account_created', 'uez_approval_uploaded'].includes(detail.application.pbs_status) && <p className="admin-help">Mark the PBS account created before retrieving tax clearance.</p>}
               </>}
             </section>
 
@@ -923,23 +929,44 @@ export default function AdminPage() {
             </section>
 
             <section className="admin-card">
-              <div className="admin-card-head"><h3>Workflow</h3></div>
-              <button className="secondary admin-full-button" onClick={markReadyForLdc} disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded'}>Mark ready for grant processing</button>
-              <p className="admin-help">This becomes available after the applicant uploads the required UEZ approval email.</p>
+              <div className="admin-card-head"><h3>Process</h3><span>{statusLabel(detail.application.status)}</span></div>
+              <div className="admin-process-list">
+                {[
+                  ['pbsAccountCreated', 'PBS Account Created', detail.application.pbs_account_created === true],
+                  ['uezApplicationSubmitted', 'UEZ Application Submitted', detail.application.uez_application_submitted === true],
+                  ['taxClearanceGood', 'Tax Clearance Good', detail.application.tax_clearance_good === true]
+                ].map(([key, label, value]) => <div className="admin-process-row" key={key}>
+                  <strong>{label}</strong>
+                  <div className="admin-process-buttons">
+                    <button className={value ? 'success-button' : 'secondary'} onClick={() => setProcessFlag(key, true)} disabled={busy}>Yes</button>
+                    <button className={!value ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag(key, false)} disabled={busy}>No</button>
+                  </div>
+                </div>)}
+              </div>
+
+              <div className="admin-card-head admin-subhead"><h3>Required documents</h3><span>{REQUIRED_GRANT_DOCUMENTS.filter(([type]) => detail.documents.some((doc) => doc.document_type === type)).length}/5</span></div>
+              <div className="admin-checklist">
+                {REQUIRED_GRANT_DOCUMENTS.map(([type, label]) => {
+                  const doc = detail.documents.find((item) => item.document_type === type);
+                  return <button type="button" key={type} className={`admin-check-row ${doc ? 'complete' : ''}`} onClick={() => doc && openDoc(doc)} disabled={!doc}>
+                    <span>{doc ? '✓' : '○'}</span><strong>{label}</strong><small>{doc ? 'Received' : 'Missing'}</small>
+                  </button>;
+                })}
+              </div>
+
               <button
                 className="primary admin-full-button"
                 onClick={runLdcJotform}
-                disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded' || !detail.documents.some((doc) => doc.document_type === 'tax_clearance') || detail.documents.some((doc) => doc.document_type === 'ldc_application')}
-              >{detail.documents.some((doc) => doc.document_type === 'ldc_application') ? '✓ LDC application submitted' : 'Fill & submit LDC application'}</button>
-              <p className="admin-help">COR fills the Lakewood JotForm, pauses for the required signature, then saves JotForm’s completed signed PDF here after final submission.</p>
+                disabled={busy || detail.documents.some((doc) => doc.document_type === 'ldc_application')}
+              >{detail.documents.some((doc) => doc.document_type === 'ldc_application') ? '✓ Signed LDC application received' : 'Fill & sign LDC application'}</button>
+              <p className="admin-help">The LDC form can be completed whenever you are ready. It is no longer locked behind another process status.</p>
               <button
                 className="primary admin-full-button"
                 onClick={runLakewoodGrantPortal}
-                disabled={busy || !detail.documents.some((doc) => doc.document_type === 'ldc_application') || !detail.documents.some((doc) => doc.document_type === 'formation') || !detail.documents.some((doc) => doc.document_type === 'tax_clearance') || !detail.documents.some((doc) => doc.document_type === 'uez_approval_email') || !detail.documents.some((doc) => doc.document_type === 'brc') || detail.application.status === 'grant_submitted'}
-              >{detail.application.status === 'grant_submitted' ? '✓ Grant application submitted' : 'Fill & submit Lakewood grant'}</button>
-              <p className="admin-help">COR fills the Lakewood grant form and attaches the signed LDC application, formation certificate, tax clearance, UEZ approval, and BRC. Review the completed packet before the final Submit Form click.</p>
+                disabled={busy || REQUIRED_GRANT_DOCUMENTS.some(([type]) => !detail.documents.some((doc) => doc.document_type === type)) || detail.application.status === 'applied'}
+              >{detail.application.status === 'applied' ? '✓ Applied' : REQUIRED_GRANT_DOCUMENTS.every(([type]) => detail.documents.some((doc) => doc.document_type === type)) ? 'Ready to Apply — Fill & submit Lakewood grant' : 'Lakewood grant — waiting for 5 documents'}</button>
               <div className="admin-timeline">
-                {[...detail.statusEvents].reverse().slice(0, 6).map((event) => <div key={event.id}><strong>{event.label || statusLabel(event.status)}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>)}
+                {[...detail.statusEvents].reverse().slice(0, 6).map((event) => <div key={event.id}><strong>{event.label || event.status}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>)}
               </div>
             </section>
           </div>

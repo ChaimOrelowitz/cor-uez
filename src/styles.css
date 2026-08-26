@@ -112,3 +112,6 @@ textarea { min-height: 94px; resize: vertical; }
   .offer-row { grid-template-columns: 1fr; gap: 5px; }
   .validation-error, .form-message { margin-left: 20px; margin-right: 20px; }
 }
+
+
+.admin-process-list,.admin-checklist{display:grid;gap:10px;margin:12px 0 18px}.admin-process-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e3e7ee;border-radius:10px;background:#fff}.admin-process-buttons{display:flex;gap:8px}.admin-process-buttons button{min-width:56px}.admin-subhead{margin-top:16px}.admin-check-row{width:100%;display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:10px;text-align:left;padding:11px 12px;border:1px solid #e3e7ee;border-radius:10px;background:#fff;color:inherit}.admin-check-row:disabled{opacity:1;cursor:default}.admin-check-row.complete{border-color:#bad9c4;background:#f7fcf8}.admin-check-row span{font-size:18px}.admin-check-row small{color:#697386}.admin-check-row.complete small{color:#287a45}

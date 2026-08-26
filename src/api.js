@@ -166,6 +166,13 @@ export function markAdminPbsAccountCreated(applicationId) {
   });
 }
 
+export function updateAdminProcessFlags(applicationId, payload) {
+  return request(`/api/uez/admin/applications/${applicationId}/process-flags`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
 export function markAdminBrcFound(applicationId, payload) {
   return request(`/api/uez/admin/applications/${applicationId}/brc-found`, {
     method: 'POST',
