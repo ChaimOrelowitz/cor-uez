@@ -22,7 +22,7 @@ import {
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
-const blankOwner = () => ({ firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: 'NJ', zip: '' });
+const blankOwner = () => ({ firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '' });
 
 function programNameFromCode(code) {
   if (code === 'lakewood_technology_grant') return 'Lakewood LDC Technology Grant';
@@ -258,12 +258,13 @@ export default function App() {
   const [form, setForm] = useState({
     address: '', email: '', password: '', businessName: '', businessDescription: '', ein: '', yearFounded: '',
     isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '',
-    owners: [{ ...blankOwner(), ownershipPercent: '100' }]
+    owners: [blankOwner()]
   });
 
   const progress = useMemo(() => `${step + 1} of ${steps.length}`, [step]);
   const ownershipTotal = useMemo(() => form.owners.reduce((sum, owner) => sum + (Number(owner.ownershipPercent) || 0), 0), [form.owners]);
   const primaryIs100 = form.owners.length === 1 && form.owners[0].ownershipPercent === '100';
+  const primaryOwnershipSelection = form.owners.length === 1 && !form.owners[0].ownershipPercent ? '' : (primaryIs100 ? 'yes' : 'no');
   const eligibleProgramName = eligibility?.programs?.[0]?.name || programNameFromCode(bundle?.application?.program_code);
   const hasFormation = documents.some((doc) => doc.document_type === 'formation');
   const update = (key) => (e) => setForm((old) => ({ ...old, [key]: e.target.value }));
@@ -516,8 +517,13 @@ export default function App() {
 
   async function saveBusinessStep() {
     const einDigits = form.ein.replace(/\D/g, '');
-    if (!form.businessName.trim() || !form.businessDescription.trim() || einDigits.length !== 9 || !form.isSoleProprietorship || !form.hasDba || (form.hasDba === 'yes' && !form.dbaName.trim())) {
-      setMessage('Complete the business name, description, 9-digit EIN, business type, and DBA information before continuing.');
+    const foundedDigits = String(form.yearFounded || '').replace(/\D/g, '');
+    if (
+      !form.businessName.trim() || !form.businessDescription.trim() || einDigits.length !== 9 ||
+      foundedDigits.length !== 4 || form.fullTimeEmployees === '' || form.partTimeEmployees === '' ||
+      !form.isSoleProprietorship || !form.hasDba || (form.hasDba === 'yes' && !form.dbaName.trim())
+    ) {
+      setMessage('Complete every business field before continuing. All fields are required.');
       return;
     }
     if (!applicationId) {
@@ -780,7 +786,7 @@ export default function App() {
         {step === 4 && <div className="content-block">
           <div className="intro-copy"><h3>Business ownership</h3><p>List every owner of the business.</p></div>
           <div className="hint"><strong>Why we ask for DOB and SSN:</strong> The grant application requires this information for each business owner. COR collects it only so we can prepare and submit the required application information on your behalf.</div>
-          <div className="field-grid"><div><label>Is the primary owner the 100% owner? <span className="required-star">*</span></label><select required value={primaryIs100 ? 'yes' : 'no'} onChange={(e) => setPrimaryOwnershipMode(e.target.value)}><option value="yes">Yes</option><option value="no">No</option></select></div></div>
+          <div className="field-grid"><div><label>Is the primary owner the 100% owner? <span className="required-star">*</span></label><select required value={primaryOwnershipSelection} onChange={(e) => setPrimaryOwnershipMode(e.target.value)}><option value="" disabled>Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div></div>
           {!primaryIs100 && <div className="ownership-summary"><span>Ownership accounted for</span><strong className={Math.abs(ownershipTotal - 100) < 0.001 ? 'ownership-ok' : ''}>{ownershipTotal}% / 100%</strong></div>}
           {form.owners.map((owner, index) => <div className="owner-card" key={index}>
             <div className="owner-card-head"><strong>{index === 0 ? 'Primary owner' : `Additional owner ${index + 1}`}</strong>{index > 0 && <button className="owner-remove" type="button" onClick={() => removeOwner(index)}>Remove</button>}</div>
