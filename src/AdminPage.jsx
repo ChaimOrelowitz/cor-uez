@@ -112,7 +112,9 @@ function docFor(detail, type) {
 }
 
 function formationSatisfied(detail) {
-  return Boolean(detail?.application?.is_sole_proprietorship) || Boolean(docFor(detail, 'formation') && detail?.application?.formation_review_status === 'approved');
+  const formation = docFor(detail, 'formation');
+  if (!formation) return Boolean(detail?.application?.is_sole_proprietorship);
+  return detail?.application?.formation_review_status === 'approved';
 }
 
 function packetReady(detail) {
@@ -140,8 +142,8 @@ function attentionItems(detail) {
   const approval = docFor(detail, 'uez_approval_email');
   if (payment?.status === 'client_reported') items.push('Client says payment was sent');
   if (detail.application.brc_status === 'client_created') items.push('Client says BRC was created — recheck BRC');
-  if (!detail.application.is_sole_proprietorship && formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
-  if (!detail.application.is_sole_proprietorship && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
+  if (formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
+  if (formation && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
   if (approval && (detail.application.uez_approval_review_status || 'not_reviewed') === 'not_reviewed') items.push('Review UEZ approval email');
   return items;
 }
@@ -876,7 +878,7 @@ export default function AdminPage() {
           {filtered.map((app) => {
             const needsAttention = app.payment_status === 'client_reported'
               || app.brc_status === 'client_created'
-              || (!app.is_sole_proprietorship && (app.document_types || []).includes('formation') && app.formation_review_status !== 'approved')
+              || ((app.document_types || []).includes('formation') && app.formation_review_status !== 'approved')
               || ((app.document_types || []).includes('uez_approval_email') && (app.uez_approval_review_status || 'not_reviewed') === 'not_reviewed');
             return <button key={app.id} className={`application-list-item ops-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => openApplication(app.id)}>
               <div className="ops-list-main"><strong>{app.business_name_input || 'Unnamed business'}{needsAttention && <i className="attention-dot" title="Needs attention" />}</strong><small>{app.required_document_ready_count || 0}/5 docs · UEZ {uezStatusLabel(app.uez_application_status)}</small></div>
@@ -936,7 +938,7 @@ export default function AdminPage() {
                     const formation = docFor(detail, 'formation');
                     const sole = detail.application.is_sole_proprietorship;
                     const review = detail.application.formation_review_status || 'not_reviewed';
-                    return <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : '○'}</b><span>Certificate of Formation</span></button><small>{sole ? 'Not required' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
+                    return <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : '○'}</b><span>Certificate of Formation</span></button><small>{sole && !formation ? 'Not required' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
                   })()}
                   {(() => {
                     const approval = docFor(detail, 'uez_approval_email');

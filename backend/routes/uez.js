@@ -306,7 +306,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
 
     if (error) throw error;
 
-    if (documentType === 'formation' && !application.is_sole_proprietorship) {
+    if (documentType === 'formation') {
       await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
     }
 
@@ -643,7 +643,6 @@ router.post('/admin/applications/:id/documents/:documentId/review', requireUezAd
     let eventLabel;
 
     if (document.document_type === 'formation') {
-      if (application.is_sole_proprietorship) return res.status(400).json({ error: 'Formation review is not required for a sole proprietorship.' });
       patch.formation_review_status = decision;
       eventStatus = decision === 'approved' ? 'formation_approved' : 'formation_rejected';
       eventLabel = decision === 'approved' ? 'Certificate of Formation approved' : 'Certificate of Formation needs replacement';

@@ -132,10 +132,11 @@
       element = document.createElement('div');
       element.id = 'cor-uez-helper-notice';
       Object.assign(element.style, {
-        position: 'fixed', top: '12px', right: '12px', zIndex: '2147483647',
-        background: '#17203a', color: 'white', padding: '12px 16px',
-        borderRadius: '10px', font: '13px system-ui, -apple-system, sans-serif',
-        maxWidth: '380px', boxShadow: '0 8px 25px rgba(0,0,0,.3)', border: '1px solid #3b4261'
+        position: 'fixed', bottom: '10px', left: '10px', zIndex: '2147483647',
+        background: '#17203a', color: 'white', padding: '8px 10px',
+        borderRadius: '8px', font: '12px system-ui, -apple-system, sans-serif',
+        maxWidth: '300px', boxShadow: '0 5px 16px rgba(0,0,0,.22)', border: '1px solid #3b4261',
+        pointerEvents: 'none', opacity: '.88'
       });
       (document.body || document.documentElement).appendChild(element);
     }
