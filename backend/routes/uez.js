@@ -67,7 +67,7 @@ async function addStatusEvent(applicationId, status, label, message, userId, vis
 async function getApplicationBundle(application, user) {
   const [ownersResult, docsResult, eventsResult, paymentsResult] = await Promise.all([
     supabase.from('uez_owners')
-      .select('id, owner_order, first_name, last_name, email, phone, ownership_percent, position_title')
+      .select('id, owner_order, honorific_title, first_name, last_name, email, phone, ownership_percent, position_title, address_line1, address_line2, city, state, zip')
       .eq('application_id', application.id)
       .order('owner_order'),
     supabase.from('uez_documents')
@@ -227,6 +227,7 @@ router.put('/applications/:id/owners', async (req, res) => {
     const rows = owners.map((owner, index) => ({
       application_id: application.id,
       owner_order: index + 1,
+      honorific_title: String(owner.title || '').trim(),
       first_name: String(owner.firstName || '').trim(),
       last_name: String(owner.lastName || '').trim(),
       email: owner.email || null,
@@ -243,6 +244,7 @@ router.put('/applications/:id/owners', async (req, res) => {
       updated_at: new Date().toISOString()
     }));
 
+    if (req.user.role !== 'admin' && rows.some((row) => !row.honorific_title)) throw new Error('Each owner requires a title.');
     if (rows.some((row) => !row.first_name || !row.last_name)) throw new Error('Each owner requires a first and last name.');
     if (owners.some((owner) => !/^\S+@\S+\.\S+$/.test(String(owner.email || '').trim()))) {
       throw new Error('Each owner requires a valid email address.');
@@ -268,7 +270,7 @@ router.put('/applications/:id/owners', async (req, res) => {
 
     const { data, error } = await supabase.from('uez_owners')
       .insert(rows)
-      .select('id, owner_order, first_name, last_name, email, phone, ownership_percent, position_title, created_at, updated_at')
+      .select('id, owner_order, honorific_title, first_name, last_name, email, phone, ownership_percent, position_title, address_line1, address_line2, city, state, zip, created_at, updated_at')
       .order('owner_order');
     if (error) throw error;
 
@@ -481,7 +483,7 @@ router.post('/applications/:id/submit', async (req, res) => {
     if (!submittedOwners.length || Math.abs(ownershipTotal - 100) > 0.001) {
       return res.status(400).json({ error: 'Business ownership must be complete and total 100% before submission.' });
     }
-    if (submittedOwners.some((owner) => !String(owner.first_name || '').trim() || !String(owner.last_name || '').trim() || !String(owner.email || '').trim() || !String(owner.phone || '').trim() || !owner.dob_enc || !owner.ssn_enc || !(Number(owner.ownership_percent) > 0) || !String(owner.address_line1 || '').trim() || !String(owner.city || '').trim() || !String(owner.state || '').trim() || !String(owner.zip || '').trim())) {
+    if (submittedOwners.some((owner) => !String(owner.honorific_title || '').trim() || !String(owner.first_name || '').trim() || !String(owner.last_name || '').trim() || !String(owner.email || '').trim() || !String(owner.phone || '').trim() || !owner.dob_enc || !owner.ssn_enc || !(Number(owner.ownership_percent) > 0) || !String(owner.address_line1 || '').trim() || !String(owner.city || '').trim() || !String(owner.state || '').trim() || !String(owner.zip || '').trim())) {
       return res.status(400).json({ error: 'Every owner field is required before submission except Address Line 2.' });
     }
 

@@ -22,7 +22,7 @@ import {
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
-const blankOwner = () => ({ firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '' });
+const blankOwner = () => ({ title: '', titleOther: '', firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '' });
 
 function programNameFromCode(code) {
   if (code === 'lakewood_technology_grant') return 'Lakewood LDC Technology Grant';
@@ -328,6 +328,8 @@ export default function App() {
       dbaName: latest.dba_name || old.dbaName,
       owners: full.owners?.length
         ? full.owners.map((owner) => ({
+            title: ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Rabbi'].includes(owner.honorific_title) ? owner.honorific_title : (owner.honorific_title ? 'Other' : ''),
+            titleOther: ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Rabbi'].includes(owner.honorific_title) ? '' : (owner.honorific_title || ''),
             firstName: owner.first_name || '',
             lastName: owner.last_name || '',
             email: owner.email || '',
@@ -563,7 +565,7 @@ export default function App() {
     }
 
     const incomplete = ownersForSave.some((owner) =>
-      !owner.firstName || !owner.lastName || !owner.email || !owner.phone || !owner.dob ||
+      !owner.title || (owner.title === 'Other' && !owner.titleOther?.trim()) || !owner.firstName || !owner.lastName || !owner.email || !owner.phone || !owner.dob ||
       String(owner.ssn || '').replace(/\D/g, '').length !== 9 || !owner.ownershipPercent ||
       !owner.addressLine1?.trim() || !owner.city?.trim() || !owner.state?.trim() || !owner.zip?.trim()
     );
@@ -575,7 +577,11 @@ export default function App() {
     setBusy(true);
     setOwnerError('');
     try {
-      await saveOwners(applicationId, ownersForSave);
+      const ownersPayload = ownersForSave.map((owner) => ({
+        ...owner,
+        title: owner.title === 'Other' ? owner.titleOther.trim() : owner.title
+      }));
+      await saveOwners(applicationId, ownersPayload);
       const refreshed = await getApplication(applicationId);
       setBundle(refreshed);
       setDocuments(refreshed.documents || []);
@@ -791,6 +797,8 @@ export default function App() {
           {form.owners.map((owner, index) => <div className="owner-card" key={index}>
             <div className="owner-card-head"><strong>{index === 0 ? 'Primary owner' : `Additional owner ${index + 1}`}</strong>{index > 0 && <button className="owner-remove" type="button" onClick={() => removeOwner(index)}>Remove</button>}</div>
             <div className="field-grid">
+              <div><label>Title <span className="required-star">*</span></label><select required value={owner.title || ''} onChange={updateOwner(index, 'title')}><option value="" disabled>Select title</option><option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Ms.">Ms.</option><option value="Dr.">Dr.</option><option value="Rabbi">Rabbi</option><option value="Other">Other</option></select></div>
+              {owner.title === 'Other' && <div><label>Other title <span className="required-star">*</span></label><input required value={owner.titleOther || ''} onChange={updateOwner(index, 'titleOther')} /></div>}
               <div><label>First name <span className="required-star">*</span></label><input required value={owner.firstName} onChange={updateOwner(index, 'firstName')} /></div>
               <div><label>Last name <span className="required-star">*</span></label><input required value={owner.lastName} onChange={updateOwner(index, 'lastName')} /></div>
               <div><label>Email <span className="required-star">*</span></label><input required type="email" value={owner.email} onChange={updateOwner(index, 'email')} /></div>
