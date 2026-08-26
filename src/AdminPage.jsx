@@ -94,6 +94,55 @@ function formatDobInput(value) {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
 
+function uezStatusLabel(value) {
+  if (value === 'approved') return 'Approved';
+  if (value === 'applied') return 'Applied';
+  return 'Not Started';
+}
+
+function paymentStatusLabel(value) {
+  if (value === 'paid') return 'Paid';
+  if (value === 'client_reported') return 'Client says paid';
+  return 'Not recorded';
+}
+
+function docFor(detail, type) {
+  return [...(detail?.documents || [])].reverse().find((doc) => doc.document_type === type) || null;
+}
+
+function formationSatisfied(detail) {
+  return Boolean(detail?.application?.is_sole_proprietorship) || Boolean(docFor(detail, 'formation') && detail?.application?.formation_review_status === 'approved');
+}
+
+function packetReady(detail) {
+  return formationSatisfied(detail)
+    && Boolean(docFor(detail, 'brc'))
+    && Boolean(docFor(detail, 'uez_approval_email'))
+    && Boolean(docFor(detail, 'tax_clearance'))
+    && Boolean(docFor(detail, 'ldc_application'));
+}
+
+function readyDocumentCount(detail) {
+  return (formationSatisfied(detail) ? 1 : 0)
+    + (docFor(detail, 'brc') ? 1 : 0)
+    + (docFor(detail, 'uez_approval_email') ? 1 : 0)
+    + (docFor(detail, 'tax_clearance') ? 1 : 0)
+    + (docFor(detail, 'ldc_application') ? 1 : 0);
+}
+
+function attentionItems(detail) {
+  if (!detail) return [];
+  const items = [];
+  const payment = detail.payments?.[detail.payments.length - 1];
+  const formation = docFor(detail, 'formation');
+  const approval = docFor(detail, 'uez_approval_email');
+  if (payment?.status === 'client_reported') items.push('Client says payment was sent');
+  if (!detail.application.is_sole_proprietorship && formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
+  if (!detail.application.is_sole_proprietorship && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
+  if (approval && detail.application.uez_application_status !== 'approved') items.push('Review UEZ approval email');
+  return items;
+}
+
 function applicationDraftFrom(app) {
   return {
     contactEmail: app.contact_email || '',
@@ -373,7 +422,7 @@ export default function AdminPage() {
       if (outcome.status === 'complete') {
         setMessage('BRC confirmed. The PDF and certificate details were added directly to this applicant’s UEZ file.');
       } else if (outcome.status === 'not_found') {
-        setMessage('NJ did not find a matching BRC. The applicant was marked as waiting for a BRC.');
+        setMessage('NJ did not find a matching BRC.');
       } else {
         throw new Error(outcome.error || 'The BRC check did not finish.');
       }
@@ -579,11 +628,11 @@ export default function AdminPage() {
 
   async function markPbsAccountCreated() {
     setBusy(true);
-    setMessage('Moving the application to the UEZ approval-email stage…');
+    setMessage('Saving PBS account status…');
     try {
       await markAdminPbsAccountCreated(detail.application.id);
       await refreshList(detail.application.id);
-      setMessage('PBS account marked created. The applicant is now required to upload the UEZ approval email.');
+      setMessage('PBS account marked created.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -620,7 +669,7 @@ export default function AdminPage() {
     try {
       await markAdminBrcNotFound(detail.application.id);
       await refreshList(detail.application.id);
-      setMessage('Marked as waiting for BRC. The applicant now sees the BRC instructions and upload button in their account.');
+      setMessage('BRC marked not found. The applicant can see the BRC instructions and upload button.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -733,10 +782,15 @@ export default function AdminPage() {
         </div>
 
         <div className="application-list">
-          {filtered.map((app) => <button key={app.id} className={`application-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => openApplication(app.id)}>
-            <div><strong>{app.business_name_input || 'Unnamed business'}</strong><small>{app.contact_email || 'No email'}</small></div>
-            <div className="list-item-meta"><span className={`mini-status ${app.status === 'applied' ? 'good' : ''}`}>{statusLabel(app.status)}</span><small>{new Date(app.created_at).toLocaleDateString()}</small></div>
-          </button>)}
+          {filtered.map((app) => {
+            const needsAttention = app.payment_status === 'client_reported'
+              || (!app.is_sole_proprietorship && (app.document_types || []).includes('formation') && app.formation_review_status !== 'approved')
+              || ((app.document_types || []).includes('uez_approval_email') && app.uez_application_status !== 'approved');
+            return <button key={app.id} className={`application-list-item ops-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => openApplication(app.id)}>
+              <div className="ops-list-main"><strong>{app.business_name_input || 'Unnamed business'}{needsAttention && <i className="attention-dot" title="Needs attention" />}</strong><small>{app.required_document_ready_count || 0}/5 docs · UEZ {uezStatusLabel(app.uez_application_status)}</small></div>
+              <div className="list-item-meta"><span className={`mini-status ${app.payment_status === 'paid' ? 'good' : app.payment_status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(app.payment_status)}</span><small>{statusLabel(app.status)}</small></div>
+            </button>;
+          })}
           {filtered.length === 0 && <div className="empty-list">No applications in this view.</div>}
         </div>
       </aside>
@@ -746,9 +800,13 @@ export default function AdminPage() {
         {!detail && <div className="admin-empty"><h2>Select an application</h2><p>New submissions will appear on the left.</p></div>}
 
         {detail && <>
-          <div className="admin-detail-header">
+          <div className="admin-detail-header cockpit-header">
             <div><span className="eyebrow">UEZ APPLICATION</span><h1>{detail.application.business_name_input}</h1><p>{detail.application.contact_email} · {detail.application.contact_phone || 'No phone'}</p></div>
-            <div className="admin-header-status"><span>{statusLabel(detail.application.status)}</span><small>Submitted {detail.application.submitted_at ? new Date(detail.application.submitted_at).toLocaleString() : 'not yet'}</small></div>
+            <div className="cockpit-header-chips">
+              <span className={`cockpit-chip ${detail.application.status === 'applied' ? 'good' : ''}`}>{statusLabel(detail.application.status)}</span>
+              <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
+              <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
+            </div>
           </div>
 
           <div className="admin-edit-actions">
@@ -759,8 +817,62 @@ export default function AdminPage() {
             <button className="admin-delete-button" onClick={deleteApplication} disabled={busy}>Delete application</button>
           </div>
 
+          <section className="ops-cockpit">
+            {attentionItems(detail).length > 0 && <div className="ops-attention-strip">
+              <strong>Needs attention</strong>
+              <div>{attentionItems(detail).map((item) => <span key={item}>{item}</span>)}</div>
+            </div>}
+
+            <div className="ops-cockpit-grid">
+              <div className="ops-panel status-panel">
+                <div className="ops-panel-head"><h3>Status</h3></div>
+                <div className="compact-status-grid">
+                  <div className="compact-status-item"><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></div>
+                  <div className="compact-status-item"><span>UEZ</span><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></div>
+                  <div className="compact-status-item"><span>Tax clearance</span><div className="tiny-toggle"><button className={detail.application.tax_clearance_good ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceGood', true)} disabled={busy}>Good</button><button className={!detail.application.tax_clearance_good ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceGood', false)} disabled={busy}>No</button></div></div>
+                  <div className="compact-status-item"><span>Payment</span><strong className={detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'text-good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'text-warn' : ''}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</strong>{detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <button className="tiny-confirm" onClick={confirmPayment} disabled={busy}>Confirm</button>}</div>
+                </div>
+              </div>
+
+              <div className="ops-panel documents-panel">
+                <div className="ops-panel-head"><h3>Documents</h3><span>{readyDocumentCount(detail)}/5 ready</span></div>
+                <div className="ops-doc-list">
+                  {(() => {
+                    const formation = docFor(detail, 'formation');
+                    const sole = detail.application.is_sole_proprietorship;
+                    return <div className={`ops-doc-row ${formationSatisfied(detail) ? 'ready' : detail.application.formation_review_status === 'rejected' ? 'bad' : ''}`}>
+                      <button className="ops-doc-name" onClick={() => formation && openDoc(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : '○'}</b><span>Certificate of Formation</span></button>
+                      {sole ? <small>Not required</small> : !formation ? <small>Missing</small> : <div className="formation-inline-review"><button className={detail.application.formation_review_status === 'approved' ? 'selected-good' : ''} onClick={() => setProcessFlag('formationReviewStatus', 'approved')} disabled={busy}>Approve</button><button className={detail.application.formation_review_status === 'rejected' ? 'selected-bad' : ''} onClick={() => setProcessFlag('formationReviewStatus', 'rejected')} disabled={busy}>Wrong</button></div>}
+                    </div>;
+                  })()}
+                  {[
+                    ['brc', 'BRC'],
+                    ['uez_approval_email', 'UEZ Approval Email'],
+                    ['tax_clearance', 'Tax Clearance'],
+                    ['ldc_application', 'Signed LDC Application']
+                  ].map(([type, label]) => {
+                    const doc = docFor(detail, type);
+                    return <div key={type} className={`ops-doc-row ${doc ? 'ready' : ''}`}><button className="ops-doc-name" onClick={() => doc && openDoc(doc)} disabled={!doc}><b>{doc ? '✓' : '○'}</b><span>{label}</span></button><small>{doc ? 'Received' : 'Missing'}</small></div>;
+                  })}
+                </div>
+              </div>
+
+              <div className="ops-panel actions-panel">
+                <div className="ops-panel-head"><h3>Actions</h3></div>
+                <div className="ops-action-grid">
+                  <button className="ops-action primary" onClick={runBrcLookup} disabled={busy}><span>BRC</span><strong>Look up & import</strong></button>
+                  <button className="ops-action primary" onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>Tax clearance</span><strong>{myNjCredentials ? 'Retrieve from PBS' : 'Needs MyNJ login'}</strong></button>
+                  <button className="ops-action primary" onClick={runLdcJotform} disabled={busy}><span>LDC application</span><strong>{docFor(detail, 'ldc_application') ? 'Run again' : 'Fill & sign'}</strong></button>
+                  <button className={`ops-action ${packetReady(detail) ? 'success-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>Lakewood grant</span><strong>{detail.application.status === 'applied' ? 'Submitted ✓' : packetReady(detail) ? 'Submit grant' : `${readyDocumentCount(detail)}/5 docs ready`}</strong></button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="admin-details-heading"><span>DETAILS</span><small>Reference information and manual overrides</small></div>
+
           <div className="admin-card-grid">
-            <section className="admin-card admin-business-card">
+            <section className="admin-card admin-business-card admin-secondary-card">
               <div className="admin-card-head"><h3>Business</h3><span>{programLabel(detail.application.program_code)}</span></div>
               {editMode ? <div className="admin-edit-grid">
                 <div><label>Business name <span className="required-star">*</span></label><input value={applicationDraft.businessName} onChange={(e) => updateApplicationDraft('businessName', e.target.value)} /></div>
@@ -798,21 +910,19 @@ export default function AdminPage() {
               </dl>}
             </section>
 
-            <section className="admin-card payment-admin-card">
-              <div className="admin-card-head"><h3>Payment</h3><span>{detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'PAID' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'CLIENT SAYS PAID' : 'NOT RECORDED'}</span></div>
+            <section className="admin-card payment-admin-card admin-secondary-card">
+              <div className="admin-card-head"><h3>Payment details</h3><span>{detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'PAID' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'CLIENT SAYS PAID' : 'NOT RECORDED'}</span></div>
               {detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <div className="admin-alert">Client says payment was sent. Check your bank before confirming.</div>}
               <div className="admin-edit-grid"><div><label>Amount</label><input type="number" value={paymentDraft.amount} onChange={(e) => setPaymentDraft((old) => ({...old, amount:e.target.value}))} /></div><div><label>Date</label><input type="date" value={paymentDraft.paymentDate} onChange={(e) => setPaymentDraft((old) => ({...old, paymentDate:e.target.value}))} /></div><div><label>Method</label><input value={paymentDraft.paymentMethod} onChange={(e) => setPaymentDraft((old) => ({...old, paymentMethod:e.target.value}))} /></div><div><label>Reference</label><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft((old) => ({...old, reference:e.target.value}))} /></div><div className="admin-edit-wide"><label>Notes</label><input value={paymentDraft.notes} onChange={(e) => setPaymentDraft((old) => ({...old, notes:e.target.value}))} /></div></div>
-              <button className="success-button admin-full-button" onClick={confirmPayment} disabled={busy}>✓ Confirm payment received</button>
+              {detail.payments?.[detail.payments.length - 1]?.status !== 'paid' && <button className="success-button admin-full-button" onClick={confirmPayment} disabled={busy}>✓ Confirm payment received</button>}
             </section>
 
-            <section className="admin-card brc-admin-card">
-              <div className="admin-card-head"><h3>BRC</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
-              <div className="lookup-values"><span>Name control <strong>{nameControl(detail.application.business_name_input)}</strong></span><span>NJ Tax ID <strong>{njTaxId(detail.application.ein)}</strong></span></div>
-              <button className="primary admin-primary" onClick={runBrcLookup} disabled={busy}>{busy ? 'BRC check running…' : 'Look up and import BRC from NJ'}</button>
-              <p className="admin-help">The COR Chrome extension opens New Jersey when you click above. Complete any NJ verification shown; the certificate details and PDF are added directly to this applicant’s UEZ file.</p>
+            <section className="admin-card brc-admin-card admin-secondary-card">
+              <div className="admin-card-head"><h3>BRC details</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
 
               <div className="brc-result-form">
                 <label>Registered business name</label><input value={brcForm.registeredBusinessName} onChange={(e) => setBrcForm((old) => ({ ...old, registeredBusinessName: e.target.value }))} />
+                <label>DBA / trade name</label><input value={brcForm.tradeName} onChange={(e) => setBrcForm((old) => ({ ...old, tradeName: e.target.value }))} />
                 <label>Business address</label><input value={brcForm.address} onChange={(e) => setBrcForm((old) => ({ ...old, address: e.target.value }))} />
               </div>
 
@@ -821,10 +931,10 @@ export default function AdminPage() {
                 <button className="warning-button" onClick={saveBrcNotFound} disabled={busy}>No BRC found</button>
               </div>
 
-              {detail.application.status === 'waiting_for_brc' && <a className="secondary admin-email-button" href={emailApplicantHref}>Email applicant BRC instructions</a>}
+              {detail.application.brc_status === 'not_found' && <a className="secondary admin-email-button" href={emailApplicantHref}>Email applicant BRC instructions</a>}
             </section>
 
-            <section className="admin-card mynj-card admin-account-card">
+            <section className="admin-card mynj-card admin-account-card admin-secondary-card">
               <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{detail.application.pbs_status === 'account_created' || detail.application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span></div>
               {myNjCredentials ? <>
                 {myNjEditMode ? <div className="credential-edit-grid">
@@ -861,23 +971,7 @@ export default function AdminPage() {
               </>}
             </section>
 
-            <section className="admin-card tax-clearance-card admin-tax-card">
-              <div className="admin-card-head"><h3>Tax clearance</h3><span>{detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? 'RECEIVED' : 'NOT RETRIEVED'}</span></div>
-              {detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? <>
-                <p className="admin-help">The New Jersey tax-clearance letter is saved in this applicant’s Documents below.</p>
-                <button className="secondary admin-full-button" onClick={() => openDoc(detail.documents.find((doc) => doc.document_type === 'tax_clearance'))}>Open tax-clearance letter</button>
-              </> : <>
-                <p className="admin-help">The COR Chrome extension signs into PBS, opens <strong>Tax &amp; Revenue Center</strong>, selects <strong>Business Incentive Tax Clearance</strong> and <strong>New Jersey Department of Community Affairs</strong>, then files the PDF here automatically. Complete any New Jersey verification shown in the visible window.</p>
-                <button
-                  className="primary admin-full-button"
-                  onClick={runTaxClearance}
-                  disabled={busy || !myNjCredentials}
-                >Retrieve tax clearance from PBS</button>
-                {!myNjCredentials && <p className="admin-help">MyNJ / PBS login information is required first.</p>}
-              </>}
-            </section>
-
-            <section className="admin-card admin-wide admin-owners-card">
+            <section className="admin-card admin-wide admin-owners-card admin-secondary-card">
               <div className="admin-card-head"><h3>Owners</h3><span>{editMode ? ownerDrafts.length : detail.owners.length}</span></div>
               {editMode ? <>
                 <div className="owner-admin-list owner-edit-list">
@@ -919,7 +1013,7 @@ export default function AdminPage() {
               </div>}
             </section>
 
-            <section className="admin-card admin-documents-card">
+            <section className="admin-card admin-documents-card admin-secondary-card">
               <div className="admin-card-head"><h3>Documents</h3><span>{detail.documents.length}</span></div>
               <div className="admin-document-list">
                 {detail.documents.map((doc) => (
@@ -934,43 +1028,6 @@ export default function AdminPage() {
                   </div>
                 ))}
                 {detail.documents.length === 0 && <p className="muted">No documents uploaded.</p>}
-              </div>
-            </section>
-
-            <section className="admin-card admin-wide admin-operations-card">
-              <div className="admin-card-head"><h3>Requirements & Processing</h3><span>{statusLabel(detail.application.status)}</span></div>
-              <div className="admin-process-list">
-                <div className="admin-process-row"><strong>PBS Account Created</strong><div className="admin-process-buttons"><button className={detail.application.pbs_account_created ? 'success-button' : 'secondary'} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></div>
-                <div className="admin-process-row"><strong>UEZ Application Status</strong><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></div>
-                <div className="admin-process-row"><strong>Tax Clearance Good</strong><div className="admin-process-buttons"><button className={detail.application.tax_clearance_good ? 'success-button' : 'secondary'} onClick={() => setProcessFlag('taxClearanceGood', true)} disabled={busy}>Yes</button><button className={!detail.application.tax_clearance_good ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag('taxClearanceGood', false)} disabled={busy}>No</button></div></div>
-              </div>
-
-              <div className="admin-card-head admin-subhead"><h3>Required documents</h3><span>{REQUIRED_GRANT_DOCUMENTS.filter(([type]) => type === 'formation' ? (detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) : detail.documents.some((doc) => doc.document_type === type)).length}/5</span></div>
-              {!detail.application.is_sole_proprietorship && <div className="formation-review-box"><strong>Formation review</strong><span>{detail.documents.some((doc) => doc.document_type === 'formation') ? 'Document uploaded' : 'Waiting for upload'}</span><div className="admin-process-buttons"><button className={detail.application.formation_review_status === 'approved' ? 'success-button' : 'secondary'} onClick={() => setProcessFlag('formationReviewStatus','approved')} disabled={busy || !detail.documents.some((doc) => doc.document_type === 'formation')}>Approve</button><button className={detail.application.formation_review_status === 'rejected' ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag('formationReviewStatus','rejected')} disabled={busy || !detail.documents.some((doc) => doc.document_type === 'formation')}>Wrong document</button></div></div>}
-              <div className="admin-checklist">
-                {REQUIRED_GRANT_DOCUMENTS.map(([type, label]) => {
-                  const doc = detail.documents.find((item) => item.document_type === type);
-                  return <button type="button" key={type} className={`admin-check-row ${doc ? 'complete' : ''}`} onClick={() => doc && openDoc(doc)} disabled={!doc}>
-                    <span>{doc ? '✓' : '○'}</span><strong>{label}</strong><small>{doc ? 'Received' : 'Missing'}</small>
-                  </button>;
-                })}
-              </div>
-
-              <div className={`processing-readiness ${(detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? 'ready' : ''}`}><strong>{(detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? '✓ Ready for processing' : 'Not ready for processing'}</strong><small>Formation approved (or sole prop) · BRC · UEZ approval email · Tax clearance</small></div>
-
-              <button
-                className="primary admin-full-button"
-                onClick={runLdcJotform}
-                disabled={busy || detail.documents.some((doc) => doc.document_type === 'ldc_application')}
-              >{detail.documents.some((doc) => doc.document_type === 'ldc_application') ? '✓ Signed LDC application received' : 'Fill & sign LDC application'}</button>
-              <p className="admin-help">The LDC form can be completed whenever you are ready. It is no longer locked behind another process status.</p>
-              <button
-                className="primary admin-full-button"
-                onClick={runLakewoodGrantPortal}
-                disabled={busy || !((detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') && detail.documents.some((doc) => doc.document_type === 'ldc_application')) || detail.application.status === 'applied'}
-              >{detail.application.status === 'applied' ? '✓ Applied' : ((detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') && detail.documents.some((doc) => doc.document_type === 'ldc_application')) ? 'Ready to Apply — Fill & submit Lakewood grant' : 'Lakewood grant — waiting for 5 documents'}</button>
-              <div className="admin-timeline">
-                {[...detail.statusEvents].reverse().slice(0, 6).map((event) => <div key={event.id}><strong>{event.label || event.status}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>)}
               </div>
             </section>
           </div>

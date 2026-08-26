@@ -698,28 +698,45 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
     const ids = (data || []).map((row) => row.id);
     if (!ids.length) return res.json([]);
 
-    const [ownersResult, docsResult] = await Promise.all([
+    const [ownersResult, docsResult, paymentsResult] = await Promise.all([
       supabase.from('uez_owners').select('application_id').in('application_id', ids),
-      supabase.from('uez_documents').select('application_id, document_type').in('application_id', ids)
+      supabase.from('uez_documents').select('application_id, document_type, created_at').in('application_id', ids),
+      supabase.from('uez_payments').select('application_id, status, amount, payment_date, created_at').in('application_id', ids).order('created_at')
     ]);
     if (ownersResult.error) throw ownersResult.error;
     if (docsResult.error) throw docsResult.error;
+    if (paymentsResult.error) throw paymentsResult.error;
 
     const ownerCounts = {};
     const docCounts = {};
-    const brcUploads = {};
+    const docTypes = {};
+    const latestPayments = {};
     for (const row of ownersResult.data || []) ownerCounts[row.application_id] = (ownerCounts[row.application_id] || 0) + 1;
     for (const row of docsResult.data || []) {
       docCounts[row.application_id] = (docCounts[row.application_id] || 0) + 1;
-      if (row.document_type === 'brc') brcUploads[row.application_id] = true;
+      if (!docTypes[row.application_id]) docTypes[row.application_id] = new Set();
+      docTypes[row.application_id].add(row.document_type);
     }
+    for (const row of paymentsResult.data || []) latestPayments[row.application_id] = row;
 
-    res.json((data || []).map((row) => ({
-      ...row,
-      owner_count: ownerCounts[row.id] || 0,
-      document_count: docCounts[row.id] || 0,
-      has_brc_upload: Boolean(brcUploads[row.id])
-    })));
+    res.json((data || []).map((row) => {
+      const types = docTypes[row.id] || new Set();
+      const formationReady = row.is_sole_proprietorship || (types.has('formation') && row.formation_review_status === 'approved');
+      const readyCount = (formationReady ? 1 : 0)
+        + (types.has('brc') ? 1 : 0)
+        + (types.has('uez_approval_email') ? 1 : 0)
+        + (types.has('tax_clearance') ? 1 : 0)
+        + (types.has('ldc_application') ? 1 : 0);
+      return {
+        ...row,
+        owner_count: ownerCounts[row.id] || 0,
+        document_count: docCounts[row.id] || 0,
+        document_types: [...types],
+        required_document_ready_count: readyCount,
+        payment_status: latestPayments[row.id]?.status || null,
+        payment_amount: latestPayments[row.id]?.amount || null
+      };
+    }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -733,15 +750,17 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
-    const [ownersResult, docsResult, eventsResult] = await Promise.all([
+    const [ownersResult, docsResult, eventsResult, paymentsResult] = await Promise.all([
       supabase.from('uez_owners').select('*').eq('application_id', application.id).order('owner_order'),
       supabase.from('uez_documents').select('id, document_type, filename, source, status, metadata, created_at').eq('application_id', application.id).order('created_at'),
-      supabase.from('uez_status_events').select('*').eq('application_id', application.id).order('created_at')
+      supabase.from('uez_status_events').select('*').eq('application_id', application.id).order('created_at'),
+      supabase.from('uez_payments').select('id, amount, payment_date, payment_method, reference, notes, status, refund_amount, refunded_at, created_at').eq('application_id', application.id).order('created_at')
     ]);
 
     if (ownersResult.error) throw ownersResult.error;
     if (docsResult.error) throw docsResult.error;
     if (eventsResult.error) throw eventsResult.error;
+    if (paymentsResult.error) throw paymentsResult.error;
 
     const owners = (ownersResult.data || []).map((owner) => ({
       id: owner.id,
@@ -766,7 +785,8 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       application,
       owners,
       documents: docsResult.data || [],
-      statusEvents: eventsResult.data || []
+      statusEvents: eventsResult.data || [],
+      payments: paymentsResult.data || []
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -894,7 +914,6 @@ router.post('/admin/applications/:id/brc-found', requireUezAdmin, async (req, re
       registered_business_name: registeredBusinessName,
       brc_data: brcData,
       brc_last_error: null,
-      status: application.submitted_at ? 'brc_confirmed' : application.status,
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
@@ -929,7 +948,6 @@ router.post('/admin/applications/:id/brc-not-found', requireUezAdmin, async (req
       brc_status: 'not_found',
       brc_checked_at: checkedAt,
       brc_last_error: null,
-      status: 'waiting_for_brc',
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
