@@ -17,6 +17,43 @@
 
   const pageText = () => String(document.body?.innerText || '').replace(/\s+/g, ' ').trim();
 
+  const escapeHtmlAttribute = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const cleanCertificateHtml = () => {
+    const candidates = [...document.querySelectorAll('table, div, section, fieldset, form, main')]
+      .filter((element) => {
+        const text = String(element.innerText || '');
+        if (!/BUSINESS REGISTRATION CERTIFICATE/i.test(text) || !/Certificate\s*Number/i.test(text)) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width >= 350 && rect.height >= 180;
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { element, area: rect.width * rect.height };
+      })
+      .sort((a, b) => a.area - b.area);
+
+    const source = candidates[0]?.element || document.body;
+    const clone = source.cloneNode(true);
+    clone.querySelectorAll('#cor-uez-helper-notice, script, button, input[type="button"], input[type="submit"], input[value="Return"], a').forEach((element) => element.remove());
+
+    const headAssets = [...document.querySelectorAll('head style, head link[rel="stylesheet"]')]
+      .map((element) => element.outerHTML)
+      .join('\n');
+    const baseHref = escapeHtmlAttribute(location.href);
+
+    return `<!doctype html><html><head><meta charset="utf-8"><base href="${baseHref}">${headAssets}<style>
+      html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+      body { width: auto !important; min-width: 0 !important; }
+      #cor-uez-helper-notice, button, input[type="button"], input[type="submit"], input[value="Return"], a { display: none !important; }
+      @page { margin: 0.3in; }
+    </style></head><body>${clone.outerHTML}</body></html>`;
+  };
+
   const notice = (message) => {
     let element = document.getElementById('cor-uez-helper-notice');
     if (!element) {
@@ -100,7 +137,6 @@
       // 2. Certificate Result Page
       if (/BUSINESS REGISTRATION CERTIFICATE/i.test(text) && (/Certificate Number/i.test(text) || /Effective Date/i.test(text))) {
         sent = true;
-        notice('COR found the official BRC certificate! Saving PDF to file…');
 
         const certMatch = text.match(/Certificate\s*Number\s*:?\s*([A-Za-z0-9-]+)/i);
         const taxpayerMatch = text.match(/Taxpayer\s*Name\s*:?\s*([^:\n\r]+?)(?=Trade\s*Name|Address|Certificate|$)/i);
@@ -115,11 +151,13 @@
         const address = addressMatch ? addressMatch[1].trim() : '';
         const effectiveDate = effectiveMatch ? effectiveMatch[1].trim() : '';
         const issuanceDate = issuanceMatch ? issuanceMatch[1].trim() : '';
+        const certificateHtml = cleanCertificateHtml();
 
+        notice('COR found the official BRC certificate! Saving a clean certificate PDF…');
         await send({
           type: 'COR_BRC_FOUND',
           result: { taxpayerName, tradeName, address, certificateNumber, effectiveDate, issuanceDate },
-          html: document.documentElement.outerHTML
+          html: certificateHtml
         });
         return;
       }
