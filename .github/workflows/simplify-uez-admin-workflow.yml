@@ -1,0 +1,30 @@
+name: Simplify UEZ admin workflow
+
+on:
+  push:
+    paths:
+      - '.github/workflows/simplify-uez-admin-workflow.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply workflow patch
+        run: python .github/scripts/simplify_uez_admin_workflow.py
+      - name: Verify backend and frontend
+        run: |
+          node --check backend/routes/uez.js
+          node --check backend/routes/uezBrc.js
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add backend/routes/uez.js backend/routes/uezBrc.js src/AdminPage.jsx src/api.js src/styles.css
+          git commit -m "Simplify UEZ workflow into independent checks"
+          git push
