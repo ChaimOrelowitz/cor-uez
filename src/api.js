@@ -45,11 +45,14 @@ export async function getApplicantSession() {
 }
 
 export async function signUpApplicant(email, password) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { emailRedirectTo: `${window.location.origin}/` }
+  const response = await fetch(`${API_BASE}/api/uez/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
   });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Could not create your account.');
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data;
 }
@@ -190,5 +193,15 @@ export function updateAdminApplicationStatus(applicationId, payload) {
   return request(`/api/uez/admin/applications/${applicationId}/status`, {
     method: 'POST',
     body: JSON.stringify(payload)
+  });
+}
+
+export function reportApplicantPayment(applicationId) {
+  return request(`/api/uez/applications/${applicationId}/payment-reported`, { method: 'POST' });
+}
+
+export function saveAdminPayment(applicationId, payload) {
+  return request(`/api/uez/admin/applications/${applicationId}/payment`, {
+    method: 'PUT', body: JSON.stringify(payload)
   });
 }

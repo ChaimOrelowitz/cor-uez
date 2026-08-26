@@ -96,6 +96,26 @@ async function getApplicationBundle(application, user) {
   };
 }
 
+router.post('/signup', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+    if (error) throw error;
+    res.status(201).json({ id: data.user?.id || null, email });
+  } catch (err) {
+    const message = /already|registered|exists/i.test(err.message || '') ? 'An account already exists for this email. Sign in instead.' : err.message;
+    res.status(400).json({ error: message });
+  }
+});
+
 router.use(requireUezAuth);
 
 router.get('/whoami', (req, res) => {
@@ -281,6 +301,10 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
 
     if (error) throw error;
 
+    if (documentType === 'formation' && !application.is_sole_proprietorship) {
+      await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
+    }
+
     if (documentType === 'brc') {
       await supabase.from('uez_applications').update({
         brc_status: 'uploaded',
@@ -302,6 +326,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
       const { error: appError } = await supabase.from('uez_applications').update({
         pbs_status: 'uez_approval_uploaded',
         uez_application_submitted: true,
+        uez_application_status: application.uez_application_status === 'approved' ? 'approved' : 'applied',
         updated_at: now
       }).eq('id', application.id);
       if (appError) throw appError;
@@ -372,6 +397,10 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
 
     const { error: deleteError } = await supabase.from('uez_documents').delete().eq('id', doc.id);
     if (deleteError) throw deleteError;
+
+    if (doc.document_type === 'formation') {
+      await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
+    }
 
     if (doc.document_type === 'brc' && req.user.role === 'admin') {
       await supabase.from('uez_applications').update({
@@ -575,8 +604,14 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
       patch.pbs_account_created = body.pbsAccountCreated;
       patch.pbs_status = body.pbsAccountCreated ? 'account_created' : null;
     }
-    if (typeof body.uezApplicationSubmitted === 'boolean') patch.uez_application_submitted = body.uezApplicationSubmitted;
     if (typeof body.taxClearanceGood === 'boolean') patch.tax_clearance_good = body.taxClearanceGood;
+    if (['not_started', 'applied', 'approved'].includes(body.uezApplicationStatus)) {
+      patch.uez_application_status = body.uezApplicationStatus;
+      patch.uez_application_submitted = body.uezApplicationStatus !== 'not_started';
+    }
+    if (['not_reviewed', 'approved', 'rejected'].includes(body.formationReviewStatus)) {
+      patch.formation_review_status = body.formationReviewStatus;
+    }
 
     if (Object.keys(patch).length === 1) return res.status(400).json({ error: 'No process status was supplied.' });
     const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();
@@ -585,6 +620,72 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+router.post('/applications/:id/payment-reported', async (req, res) => {
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+
+    const { data: existing, error: existingError } = await supabase.from('uez_payments')
+      .select('*')
+      .eq('application_id', application.id)
+      .in('status', ['client_reported', 'paid'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) return res.json(existing);
+
+    const { data, error } = await supabase.from('uez_payments').insert({
+      application_id: application.id,
+      amount: Number(application.payment_expected_amount || 500),
+      status: 'client_reported',
+      notes: 'Applicant reported that payment was sent.',
+      recorded_by: req.user.id
+    }).select('*').single();
+    if (error) throw error;
+    await addStatusEvent(application.id, 'payment_reported', 'Payment reported', 'You told COR that your payment was sent. We will verify receipt.', req.user.id, true);
+    res.status(201).json(data);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.put('/admin/applications/:id/payment', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications').select('*').eq('id', req.params.id).single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const amount = Number(req.body?.amount ?? application.payment_expected_amount ?? 500);
+    if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ error: 'Enter a valid payment amount.' });
+    const status = req.body?.status === 'client_reported' ? 'client_reported' : 'paid';
+    const paymentDate = status === 'paid' ? (req.body?.paymentDate || new Date().toISOString().slice(0, 10)) : null;
+    const method = String(req.body?.paymentMethod || '').trim() || null;
+    const reference = String(req.body?.reference || '').trim() || null;
+    const notes = String(req.body?.notes || '').trim() || null;
+
+    const { data: existing, error: existingError } = await supabase.from('uez_payments')
+      .select('*').eq('application_id', application.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (existingError) throw existingError;
+
+    let result;
+    if (existing) {
+      const { data, error } = await supabase.from('uez_payments').update({
+        amount, status, payment_date: paymentDate, payment_method: method, reference, notes, recorded_by: req.user.id
+      }).eq('id', existing.id).select('*').single();
+      if (error) throw error;
+      result = data;
+    } else {
+      const { data, error } = await supabase.from('uez_payments').insert({
+        application_id: application.id, amount, status, payment_date: paymentDate,
+        payment_method: method, reference, notes, recorded_by: req.user.id
+      }).select('*').single();
+      if (error) throw error;
+      result = data;
+    }
+
+    if (status === 'paid') await addStatusEvent(application.id, 'payment_recorded', 'Client payment recorded', 'COR confirmed that your payment was received.', req.user.id, true);
+    res.json(result);
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 router.get('/admin/applications', requireUezAdmin, async (_req, res) => {

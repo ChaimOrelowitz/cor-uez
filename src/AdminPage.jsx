@@ -18,6 +18,7 @@ import {
   updateAdminMyNjCredentials,
   updateAdminApplicationStatus,
   updateAdminProcessFlags,
+  saveAdminPayment,
   whoAmI
 } from './api';
 
@@ -189,14 +190,8 @@ export default function AdminPage() {
   const [myNjEditMode, setMyNjEditMode] = useState(false);
   const [myNjDraft, setMyNjDraft] = useState(null);
   const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
-  const [brcForm, setBrcForm] = useState({
-    registeredBusinessName: '',
-    tradeName: '',
-    address: '',
-    certificateNumber: '',
-    effectiveDate: '',
-    issuanceDate: ''
-  });
+  const [brcForm, setBrcForm] = useState({ registeredBusinessName: '', tradeName: '', address: '' });
+  const [paymentDraft, setPaymentDraft] = useState({ amount: '500', paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Zelle', reference: '', notes: '' });
 
   useEffect(() => {
     getApplicantSession().then(async (current) => {
@@ -247,10 +242,13 @@ export default function AdminPage() {
       setBrcForm({
         registeredBusinessName: app.brc_registered_name || app.registered_business_name || app.business_name_input || '',
         tradeName: brc.tradeName || '',
-        address: brc.address || '',
-        certificateNumber: brc.certificateNumber || '',
-        effectiveDate: brc.effectiveDate || '',
-        issuanceDate: brc.issuanceDate || ''
+        address: brc.address || ''
+      });
+      const latestPayment = [...(data.payments || [])].reverse()[0];
+      setPaymentDraft({
+        amount: String(latestPayment?.amount ?? app.payment_expected_amount ?? 500),
+        paymentDate: latestPayment?.payment_date || new Date().toISOString().slice(0,10),
+        paymentMethod: latestPayment?.payment_method || 'Zelle', reference: latestPayment?.reference || '', notes: latestPayment?.notes || ''
       });
     } catch (err) {
       setMessage(err.message);
@@ -644,6 +642,16 @@ export default function AdminPage() {
     }
   }
 
+  async function confirmPayment() {
+    setBusy(true); setMessage('Recording payment…');
+    try {
+      await saveAdminPayment(detail.application.id, { ...paymentDraft, status: 'paid' });
+      await refreshList(detail.application.id);
+      setMessage('Client payment recorded.');
+    } catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function markReadyForLdc() {
     setBusy(true);
     setMessage('');
@@ -752,7 +760,7 @@ export default function AdminPage() {
           </div>
 
           <div className="admin-card-grid">
-            <section className="admin-card">
+            <section className="admin-card admin-business-card">
               <div className="admin-card-head"><h3>Business</h3><span>{programLabel(detail.application.program_code)}</span></div>
               {editMode ? <div className="admin-edit-grid">
                 <div><label>Business name <span className="required-star">*</span></label><input value={applicationDraft.businessName} onChange={(e) => updateApplicationDraft('businessName', e.target.value)} /></div>
@@ -790,21 +798,22 @@ export default function AdminPage() {
               </dl>}
             </section>
 
+            <section className="admin-card payment-admin-card">
+              <div className="admin-card-head"><h3>Payment</h3><span>{detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'PAID' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'CLIENT SAYS PAID' : 'NOT RECORDED'}</span></div>
+              {detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <div className="admin-alert">Client says payment was sent. Check your bank before confirming.</div>}
+              <div className="admin-edit-grid"><div><label>Amount</label><input type="number" value={paymentDraft.amount} onChange={(e) => setPaymentDraft((old) => ({...old, amount:e.target.value}))} /></div><div><label>Date</label><input type="date" value={paymentDraft.paymentDate} onChange={(e) => setPaymentDraft((old) => ({...old, paymentDate:e.target.value}))} /></div><div><label>Method</label><input value={paymentDraft.paymentMethod} onChange={(e) => setPaymentDraft((old) => ({...old, paymentMethod:e.target.value}))} /></div><div><label>Reference</label><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft((old) => ({...old, reference:e.target.value}))} /></div><div className="admin-edit-wide"><label>Notes</label><input value={paymentDraft.notes} onChange={(e) => setPaymentDraft((old) => ({...old, notes:e.target.value}))} /></div></div>
+              <button className="success-button admin-full-button" onClick={confirmPayment} disabled={busy}>✓ Confirm payment received</button>
+            </section>
+
             <section className="admin-card brc-admin-card">
-              <div className="admin-card-head"><h3>BRC verification</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
+              <div className="admin-card-head"><h3>BRC</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
               <div className="lookup-values"><span>Name control <strong>{nameControl(detail.application.business_name_input)}</strong></span><span>NJ Tax ID <strong>{njTaxId(detail.application.ein)}</strong></span></div>
               <button className="primary admin-primary" onClick={runBrcLookup} disabled={busy}>{busy ? 'BRC check running…' : 'Look up and import BRC from NJ'}</button>
               <p className="admin-help">The COR Chrome extension opens New Jersey when you click above. Complete any NJ verification shown; the certificate details and PDF are added directly to this applicant’s UEZ file.</p>
 
               <div className="brc-result-form">
-                <label>Official registered business name</label><input value={brcForm.registeredBusinessName} onChange={(e) => setBrcForm((old) => ({ ...old, registeredBusinessName: e.target.value }))} />
-                <div className="admin-two-col">
-                  <div><label>Certificate #</label><input value={brcForm.certificateNumber} onChange={(e) => setBrcForm((old) => ({ ...old, certificateNumber: e.target.value }))} /></div>
-                  <div><label>Trade name</label><input value={brcForm.tradeName} onChange={(e) => setBrcForm((old) => ({ ...old, tradeName: e.target.value }))} /></div>
-                  <div><label>Effective date</label><input value={brcForm.effectiveDate} onChange={(e) => setBrcForm((old) => ({ ...old, effectiveDate: e.target.value }))} /></div>
-                  <div><label>Issue date</label><input value={brcForm.issuanceDate} onChange={(e) => setBrcForm((old) => ({ ...old, issuanceDate: e.target.value }))} /></div>
-                </div>
-                <label>BRC address</label><input value={brcForm.address} onChange={(e) => setBrcForm((old) => ({ ...old, address: e.target.value }))} />
+                <label>Registered business name</label><input value={brcForm.registeredBusinessName} onChange={(e) => setBrcForm((old) => ({ ...old, registeredBusinessName: e.target.value }))} />
+                <label>Business address</label><input value={brcForm.address} onChange={(e) => setBrcForm((old) => ({ ...old, address: e.target.value }))} />
               </div>
 
               <div className="admin-action-row">
@@ -815,7 +824,7 @@ export default function AdminPage() {
               {detail.application.status === 'waiting_for_brc' && <a className="secondary admin-email-button" href={emailApplicantHref}>Email applicant BRC instructions</a>}
             </section>
 
-            <section className="admin-card mynj-card">
+            <section className="admin-card mynj-card admin-account-card">
               <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{detail.application.pbs_status === 'account_created' || detail.application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span></div>
               {myNjCredentials ? <>
                 {myNjEditMode ? <div className="credential-edit-grid">
@@ -852,7 +861,7 @@ export default function AdminPage() {
               </>}
             </section>
 
-            <section className="admin-card tax-clearance-card">
+            <section className="admin-card tax-clearance-card admin-tax-card">
               <div className="admin-card-head"><h3>Tax clearance</h3><span>{detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? 'RECEIVED' : 'NOT RETRIEVED'}</span></div>
               {detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? <>
                 <p className="admin-help">The New Jersey tax-clearance letter is saved in this applicant’s Documents below.</p>
@@ -868,7 +877,7 @@ export default function AdminPage() {
               </>}
             </section>
 
-            <section className="admin-card admin-wide">
+            <section className="admin-card admin-wide admin-owners-card">
               <div className="admin-card-head"><h3>Owners</h3><span>{editMode ? ownerDrafts.length : detail.owners.length}</span></div>
               {editMode ? <>
                 <div className="owner-admin-list owner-edit-list">
@@ -910,7 +919,7 @@ export default function AdminPage() {
               </div>}
             </section>
 
-            <section className="admin-card">
+            <section className="admin-card admin-documents-card">
               <div className="admin-card-head"><h3>Documents</h3><span>{detail.documents.length}</span></div>
               <div className="admin-document-list">
                 {detail.documents.map((doc) => (
@@ -928,23 +937,16 @@ export default function AdminPage() {
               </div>
             </section>
 
-            <section className="admin-card">
-              <div className="admin-card-head"><h3>Process</h3><span>{statusLabel(detail.application.status)}</span></div>
+            <section className="admin-card admin-wide admin-operations-card">
+              <div className="admin-card-head"><h3>Requirements & Processing</h3><span>{statusLabel(detail.application.status)}</span></div>
               <div className="admin-process-list">
-                {[
-                  ['pbsAccountCreated', 'PBS Account Created', detail.application.pbs_account_created === true],
-                  ['uezApplicationSubmitted', 'UEZ Application Submitted', detail.application.uez_application_submitted === true],
-                  ['taxClearanceGood', 'Tax Clearance Good', detail.application.tax_clearance_good === true]
-                ].map(([key, label, value]) => <div className="admin-process-row" key={key}>
-                  <strong>{label}</strong>
-                  <div className="admin-process-buttons">
-                    <button className={value ? 'success-button' : 'secondary'} onClick={() => setProcessFlag(key, true)} disabled={busy}>Yes</button>
-                    <button className={!value ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag(key, false)} disabled={busy}>No</button>
-                  </div>
-                </div>)}
+                <div className="admin-process-row"><strong>PBS Account Created</strong><div className="admin-process-buttons"><button className={detail.application.pbs_account_created ? 'success-button' : 'secondary'} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></div>
+                <div className="admin-process-row"><strong>UEZ Application Status</strong><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></div>
+                <div className="admin-process-row"><strong>Tax Clearance Good</strong><div className="admin-process-buttons"><button className={detail.application.tax_clearance_good ? 'success-button' : 'secondary'} onClick={() => setProcessFlag('taxClearanceGood', true)} disabled={busy}>Yes</button><button className={!detail.application.tax_clearance_good ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag('taxClearanceGood', false)} disabled={busy}>No</button></div></div>
               </div>
 
-              <div className="admin-card-head admin-subhead"><h3>Required documents</h3><span>{REQUIRED_GRANT_DOCUMENTS.filter(([type]) => detail.documents.some((doc) => doc.document_type === type)).length}/5</span></div>
+              <div className="admin-card-head admin-subhead"><h3>Required documents</h3><span>{REQUIRED_GRANT_DOCUMENTS.filter(([type]) => type === 'formation' ? (detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) : detail.documents.some((doc) => doc.document_type === type)).length}/5</span></div>
+              {!detail.application.is_sole_proprietorship && <div className="formation-review-box"><strong>Formation review</strong><span>{detail.documents.some((doc) => doc.document_type === 'formation') ? 'Document uploaded' : 'Waiting for upload'}</span><div className="admin-process-buttons"><button className={detail.application.formation_review_status === 'approved' ? 'success-button' : 'secondary'} onClick={() => setProcessFlag('formationReviewStatus','approved')} disabled={busy || !detail.documents.some((doc) => doc.document_type === 'formation')}>Approve</button><button className={detail.application.formation_review_status === 'rejected' ? 'warning-button' : 'secondary'} onClick={() => setProcessFlag('formationReviewStatus','rejected')} disabled={busy || !detail.documents.some((doc) => doc.document_type === 'formation')}>Wrong document</button></div></div>}
               <div className="admin-checklist">
                 {REQUIRED_GRANT_DOCUMENTS.map(([type, label]) => {
                   const doc = detail.documents.find((item) => item.document_type === type);
@@ -953,6 +955,8 @@ export default function AdminPage() {
                   </button>;
                 })}
               </div>
+
+              <div className={`processing-readiness ${(detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? 'ready' : ''}`}><strong>{(detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') ? '✓ Ready for processing' : 'Not ready for processing'}</strong><small>Formation approved (or sole prop) · BRC · UEZ approval email · Tax clearance</small></div>
 
               <button
                 className="primary admin-full-button"
@@ -963,8 +967,8 @@ export default function AdminPage() {
               <button
                 className="primary admin-full-button"
                 onClick={runLakewoodGrantPortal}
-                disabled={busy || REQUIRED_GRANT_DOCUMENTS.some(([type]) => !detail.documents.some((doc) => doc.document_type === type)) || detail.application.status === 'applied'}
-              >{detail.application.status === 'applied' ? '✓ Applied' : REQUIRED_GRANT_DOCUMENTS.every(([type]) => detail.documents.some((doc) => doc.document_type === type)) ? 'Ready to Apply — Fill & submit Lakewood grant' : 'Lakewood grant — waiting for 5 documents'}</button>
+                disabled={busy || !((detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') && detail.documents.some((doc) => doc.document_type === 'ldc_application')) || detail.application.status === 'applied'}
+              >{detail.application.status === 'applied' ? '✓ Applied' : ((detail.application.is_sole_proprietorship || (detail.documents.some((doc) => doc.document_type === 'formation') && detail.application.formation_review_status === 'approved')) && detail.documents.some((doc) => doc.document_type === 'brc') && detail.documents.some((doc) => doc.document_type === 'uez_approval_email') && detail.documents.some((doc) => doc.document_type === 'tax_clearance') && detail.documents.some((doc) => doc.document_type === 'ldc_application')) ? 'Ready to Apply — Fill & submit Lakewood grant' : 'Lakewood grant — waiting for 5 documents'}</button>
               <div className="admin-timeline">
                 {[...detail.statusEvents].reverse().slice(0, 6).map((event) => <div key={event.id}><strong>{event.label || event.status}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>)}
               </div>

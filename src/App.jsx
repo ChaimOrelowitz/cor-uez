@@ -14,7 +14,9 @@ import {
   signOutApplicant,
   signUpApplicant,
   submitApplication,
-  uploadApplicationDocument
+  uploadApplicationDocument,
+  deleteDocument,
+  reportApplicantPayment
 } from './api';
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
@@ -27,20 +29,9 @@ function programNameFromCode(code) {
 }
 
 function statusLabel(status) {
-  const labels = {
-    intake_in_progress: 'Application in progress',
-    submitted_for_review: 'Submitted for COR review',
-    brc_confirmed: 'BRC confirmed',
-    waiting_for_brc: 'Waiting for your BRC',
-    brc_uploaded: 'BRC uploaded — COR review pending',
-    pbs_account_pending: 'COR is creating your PBS account',
-    waiting_for_uez_approval: 'Waiting for your UEZ approval email',
-    uez_approval_uploaded: 'UEZ approval email received',
-    ldc_submitted: 'Grant application submitted',
-    approved: 'Approved'
-  };
-  return labels[status] || String(status || 'In progress').replace(/_/g, ' ');
+  return status === 'applied' ? 'Applied' : 'In Progress';
 }
+
 
 function documentLabel(type) {
   const labels = {
@@ -54,16 +45,37 @@ function documentLabel(type) {
   return labels[type] || type;
 }
 
+function formatPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+}
+function formatSsn(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 9);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 5) return `${digits.slice(0,3)}-${digits.slice(3)}`;
+  return `${digits.slice(0,3)}-${digits.slice(3,5)}-${digits.slice(5)}`;
+}
+function formatDob(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0,2)}/${digits.slice(2)}`;
+  return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
+}
+
 function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [myNjCredentials, setMyNjCredentials] = useState(null);
   const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
+  const [paymentBusy, setPaymentBusy] = useState(false);
   const app = bundle.application;
   const needsBrc = ['not_found', 'missing', 'required'].includes(app.brc_status) || app.status === 'waiting_for_brc';
   const brcUploaded = app.brc_status === 'uploaded' || app.status === 'brc_uploaded';
   const brcConfirmed = app.brc_status === 'found' || app.status === 'brc_confirmed';
   const approvalUploaded = bundle.documents.some((doc) => doc.document_type === 'uez_approval_email');
+  const latestPayment = [...(bundle.payments || [])].reverse()[0] || null;
   const needsApprovalEmail = app.pbs_status === 'account_created' || app.status === 'waiting_for_uez_approval';
 
   useEffect(() => {
@@ -102,6 +114,16 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     } finally {
       setUploading(false);
     }
+  }
+
+  async function reportPaymentSent() {
+    setPaymentBusy(true); setMessage('');
+    try {
+      await reportApplicantPayment(app.id);
+      await onRefresh();
+      setMessage('Thanks. COR will verify the payment and update your account.');
+    } catch (err) { setMessage(err.message); }
+    finally { setPaymentBusy(false); }
   }
 
   async function openDocument(doc) {
@@ -186,6 +208,13 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
           </div>
         </section>
 
+        <section className="wizard-card portal-card">
+          <div className="portal-section-head"><h3>Payment</h3><span>$500</span></div>
+          {latestPayment?.status === 'paid' ? <div className="action-panel good-panel"><h3>✓ Client payment recorded</h3><p>COR confirmed that your payment was received.</p></div>
+            : latestPayment?.status === 'client_reported' ? <div className="action-panel"><h3>Payment reported</h3><p>You told COR the payment was sent. We are verifying it.</p></div>
+            : <><p className="muted">After you send the $500 payment, click below so COR knows to check for it.</p><button className="primary admin-full-button" onClick={reportPaymentSent} disabled={paymentBusy}>{paymentBusy ? 'Saving…' : 'I sent my payment'}</button></>}
+        </section>
+
         {myNjCredentials && <section className="wizard-card portal-card portal-wide mynj-card">
           <div className="portal-section-head"><h3>MyNJ / PBS account information</h3><span>✓</span></div>
           <div className="credential-grid applicant-credential-grid">
@@ -226,6 +255,7 @@ export default function App() {
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [addressMagicKey, setAddressMagicKey] = useState(null);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [documents, setDocuments] = useState([]);
   const [uploadingType, setUploadingType] = useState('');
   const [form, setForm] = useState({
@@ -260,6 +290,7 @@ export default function App() {
         if (!cancelled) {
           setAddressSuggestions(suggestions);
           setShowAddressSuggestions(suggestions.length > 0);
+          setActiveSuggestionIndex(-1);
         }
       } catch (_) {
         if (!cancelled) setAddressSuggestions([]);
@@ -324,10 +355,19 @@ export default function App() {
 
   function updateOwner(index, key) {
     return (e) => {
-      const value = e.target.value;
+      const raw = e.target.value;
+      const value = key === 'phone' ? formatPhone(raw) : key === 'ssn' ? formatSsn(raw) : key === 'dob' ? formatDob(raw) : raw;
       setForm((old) => ({ ...old, owners: old.owners.map((owner, i) => i === index ? { ...owner, [key]: value } : owner) }));
       setOwnerError('');
     };
+  }
+
+  function handleAddressKeyDown(e) {
+    if (!showAddressSuggestions || !addressSuggestions.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveSuggestionIndex((i) => Math.min(i + 1, addressSuggestions.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveSuggestionIndex((i) => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter' && activeSuggestionIndex >= 0) { e.preventDefault(); selectAddressSuggestion(addressSuggestions[activeSuggestionIndex]); }
+    else if (e.key === 'Escape') { setShowAddressSuggestions(false); setActiveSuggestionIndex(-1); }
   }
 
   function updateAddress(e) {
@@ -344,6 +384,7 @@ export default function App() {
     setAddressMagicKey(suggestion.magicKey || null);
     setAddressSuggestions([]);
     setShowAddressSuggestions(false);
+    setActiveSuggestionIndex(-1);
     setEligibility(null);
     setMessage('');
   }
@@ -568,6 +609,16 @@ export default function App() {
     }
   }
 
+  async function removeUploadedDocument(doc) {
+    setUploadingType('remove'); setMessage('');
+    try {
+      await deleteDocument(applicationId, doc.id);
+      const refreshed = await getApplication(applicationId);
+      setBundle(refreshed); setDocuments(refreshed.documents || []);
+    } catch (err) { setMessage(err.message); }
+    finally { setUploadingType(''); }
+  }
+
   function continueFromAddress() {
     if (!eligibility) return setMessage('Check your business address first.');
     if (eligibility.status === 'address_not_found') return setMessage('We could not confidently match that address. Please check it and try again.');
@@ -642,10 +693,10 @@ export default function App() {
         {step === 0 && <div className="content-block">
           <form onSubmit={runAddressCheck}>
             <div className="intro-copy"><h3>Find your business</h3><p>Start typing the registered business address and choose the matching New Jersey address.</p></div>
-            <label>Registered business address</label>
+            <label>Registered business address <span className="required-star">*</span></label>
             <div className="address-autocomplete">
-              <input value={form.address} onChange={updateAddress} onFocus={() => setShowAddressSuggestions(addressSuggestions.length > 0)} autoComplete="off" placeholder="Start typing an NJ business address" required />
-              {showAddressSuggestions && addressSuggestions.length > 0 && <div className="address-suggestions">{addressSuggestions.map((suggestion) => <button key={`${suggestion.text}-${suggestion.magicKey || ''}`} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectAddressSuggestion(suggestion)}>{suggestion.text}</button>)}</div>}
+              <input value={form.address} onChange={updateAddress} onFocus={() => setShowAddressSuggestions(addressSuggestions.length > 0)} onKeyDown={handleAddressKeyDown} autoComplete="off" placeholder="Start typing an NJ business address" required />
+              {showAddressSuggestions && addressSuggestions.length > 0 && <div className="address-suggestions">{addressSuggestions.map((suggestion, index) => <button key={`${suggestion.text}-${suggestion.magicKey || ''}`} className={index === activeSuggestionIndex ? 'active' : ''} type="button" onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setActiveSuggestionIndex(index)} onClick={() => selectAddressSuggestion(suggestion)}>{suggestion.text}</button>)}</div>}
             </div>
             <button className="primary" disabled={busy}>{busy ? 'Checking…' : 'Check my address'}</button>
           </form>
@@ -665,48 +716,49 @@ export default function App() {
           <p className="offer-description">Complete one intake. COR will review your documents, verify your New Jersey Business Registration Certificate after submission, enroll the business in the UEZ, and handle the available grant application when applicable. If a BRC is missing, we’ll tell you exactly what to do next.</p>
         </div>}
 
-        {step === 2 && <div className="content-block">
+        {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); (signInMode ? signInAndResume : createAccountAndCase)(); }}>
           <div className="intro-copy">
             <h3>{signInMode ? 'Sign in to your COR account' : 'Create your COR account'}</h3>
             <p>{signInMode ? 'Use your email and password to continue your application.' : 'Your account keeps your application, documents, and status in one place.'}</p>
           </div>
           <div className="field-grid">
-            <div><label>Email</label><input type="email" value={form.email} onChange={update('email')} /></div>
-            <div><label>Password</label><input type="password" value={form.password} onChange={update('password')} /></div>
+            <div><label>Email <span className="required-star">*</span></label><input type="email" value={form.email} onChange={update('email')} required /></div>
+            <div><label>Password <span className="required-star">*</span></label><input type="password" value={form.password} onChange={update('password')} required minLength="6" /></div>
           </div>
           <button type="button" className="text-button" onClick={() => { setSignInMode((old) => !old); setMessage(''); }}>{signInMode ? 'Need to create an account?' : 'Already have an account?'}</button>
-        </div>}
+          <button type="submit" className="primary account-submit" disabled={busy}>{busy ? 'Please wait…' : signInMode ? 'Sign in' : 'Create account'}</button>
+        </form>}
 
         {step === 3 && <div className="content-block">
           <div className="intro-copy"><h3>Tell us about the business</h3><p>We’ll use this information for your UEZ enrollment and available grant application.</p></div>
-          <label>Business name</label><input value={form.businessName} onChange={update('businessName')} />
-          <label>In a few words, what does the business do?</label><textarea value={form.businessDescription} onChange={update('businessDescription')} placeholder="Example: HVAC installation and repair" required />
+          <label>Business name <span className="required-star">*</span></label><input required value={form.businessName} onChange={update('businessName')} />
+          <label>In a few words, what does the business do? <span className="required-star">*</span></label><textarea value={form.businessDescription} onChange={update('businessDescription')} placeholder="Example: HVAC installation and repair" required />
           <div className="field-grid">
-            <div><label>EIN</label><input value={form.ein} onChange={update('ein')} placeholder="12-3456789" /></div>
-            <div><label>Year founded</label><input value={form.yearFounded} onChange={update('yearFounded')} /></div>
-            <div><label>Is this business a sole proprietorship?</label><select value={form.isSoleProprietorship} onChange={update('isSoleProprietorship')}><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+            <div><label>EIN <span className="required-star">*</span></label><input required value={form.ein} onChange={update('ein')} placeholder="12-3456789" /></div>
+            <div><label>Year founded <span className="required-star">*</span></label><input required value={form.yearFounded} onChange={update('yearFounded')} /></div>
+            <div><label>Is this business a sole proprietorship? <span className="required-star">*</span></label><select required value={form.isSoleProprietorship} onChange={update('isSoleProprietorship')}><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
             <div><label>Does the business have a DBA? <span className="required-star">*</span></label><select value={form.hasDba} onChange={(e) => setForm((old) => ({ ...old, hasDba: e.target.value, dbaName: e.target.value === 'yes' ? old.dbaName : '' }))} required><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
             {form.hasDba === 'yes' && <div><label>What is the DBA name? <span className="required-star">*</span></label><input value={form.dbaName} onChange={update('dbaName')} required /></div>}
-            <div><label>Full-time employees</label><input type="number" min="0" value={form.fullTimeEmployees} onChange={update('fullTimeEmployees')} placeholder="0" /></div>
-            <div><label>Part-time employees</label><input type="number" min="0" value={form.partTimeEmployees} onChange={update('partTimeEmployees')} placeholder="0" /></div>
+            <div><label>Full-time employees <span className="required-star">*</span></label><input required type="number" min="0" value={form.fullTimeEmployees} onChange={update('fullTimeEmployees')} placeholder="0" /></div>
+            <div><label>Part-time employees <span className="required-star">*</span></label><input required type="number" min="0" value={form.partTimeEmployees} onChange={update('partTimeEmployees')} placeholder="0" /></div>
           </div>
         </div>}
 
         {step === 4 && <div className="content-block">
           <div className="intro-copy"><h3>Business ownership</h3><p>List every owner of the business.</p></div>
           <div className="hint"><strong>Why we ask for DOB and SSN:</strong> The grant application requires this information for each business owner. COR collects it only so we can prepare and submit the required application information on your behalf.</div>
-          <div className="field-grid"><div><label>Is the primary owner the 100% owner?</label><select value={primaryIs100 ? 'yes' : 'no'} onChange={(e) => setPrimaryOwnershipMode(e.target.value)}><option value="yes">Yes</option><option value="no">No</option></select></div></div>
+          <div className="field-grid"><div><label>Is the primary owner the 100% owner? <span className="required-star">*</span></label><select required value={primaryIs100 ? 'yes' : 'no'} onChange={(e) => setPrimaryOwnershipMode(e.target.value)}><option value="yes">Yes</option><option value="no">No</option></select></div></div>
           {!primaryIs100 && <div className="ownership-summary"><span>Ownership accounted for</span><strong className={Math.abs(ownershipTotal - 100) < 0.001 ? 'ownership-ok' : ''}>{ownershipTotal}% / 100%</strong></div>}
           {form.owners.map((owner, index) => <div className="owner-card" key={index}>
             <div className="owner-card-head"><strong>{index === 0 ? 'Primary owner' : `Additional owner ${index + 1}`}</strong>{index > 0 && <button className="owner-remove" type="button" onClick={() => removeOwner(index)}>Remove</button>}</div>
             <div className="field-grid">
-              <div><label>First name</label><input value={owner.firstName} onChange={updateOwner(index, 'firstName')} /></div>
-              <div><label>Last name</label><input value={owner.lastName} onChange={updateOwner(index, 'lastName')} /></div>
-              <div><label>Email</label><input type="email" value={owner.email} onChange={updateOwner(index, 'email')} /></div>
-              <div><label>Best phone</label><input value={owner.phone} onChange={updateOwner(index, 'phone')} /></div>
-              <div><label>Date of birth</label><input type="date" value={owner.dob} onChange={updateOwner(index, 'dob')} /></div>
-              <div><label>SSN</label><input value={owner.ssn} onChange={updateOwner(index, 'ssn')} placeholder="•••-••-••••" /></div>
-              {!primaryIs100 && <div><label>Ownership percentage</label><input type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={updateOwner(index, 'ownershipPercent')} placeholder="50" /></div>}
+              <div><label>First name <span className="required-star">*</span></label><input required value={owner.firstName} onChange={updateOwner(index, 'firstName')} /></div>
+              <div><label>Last name <span className="required-star">*</span></label><input required value={owner.lastName} onChange={updateOwner(index, 'lastName')} /></div>
+              <div><label>Email <span className="required-star">*</span></label><input required type="email" value={owner.email} onChange={updateOwner(index, 'email')} /></div>
+              <div><label>Best phone <span className="required-star">*</span></label><input required inputMode="tel" value={owner.phone} onChange={updateOwner(index, 'phone')} /></div>
+              <div><label>Date of birth <span className="required-star">*</span></label><input required inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={updateOwner(index, 'dob')} /></div>
+              <div><label>SSN <span className="required-star">*</span></label><input required inputMode="numeric" value={owner.ssn} onChange={updateOwner(index, 'ssn')} placeholder="•••-••-••••" /></div>
+              {!primaryIs100 && <div><label>Ownership percentage <span className="required-star">*</span></label><input required type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={updateOwner(index, 'ownershipPercent')} /></div>}
             </div>
           </div>)}
           {!primaryIs100 && ownershipTotal < 100 && <button className="secondary add-owner" type="button" onClick={addOwner}>+ Add another owner</button>}
@@ -717,7 +769,7 @@ export default function App() {
           <div className="intro-copy"><h3>Documents</h3><p>Upload what you already have. COR will handle the BRC check after you submit.</p></div>
 
           <div className="upload-card">
-            <div><strong>Certificate of Formation / formation document</strong><p>{form.isSoleProprietorship === 'yes' ? 'Optional for a sole proprietorship.' : 'Required before submission.'}</p></div>
+            <div><strong>Certificate of Formation / formation document {form.isSoleProprietorship !== 'yes' && <span className="required-star">*</span>}</strong><p>{form.isSoleProprietorship === 'yes' ? 'Optional for a sole proprietorship.' : 'Required before submission.'}</p></div>
             <label className="secondary inline-button file-button">
               {uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload document'}
               <input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} />
@@ -742,7 +794,7 @@ export default function App() {
 
           {documents.length > 0 && <div className="uploaded-docs">
             <h4>Uploaded</h4>
-            {documents.map((doc) => <div className="uploaded-doc-row" key={doc.id}><span>{documentLabel(doc.document_type)}</span><strong>{doc.filename}</strong></div>)}
+            {documents.map((doc) => <div className="uploaded-doc-row" key={doc.id}><span>{documentLabel(doc.document_type)}</span><strong>{doc.filename}</strong><button type="button" className="owner-remove" onClick={() => removeUploadedDocument(doc)} disabled={Boolean(uploadingType)}>Remove</button></div>)}
           </div>}
         </div>}
 
@@ -763,7 +815,6 @@ export default function App() {
           <button className="secondary" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0 || busy}>Back</button>
           {step === 0 && <button className="primary compact" onClick={continueFromAddress} disabled={busy}>Continue</button>}
           {step === 1 && <button className="primary compact" onClick={() => { setMessage(''); setStep(2); }}>Continue</button>}
-          {step === 2 && <button className="primary compact" onClick={signInMode ? signInAndResume : createAccountAndCase} disabled={busy}>{busy ? 'Please wait…' : signInMode ? 'Sign in' : 'Create account'}</button>}
           {step === 3 && <button className="primary compact" onClick={saveBusinessStep} disabled={busy}>Continue</button>}
           {step === 4 && <button className="primary compact" onClick={saveOwnerStep} disabled={busy}>Continue</button>}
           {step === 5 && <button className="primary compact" onClick={continueFromDocuments} disabled={busy || Boolean(uploadingType)}>Continue</button>}
