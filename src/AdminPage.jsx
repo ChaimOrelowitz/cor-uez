@@ -34,6 +34,7 @@ function statusLabel(status) {
     waiting_for_uez_approval: 'Waiting for UEZ approval email',
     uez_approval_uploaded: 'UEZ approval email uploaded',
     ldc_submitted: 'LDC submitted',
+    grant_submitted: 'Grant submitted',
     approved: 'Approved'
   };
   return labels[status] || String(status || '').replace(/_/g, ' ');
@@ -325,7 +326,11 @@ export default function AdminPage() {
       generating_ldc_preview: 'Signature received. Generating the JotForm PDF preview…',
       waiting_for_final_submit: 'Review the generated application and click the final Submit button in JotForm.',
       downloading_ldc_pdf: 'Application submitted. Downloading JotForm’s signed PDF…',
-      uploading_ldc_application: 'Saving the signed LDC application PDF to this UEZ file…'
+      uploading_ldc_application: 'Saving the signed LDC application PDF to this UEZ file…',
+      opening_lakewood_portal: 'Opening the Lakewood UEZ grant application…',
+      filling_lakewood_portal: 'COR is filling the Lakewood grant application…',
+      attaching_lakewood_documents: 'COR is attaching the required grant documents…',
+      waiting_for_lakewood_submit: 'Grant packet ready. Review it and click the final Submit Form button.'
     };
     const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     return new Promise((resolve, reject) => {
@@ -422,6 +427,28 @@ export default function AdminPage() {
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The LDC application workflow did not finish.');
       await refreshList(detail.application.id);
       setMessage('LDC application submitted. The signed JotForm PDF is saved in this applicant’s Documents.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runLakewoodGrantPortal() {
+    setBusy(true);
+    setMessage('Starting the COR Chrome extension…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the Lakewood grant application.');
+
+      const outcome = await runExtensionWorkflow('lakewood_portal', {
+        applicationId: detail.application.id,
+        businessName: detail.application.registered_business_name || detail.application.business_name_input,
+        accessToken: currentSession.access_token
+      });
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The Lakewood grant workflow did not finish.');
+      await refreshList(detail.application.id);
+      setMessage('Lakewood UEZ Technology Grant submitted successfully.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -905,6 +932,12 @@ export default function AdminPage() {
                 disabled={busy || detail.application.pbs_status !== 'uez_approval_uploaded' || !detail.documents.some((doc) => doc.document_type === 'tax_clearance') || detail.documents.some((doc) => doc.document_type === 'ldc_application')}
               >{detail.documents.some((doc) => doc.document_type === 'ldc_application') ? '✓ LDC application submitted' : 'Fill & submit LDC application'}</button>
               <p className="admin-help">COR fills the Lakewood JotForm, pauses for the required signature, then saves JotForm’s completed signed PDF here after final submission.</p>
+              <button
+                className="primary admin-full-button"
+                onClick={runLakewoodGrantPortal}
+                disabled={busy || !detail.documents.some((doc) => doc.document_type === 'ldc_application') || !detail.documents.some((doc) => doc.document_type === 'formation') || !detail.documents.some((doc) => doc.document_type === 'tax_clearance') || !detail.documents.some((doc) => doc.document_type === 'uez_approval_email') || !detail.documents.some((doc) => doc.document_type === 'brc') || detail.application.status === 'grant_submitted'}
+              >{detail.application.status === 'grant_submitted' ? '✓ Grant application submitted' : 'Fill & submit Lakewood grant'}</button>
+              <p className="admin-help">COR fills the Lakewood grant form and attaches the signed LDC application, formation certificate, tax clearance, UEZ approval, and BRC. Review the completed packet before the final Submit Form click.</p>
               <div className="admin-timeline">
                 {[...detail.statusEvents].reverse().slice(0, 6).map((event) => <div key={event.id}><strong>{event.label || statusLabel(event.status)}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>)}
               </div>

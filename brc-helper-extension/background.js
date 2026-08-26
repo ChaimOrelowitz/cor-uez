@@ -79,7 +79,7 @@ async function uploadLdcPdf(job, base64, filename, submissionId) {
 async function startWorkflow(message, sender) {
   const senderOrigin = sender.tab?.url ? new URL(sender.tab.url).origin : '';
   if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
-  if (!['brc', 'tax_clearance', 'ldc_jotform'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
+  if (!['brc', 'tax_clearance', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
   const existing = await getJob();
   if (existing && Date.now() - (existing.createdAt || 0) < 30 * 60 * 1000 && existing.status !== 'complete' && existing.status !== 'error') {
     throw new Error('A COR document retrieval is already running. Finish it first.');
@@ -98,13 +98,15 @@ async function startWorkflow(message, sender) {
     ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp'
     : job.workflow === 'tax_clearance'
       ? 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp'
-      : 'https://form.jotform.com/241936732268060';
+      : job.workflow === 'ldc_jotform'
+        ? 'https://form.jotform.com/241936732268060'
+        : 'https://form.jotform.com/222748639284165';
   const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });
   const tab = popup.tabs?.[0];
   job = { ...job, tabId: tab?.id || null, windowId: popup.id };
-  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : 'opening_ldc_form';
+  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
   await notify(job, openingStatus);
-  if (tab?.id && job.workflow !== 'ldc_jotform') await injectNjHelper(tab.id).catch(() => {});
+  if (tab?.id && !['ldc_jotform', 'lakewood_portal'].includes(job.workflow)) await injectNjHelper(tab.id).catch(() => {});
   return { ok: true, jobId: job.id };
 }
 
@@ -123,6 +125,73 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (job.workflow !== 'ldc_jotform' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching LDC form workflow is active.' };
       const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
       return { ok: true, detail };
+    }
+    if (message?.type === 'COR_LAKEWOOD_GET_DATA') {
+      if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };
+      const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
+      const application = detail.application || {};
+      const owners = detail.owners || [];
+      const primary = owners[0] || {};
+      return {
+        ok: true,
+        detail: {
+          application: {
+            businessName: application.registered_business_name || application.brc_registered_name || application.business_name_input || '',
+            businessPhone: application.contact_phone || primary.phone || '',
+            businessEmail: application.contact_email || primary.email || '',
+            addressLine1: application.address_line1 || '',
+            addressLine2: application.address_line2 || '',
+            city: application.city || '',
+            state: application.state || 'NJ',
+            zip: application.zip || ''
+          },
+          contact: {
+            firstName: primary.firstName || '',
+            lastName: primary.lastName || '',
+            phone: primary.phone || application.contact_phone || '',
+            email: primary.email || application.contact_email || ''
+          },
+          documents: (detail.documents || []).map((doc) => ({
+            id: doc.id,
+            documentType: doc.document_type,
+            filename: doc.filename,
+            createdAt: doc.created_at
+          }))
+        }
+      };
+    }
+    if (message?.type === 'COR_LAKEWOOD_GET_DOCUMENT') {
+      if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };
+      const documentId = String(message.documentId || '');
+      const signed = await api(job, `/api/uez/applications/${job.applicationId}/documents/${encodeURIComponent(documentId)}/url`);
+      const response = await fetch(signed.url);
+      if (!response.ok) throw new Error(`COR could not download ${signed.filename || 'the document'}.`);
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      return {
+        ok: true,
+        base64: btoa(binary),
+        filename: signed.filename || 'document',
+        mimeType: response.headers.get('content-type') || 'application/octet-stream'
+      };
+    }
+    if (message?.type === 'COR_LAKEWOOD_SUBMITTED') {
+      if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };
+      await api(job, `/api/uez/admin/applications/${job.applicationId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'grant_submitted',
+          label: 'Grant application submitted',
+          message: 'The Lakewood UEZ Technology Grant application was submitted successfully.'
+        })
+      });
+      await notify(job, 'complete');
+      if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
+      await setJob(null);
+      return { ok: true };
     }
     if (message?.type === 'COR_NJ_STATUS') { await notify(job, message.status || job.status); return { ok: true }; }
     if (message?.type === 'COR_BRC_NOT_FOUND') {

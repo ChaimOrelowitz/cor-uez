@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "COR UEZ Document Helper",
-  "version": "1.2.2",
-  "description": "Runs BRC, tax-clearance, and Lakewood LDC application workflows from the COR UEZ admin app.",
+  "version": "1.3.0",
+  "description": "Runs BRC, tax-clearance, Lakewood LDC, and Lakewood grant-submission workflows from the COR UEZ admin app.",
   "permissions": [
     "storage",
     "tabs",
@@ -20,7 +20,8 @@
     "https://my.nj.gov/*",
     "https://form.jotform.com/*",
     "https://submit.jotform.com/*",
-    "https://*.jotform.com/*"
+    "https://*.jotform.com/*",
+    "https://www.uezapps.lakewoodnj.gov/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -58,6 +59,19 @@
       ],
       "js": [
         "jotform.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "https://form.jotform.com/222748639284165*",
+        "https://submit.jotform.com/*"
+      ],
+      "js": [
+        "grant-jotform.js"
       ],
       "run_at": "document_idle",
       "all_frames": true,
