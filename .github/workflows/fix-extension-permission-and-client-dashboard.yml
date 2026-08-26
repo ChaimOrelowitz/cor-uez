@@ -1,0 +1,29 @@
+name: Fix extension permission and client dashboard
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/fix_extension_permission_and_client_dashboard.py'
+      - '.github/workflows/fix-extension-permission-and-client-dashboard.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixes
+        run: python .github/scripts/fix_extension_permission_and_client_dashboard.py
+      - name: Verify frontend and extension
+        run: |
+          node --check brc-helper-extension/background.js
+          node --check brc-helper-extension/content.js
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "Chaim Orelowitz"
+          git config user.email "chaim@corsolutions.io"
+          git add src/App.jsx src/styles.css brc-helper-extension/manifest.json
+          git commit -m "Fix BRC capture permission and simplify client dashboard" || exit 0
+          git push
