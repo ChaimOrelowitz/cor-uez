@@ -1,0 +1,246 @@
+name: Fix LDC JotForm flow
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-ldc-jotform-flow.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch JotForm helper
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f'{label} anchor not found in {path}')
+              p.write_text(s.replace(old, new, 1))
+
+          # The address returned by COR eligibility is an Esri-style full address such as:
+          # "1101 W County Line Rd, Lakewood, New Jersey, 08701".
+          # JotForm's HAR proves it requires separate street/city/state/postal values.
+          replace_once('brc-helper-extension/jotform.js',
+          '''  function parseBusinessAddress(application) {
+            let line1 = String(application.address_line1 || '').trim();
+            let line2 = String(application.address_line2 || '').trim();
+            let city = String(application.city || '').trim();
+            let state = String(application.state || '').trim() || 'NJ';
+            let postal = String(application.zip || '').trim();
+
+            if ((!city || !postal) && line1) {
+              const candidates = [line1, application.brc_data?.address].filter(Boolean).map((value) => String(value).trim());
+              for (const candidate of candidates) {
+                const match = candidate.match(/^(.*?),\\s*([^,]+),\\s*([A-Z]{2})\\s+(\\d{5}(?:-\\d{4})?)$/i);
+                if (!match) continue;
+                line1 = match[1].trim();
+                city = city || match[2].trim();
+                state = state || match[3].trim().toUpperCase();
+                postal = postal || match[4].trim();
+                break;
+              }
+            }
+
+            return { line1, line2, city, state: state || 'NJ', postal };
+          }''',
+          '''  function normalizeState(value) {
+            const text = String(value || '').trim();
+            const normalized = text.toLowerCase().replace(/\\./g, '');
+            const states = {
+              'new jersey': 'NJ',
+              'nj': 'NJ'
+            };
+            return states[normalized] || (text.length === 2 ? text.toUpperCase() : text);
+          }
+
+          function parseBusinessAddress(application) {
+            let line1 = String(application.address_line1 || '').trim();
+            let line2 = String(application.address_line2 || '').trim();
+            let city = String(application.city || '').trim();
+            let state = normalizeState(application.state || '') || 'NJ';
+            let postal = String(application.zip || '').trim();
+
+            const parseCommaAddress = (candidate) => {
+              const parts = String(candidate || '').split(',').map((part) => part.trim()).filter(Boolean);
+              if (parts.length < 3) return false;
+
+              // COR / Esri format: Street, City, New Jersey, 08701
+              if (parts.length >= 4 && /^\\d{5}(?:-\\d{4})?$/.test(parts[parts.length - 1])) {
+                const parsedPostal = parts[parts.length - 1];
+                const parsedState = normalizeState(parts[parts.length - 2]);
+                const parsedCity = parts[parts.length - 3];
+                const parsedStreet = parts.slice(0, -3).join(', ');
+                if (parsedStreet && parsedCity) {
+                  line1 = parsedStreet;
+                  city = city || parsedCity;
+                  state = parsedState || state || 'NJ';
+                  postal = postal || parsedPostal;
+                  return true;
+                }
+              }
+
+              // Conventional format: Street, City, NJ 08701
+              const last = parts[parts.length - 1].match(/^(.+?)\\s+(\\d{5}(?:-\\d{4})?)$/);
+              if (parts.length >= 3 && last) {
+                const parsedStreet = parts.slice(0, -2).join(', ');
+                const parsedCity = parts[parts.length - 2];
+                if (parsedStreet && parsedCity) {
+                  line1 = parsedStreet;
+                  city = city || parsedCity;
+                  state = normalizeState(last[1]) || state || 'NJ';
+                  postal = postal || last[2];
+                  return true;
+                }
+              }
+              return false;
+            };
+
+            if ((!city || !postal) && line1) parseCommaAddress(line1);
+
+            // If the application ever already contains structured values, prefer them.
+            state = normalizeState(state) || 'NJ';
+            return { line1, line2, city, state, postal };
+          }''',
+          'business address parser')
+
+          # JotForm Sign renders its own "Start Filling" layer. It is not a normal
+          # form-pagebreak-next button. Detect and click it by its visible label.
+          replace_once('brc-helper-extension/jotform.js',
+          '''  function visibleNextButton() {
+            const page = visiblePage();
+            const candidates = page
+              ? [...page.querySelectorAll('.form-pagebreak-next, button.form-pagebreak-next, input.form-pagebreak-next')]
+              : [...document.querySelectorAll('.form-pagebreak-next, button.form-pagebreak-next, input.form-pagebreak-next')];
+            return candidates.find((button) => button.offsetParent !== null && !button.disabled) || null;
+          }
+''',
+          '''  function visibleNextButton() {
+            const page = visiblePage();
+            const candidates = page
+              ? [...page.querySelectorAll('.form-pagebreak-next, button.form-pagebreak-next, input.form-pagebreak-next')]
+              : [...document.querySelectorAll('.form-pagebreak-next, button.form-pagebreak-next, input.form-pagebreak-next')];
+            return candidates.find((button) => button.offsetParent !== null && !button.disabled) || null;
+          }
+
+          function visibleControlByText(labels) {
+            const wanted = labels.map((label) => label.toLowerCase());
+            const candidates = [...document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"]')];
+            return candidates.find((element) => {
+              if (element.disabled || element.offsetParent === null) return false;
+              const text = String(element.value || element.textContent || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+              return wanted.some((label) => text === label || text.includes(label));
+            }) || null;
+          }
+
+          async function clickStartFillingIfPresent(job) {
+            const button = visibleControlByText(['Start Filling']);
+            if (!button) return false;
+            const key = `corLdcStartFilling:${job.id}:${location.href}`;
+            if (!sessionStorage.getItem(key)) {
+              sessionStorage.setItem(key, '1');
+              notice('COR filled the application data. Opening the JotForm Sign fields…');
+              await notifyStatus('starting_ldc_sign');
+              setTimeout(() => button.click(), 150);
+            }
+            return true;
+          }
+''',
+          'Start Filling helper')
+
+          # Every matching JotForm frame checks for Start Filling first. The actual
+          # data form still only runs on form.jotform.com; submit.jotform.com handles PDF capture.
+          replace_once('brc-helper-extension/jotform.js',
+          '''    const host = location.hostname.toLowerCase();
+            if (host === 'submit.jotform.com') {
+              await captureCompletedPdf(job);
+              return;
+            }
+
+            if (host !== 'form.jotform.com') return;
+            if (!applicationData) applicationData = await getApplicationData(job);
+''',
+          '''    const host = location.hostname.toLowerCase();
+
+            if (await clickStartFillingIfPresent(job)) return;
+
+            if (host === 'submit.jotform.com') {
+              await captureCompletedPdf(job);
+              return;
+            }
+
+            if (host !== 'form.jotform.com') return;
+            if (!applicationData) applicationData = await getApplicationData(job);
+''',
+          'frame Start Filling flow')
+
+          # Run the helper in JotForm's embedded Sign frames as well as the top-level page.
+          replace_once('brc-helper-extension/manifest.json',
+          '''  "version": "1.2.0",
+  "description": "Runs BRC, tax-clearance, and Lakewood LDC application workflows from the COR UEZ admin app.",''',
+          '''  "version": "1.2.1",
+  "description": "Runs BRC, tax-clearance, and Lakewood LDC application workflows from the COR UEZ admin app.",''',
+          'extension version')
+
+          replace_once('brc-helper-extension/manifest.json',
+          '''    "https://form.jotform.com/*",
+    "https://submit.jotform.com/*"
+''',
+          '''    "https://form.jotform.com/*",
+    "https://submit.jotform.com/*",
+    "https://*.jotform.com/*"
+''',
+          'JotForm host permissions')
+
+          replace_once('brc-helper-extension/manifest.json',
+          '''      "matches": [
+        "https://form.jotform.com/*",
+        "https://submit.jotform.com/*"
+      ],
+      "js": ["jotform.js"],
+      "run_at": "document_idle"
+''',
+          '''      "matches": [
+        "https://*.jotform.com/*"
+      ],
+      "js": ["jotform.js"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+''',
+          'JotForm content script frames')
+
+          replace_once('src/AdminPage.jsx',
+          '''      waiting_for_signature: 'Application filled. Add the required signature in the JotForm popup.',
+      generating_ldc_preview: 'Signature received. Generating the JotForm PDF preview…',''',
+          '''      starting_ldc_sign: 'Opening JotForm Sign so the required signature can be added…',
+      waiting_for_signature: 'Application filled. Add the required signature in the JotForm popup.',
+      generating_ldc_preview: 'Signature received. Generating the JotForm PDF preview…',''',
+          'admin Start Filling status')
+
+          Path('.github/workflows/fix-ldc-jotform-flow.yml').unlink()
+          PY
+
+      - name: Verify fix
+        run: |
+          node --check brc-helper-extension/jotform.js
+          node --check brc-helper-extension/background.js
+          python -m json.tool brc-helper-extension/manifest.json >/dev/null
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Commit fix
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add brc-helper-extension/jotform.js brc-helper-extension/manifest.json src/AdminPage.jsx .github/workflows/fix-ldc-jotform-flow.yml
+          git commit -m "Fix JotForm Start Filling and address mapping"
+          git push
