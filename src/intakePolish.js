@@ -62,6 +62,29 @@ function makeInlineRadios(questionPrefix) {
   select.insertAdjacentElement('afterend', group);
 }
 
+function ensureUtilityLinks() {
+  const adminActions = document.querySelector('.admin-top-actions');
+  if (adminActions && !adminActions.querySelector('a[href="/admin/email-settings"]')) {
+    const link = document.createElement('a');
+    link.href = '/admin/email-settings';
+    link.className = 'cor-email-settings-link';
+    link.textContent = 'Email settings';
+    adminActions.prepend(link);
+  }
+
+  const loginCard = document.querySelector('.login-card');
+  if (loginCard && window.location.pathname === '/' && !loginCard.querySelector('a[href="/forgot-password"]')) {
+    const submit = loginCard.querySelector('.login-submit');
+    if (submit) {
+      const link = document.createElement('a');
+      link.href = '/forgot-password';
+      link.className = 'forgot-password-link';
+      link.textContent = 'Forgot password?';
+      submit.insertAdjacentElement('afterend', link);
+    }
+  }
+}
+
 function applyIntakePolish() {
   const ein = fieldByLabel('EIN');
   if (ein instanceof HTMLInputElement) {
@@ -87,6 +110,7 @@ function applyIntakePolish() {
 
   makeInlineRadios('Is this business a sole proprietorship?');
   makeInlineRadios('Does the business have a DBA?');
+  ensureUtilityLinks();
 }
 
 let queued = false;
