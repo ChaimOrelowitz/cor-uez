@@ -320,6 +320,7 @@ export default function AdminPage() {
       uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…',
       opening_ldc_form: 'Opening the Lakewood LDC incentive application…',
       filling_ldc_form: 'COR is filling the Lakewood LDC application…',
+      starting_ldc_sign: 'Opening JotForm Sign so the required signature can be added…',
       waiting_for_signature: 'Application filled. Add the required signature in the JotForm popup.',
       generating_ldc_preview: 'Signature received. Generating the JotForm PDF preview…',
       waiting_for_final_submit: 'Review the generated application and click the final Submit button in JotForm.',

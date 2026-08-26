@@ -121,27 +121,37 @@
     };
   }
 
+  function normalizeState(value) {
+    const text = String(value || '').trim();
+    const normalized = text.toLowerCase().replace(/\./g, '');
+    if (normalized === 'new jersey' || normalized === 'nj') return 'NJ';
+    return text.length === 2 ? text.toUpperCase() : text;
+  }
+
   function parseBusinessAddress(application) {
     let line1 = String(application.address_line1 || '').trim();
     let line2 = String(application.address_line2 || '').trim();
     let city = String(application.city || '').trim();
-    let state = String(application.state || '').trim() || 'NJ';
+    let state = normalizeState(application.state || '') || 'NJ';
     let postal = String(application.zip || '').trim();
 
-    if ((!city || !postal) && line1) {
-      const candidates = [line1, application.brc_data?.address].filter(Boolean).map((value) => String(value).trim());
-      for (const candidate of candidates) {
-        const match = candidate.match(/^(.*?),\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
-        if (!match) continue;
-        line1 = match[1].trim();
-        city = city || match[2].trim();
-        state = state || match[3].trim().toUpperCase();
-        postal = postal || match[4].trim();
-        break;
+    const parts = line1.split(',').map((part) => part.trim()).filter(Boolean);
+    if ((!city || !postal) && parts.length >= 4 && /^\d{5}(?:-\d{4})?$/.test(parts[parts.length - 1])) {
+      postal = postal || parts[parts.length - 1];
+      state = normalizeState(parts[parts.length - 2]) || state || 'NJ';
+      city = city || parts[parts.length - 3];
+      line1 = parts.slice(0, -3).join(', ');
+    } else if ((!city || !postal) && parts.length >= 3) {
+      const last = parts[parts.length - 1].match(/^(.+?)\s+(\d{5}(?:-\d{4})?)$/);
+      if (last) {
+        postal = postal || last[2];
+        state = normalizeState(last[1]) || state || 'NJ';
+        city = city || parts[parts.length - 2];
+        line1 = parts.slice(0, -2).join(', ');
       }
     }
 
-    return { line1, line2, city, state: state || 'NJ', postal };
+    return { line1, line2, city, state: normalizeState(state) || 'NJ', postal };
   }
 
   function setAddress(prefix, address) {
@@ -239,6 +249,29 @@
     return candidates.find((button) => button.offsetParent !== null && !button.disabled) || null;
   }
 
+  function visibleControlByText(labels) {
+    const wanted = labels.map((label) => label.toLowerCase());
+    const candidates = [...document.querySelectorAll('button, a, input[type="button"], input[type="submit"], [role="button"]')];
+    return candidates.find((element) => {
+      if (element.disabled || element.offsetParent === null) return false;
+      const text = String(element.value || element.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      return wanted.some((label) => text === label || text.includes(label));
+    }) || null;
+  }
+
+  async function clickStartFillingIfPresent(job) {
+    const button = visibleControlByText(['Start Filling']);
+    if (!button) return false;
+    const key = `corLdcStartFilling:${job.id}:${location.href}`;
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, '1');
+      notice('COR filled the application data. Opening the JotForm Sign fields…');
+      await notifyStatus('starting_ldc_sign');
+      setTimeout(() => button.click(), 150);
+    }
+    return true;
+  }
+
   async function getApplicationData(job) {
     const response = await send({ type: 'COR_JOTFORM_GET_DATA', jobId: job.id });
     if (!response?.ok || !response.detail) throw new Error(response?.error || 'COR could not load this UEZ application.');
@@ -302,6 +335,9 @@
     if (!job || job.workflow !== 'ldc_jotform') return;
 
     const host = location.hostname.toLowerCase();
+
+    if (await clickStartFillingIfPresent(job)) return;
+
     if (host === 'submit.jotform.com') {
       await captureCompletedPdf(job);
       return;
