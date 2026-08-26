@@ -10,8 +10,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Require owner home address
-        run: python .github/scripts/require_owner_address.py
+      - name: Require all signup fields
+        run: python .github/scripts/require_all_signup_fields.py
       - name: Verify backend and frontend
         run: |
           node --check backend/routes/uez.js
@@ -21,10 +21,10 @@ jobs:
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx src/workflow.css backend/routes/uez.js
+          git add src/App.jsx backend/routes/uez.js
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Require owner home address"
+            git commit -m "Require all signup fields"
             git push
           fi
