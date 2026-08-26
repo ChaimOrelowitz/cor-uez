@@ -68,6 +68,19 @@ export async function signOutApplicant() {
   if (error) throw error;
 }
 
+export async function requestPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(String(email || '').trim(), {
+    redirectTo: `${window.location.origin}/reset-password`
+  });
+  if (error) throw error;
+}
+
+export async function updateApplicantPassword(password) {
+  const { data, error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+  return data;
+}
+
 export function whoAmI() {
   return request('/api/uez/whoami');
 }
@@ -210,5 +223,23 @@ export function reviewAdminDocument(applicationId, documentId, decision) {
   return request(`/api/uez/admin/applications/${applicationId}/documents/${documentId}/review`, {
     method: 'POST',
     body: JSON.stringify({ decision })
+  });
+}
+
+export function getAdminEmailTemplates() {
+  return request('/api/uez/email/admin/templates');
+}
+
+export function updateAdminEmailTemplate(templateKey, payload) {
+  return request(`/api/uez/email/admin/templates/${encodeURIComponent(templateKey)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendAdminApplicationEmail(applicationId, templateKey, extra = {}) {
+  return request(`/api/uez/email/admin/applications/${applicationId}/send/${encodeURIComponent(templateKey)}`, {
+    method: 'POST',
+    body: JSON.stringify({ extra })
   });
 }
