@@ -1,0 +1,27 @@
+name: Fix BRC status event scope
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/fix_brc_status_event_scope.py'
+      - '.github/workflows/fix-brc-status-event-scope.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch BRC route
+        run: python .github/scripts/fix_brc_status_event_scope.py
+      - name: Verify
+        run: |
+          node --check backend/routes/uezBrc.js
+          grep -q "async function addStatusEvent" backend/routes/uezBrc.js
+      - name: Commit
+        run: |
+          git config user.name "COR UEZ Bot"
+          git config user.email "chaim@corsolutions.io"
+          git add backend/routes/uezBrc.js
+          git commit -m "Fix BRC status event helper scope" || exit 0
+          git push
