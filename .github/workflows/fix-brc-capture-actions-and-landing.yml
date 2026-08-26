@@ -28,3 +28,4 @@ jobs:
           git add src/App.jsx src/styles.css backend/routes/uezBrc.js brc-helper-extension/content.js brc-helper-extension/background.js brc-helper-extension/manifest.json
           git commit -m "Capture BRC faithfully and tighten applicant landing" || exit 0
           git push
+# trigger
