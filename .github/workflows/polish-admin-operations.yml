@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply launch safety sole-prop and demo flow
-        run: python .github/scripts/launch_safety_soleprop_demo.py
+        run: python .github/scripts/run_launch_safety_v2.py
       - name: Verify frontend
         run: |
           npm install --ignore-scripts
