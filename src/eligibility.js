@@ -8,6 +8,24 @@ function titleCase(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function normalizedStreetAddress(candidate) {
+  const attrs = candidate?.attributes || {};
+  const addressLine1 = String(attrs.Address || attrs.StAddr || attrs.Street || '').trim();
+  const city = String(attrs.City || attrs.Municipality || '').trim();
+  const rawState = String(attrs.RegionAbbr || attrs.Region || 'NJ').trim();
+  const state = /^new jersey$/i.test(rawState) ? 'NJ' : rawState;
+  const zip = String(attrs.Postal || attrs.Zip || '').trim().slice(0, 10);
+
+  // ArcGIS POI matches can put the business name in candidate.address even though
+  // the candidate has a perfectly good street address in its attributes. Prefer
+  // those physical-address fields; fall back only when the geocoder did not return them.
+  const matchedAddress = addressLine1
+    ? [addressLine1, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+    : String(candidate?.address || '').trim();
+
+  return { matchedAddress, addressLine1: addressLine1 || matchedAddress, city, state, zip };
+}
+
 function parseActive(value) {
   if (value == null || value === '') return true;
   if (typeof value === 'boolean') return value;
@@ -136,10 +154,12 @@ export async function checkUezEligibility(address, magicKey = null) {
 
   const location = candidate.location;
   const zoneResult = await findUezZone(location);
-  const matchedAddress = candidate.address;
+  const normalizedAddress = normalizedStreetAddress(candidate);
+  const matchedAddress = normalizedAddress.matchedAddress;
 
   if (!zoneResult) return {
     status: 'not_in_uez', address, matchedAddress,
+    addressLine1: normalizedAddress.addressLine1, city: normalizedAddress.city, state: normalizedAddress.state, zip: normalizedAddress.zip,
     latitude: location.y, longitude: location.x,
     zoneGeometry: null,
     zoneIdentifier: null, zoneName: null,
@@ -160,6 +180,10 @@ export async function checkUezEligibility(address, magicKey = null) {
     status: active ? 'in_uez' : 'inactive_uez',
     address,
     matchedAddress,
+    addressLine1: normalizedAddress.addressLine1,
+    city: normalizedAddress.city,
+    state: normalizedAddress.state,
+    zip: normalizedAddress.zip,
     latitude: location.y,
     longitude: location.x,
     zoneGeometry: zoneResult.geometry,

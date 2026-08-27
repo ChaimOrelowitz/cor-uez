@@ -452,6 +452,10 @@ export default function App() {
       const app = await createApplication({
         contactEmail: form.email.trim(),
         address: eligibility?.matchedAddress || form.address,
+        addressLine1: eligibility?.addressLine1 || eligibility?.matchedAddress || form.address,
+        city: eligibility?.city || null,
+        state: eligibility?.state || 'NJ',
+        zip: eligibility?.zip || null,
         zoneIdentifier: eligibility?.zoneIdentifier,
         zoneName: eligibility?.zoneName,
         zoneEligible: eligibility?.eligible === true,
@@ -507,6 +511,10 @@ export default function App() {
           const app = await createApplication({
             contactEmail: pending?.email || form.email.trim(),
             address: pendingAddress,
+            addressLine1: pendingEligibility?.addressLine1 || pendingAddress,
+            city: pendingEligibility?.city || null,
+            state: pendingEligibility?.state || 'NJ',
+            zip: pendingEligibility?.zip || null,
             zoneIdentifier: pendingEligibility?.zoneIdentifier,
             zoneName: pendingEligibility?.zoneName,
             zoneEligible: pendingEligibility?.eligible === true,

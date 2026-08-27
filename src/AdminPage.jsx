@@ -978,7 +978,7 @@ export default function AdminPage() {
                     const formation = docFor(detail, 'formation');
                     const sole = detail.application.is_sole_proprietorship;
                     const review = detail.application.formation_review_status || 'not_reviewed';
-                    return <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : '○'}</b><span>Certificate of Formation</span></button><small>{sole && !formation ? 'Not required (sole prop)' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
+                    return <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : formation ? 'review-pending' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : formation ? '!' : '○'}</b><span>Certificate of Formation</span></button><small>{sole && !formation ? 'Not required (sole prop)' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
                   })()}
                   {(() => {
                     const approval = docFor(detail, 'uez_approval_email');
