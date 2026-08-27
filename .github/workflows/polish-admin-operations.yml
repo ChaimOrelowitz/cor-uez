@@ -10,23 +10,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Fix tax capture, retry, and manual attachment
-        run: python .github/scripts/fix_tax_capture_manual_attachment_and_retry.py
-      - name: Verify frontend, backend, and extension
+      - name: Rebuild admin left work queue
+        run: python .github/scripts/rebuild_admin_left_work_queue.py
+      - name: Verify frontend
         run: |
-          node --check backend/routes/uezEmail.js
-          node --check brc-helper-extension/content.js
-          node --check brc-helper-extension/background.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add backend/routes/uezEmail.js brc-helper-extension/content.js brc-helper-extension/manifest.json
+          git add src/AdminPage.jsx src/workflow.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Fix tax clearance capture and email attachment"
+            git commit -m "Turn admin sidebar into work queue"
             git push
           fi
