@@ -777,13 +777,12 @@ export default function App() {
           <p>COR Solutions provides a start-to-finish application service for eligible Lakewood businesses. Start with a quick address check, complete one intake, and use your account to follow the application as it moves forward.</p>
           <div className="service-intro-actions">
             <button className="primary" onClick={() => { setShowServiceIntro(false); setMessage(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Check my business address</button>
-            <a className="secondary service-link-button" href="tel:+17329300739">Call 732-930-0739</a>
           </div>
         </section>
 
         <section className="service-explainer-grid" aria-label="About the service">
-          <article><span>WHAT</span><h3>UEZ enrollment + grant application</h3><p>One intake for your New Jersey UEZ enrollment and the available Lakewood grant application.</p></article>
           <article><span>WHO</span><h3>Eligible Lakewood businesses</h3><p>The first step checks whether your business location is inside the UEZ. If it is, you can continue directly into the application.</p></article>
+          <article><span>WHAT</span><h3>UEZ enrollment + grant application</h3><p>One intake for your New Jersey UEZ enrollment and the available Lakewood grant application.</p></article>
           <article><span>HOW</span><h3>Complete one online intake</h3><p>Provide the requested business and ownership information, upload your Certificate of Formation when applicable, and respond to any action items that appear in your account.</p></article>
           <article><span>COST</span><h3>$500 service fee</h3><p>The $500 service fee covers UEZ signup and the grant application service. If the LDC rejects the application, the fee is refunded; after LDC approval it is non-refundable.</p></article>
         </section>
@@ -793,19 +792,18 @@ export default function App() {
           <div className="service-faq-list">
             <details><summary>What is the UEZ?</summary><p>New Jersey's Urban Enterprise Zone program provides benefits to qualifying businesses located within designated UEZ areas. This service starts by checking your business location against the UEZ map.</p></details>
             <details><summary>What does COR Solutions do?</summary><p>COR Solutions collects the information needed for the process, prepares the UEZ enrollment and applicable Lakewood grant application, and gives you an online account where you can see updates and anything that still needs your attention.</p></details>
-            <details><summary>What will I need to provide?</summary><p>You will enter basic business and owner information. If the business is not a sole proprietorship, you will also upload its Certificate of Formation. If another item is needed later, it will appear clearly in your account.</p></details>
+            <details><summary>What will I need to provide?</summary><p>You will enter basic business and owner information, as well as the Certificate of Formation. If another item is needed later, it will appear clearly in your account.</p></details>
             <details><summary>How do I know if my business is eligible?</summary><p>Click “Check my business address.” The next page checks the location against the UEZ map before you create an account or complete the full intake.</p></details>
-            <details><summary>Is a grant guaranteed?</summary><p>No. Eligibility and final approval are determined by the applicable government and grant agencies. COR Solutions provides the application service but cannot guarantee an approval or award.</p></details>
             <details><summary>What happens after I submit?</summary><p>You can log back into your COR account at any time. Your activity tracker shows the application moving forward, and any item you need to provide or replace will appear as an action in your account.</p></details>
           </div>
         </section>
 
         <section className="service-contact-card">
-          <div><span className="eyebrow">QUESTIONS?</span><h2>Talk to Chaim before you apply.</h2><p>Call, text, or WhatsApp and ask anything you need to know about the service or the UEZ process.</p></div>
+          <div><span className="eyebrow">QUESTIONS?</span><h2>Talk to our team before you apply.</h2><p>Call, text, or WhatsApp and ask anything you need to know about the service or the UEZ process.</p></div>
           <div className="service-contact-actions">
             <a href="tel:+17329300739">Call</a>
             <a href="sms:+17329300739">Text</a>
-            <a href="https://wa.me/17329300739" target="_blank" rel="noreferrer">WhatsApp</a>
+            <a href="https://wa.me/17329300739?text=Hi%2C%20I%20am%20interested%20in%20signing%20up%20for%20the%20tech%20grant." target="_blank" rel="noreferrer">WhatsApp</a>
           </div>
           <strong className="service-phone">732-930-0739</strong>
         </section>
@@ -822,6 +820,7 @@ export default function App() {
     </header>
 
     <main className={`page-wrap intake-page ${step === 0 ? 'intake-first-screen' : ''}`}>
+      {!session && step === 0 && <button type="button" className="secondary intake-back-to-intro" onClick={() => { setShowServiceIntro(true); setMessage(''); setEligibility(null); setAddressSuggestions([]); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>← Back</button>}
       <section className="hero">
         <div className="eyebrow">NEW JERSEY UEZ SERVICES</div>
         <h1>We handle your UEZ signup and grant application.</h1>
