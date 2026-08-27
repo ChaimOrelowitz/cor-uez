@@ -104,7 +104,7 @@ async function uploadLdcPdf(job, base64, filename, submissionId) {
 async function startWorkflow(message, sender) {
   const senderOrigin = sender.tab?.url ? new URL(sender.tab.url).origin : '';
   if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
-  if (!['brc', 'tax_clearance', 'pbs_signup', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
+  if (!['brc', 'tax_clearance', 'pbs_signup', 'pbs_login', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
   const existing = await getJob();
   if (existing && Date.now() - (existing.createdAt || 0) < 30 * 60 * 1000 && existing.status !== 'complete' && existing.status !== 'error') {
     throw new Error('A COR document retrieval is already running. Finish it first.');
@@ -113,7 +113,7 @@ async function startWorkflow(message, sender) {
 
   let job = { id: String(message.requestId || crypto.randomUUID()), workflow: message.workflow, applicationId: String(message.payload?.applicationId || ''), businessName: String(message.payload?.businessName || ''), ein: String(message.payload?.ein || ''), accessToken: String(message.payload?.accessToken || ''), status: 'starting', createdAt: Date.now() };
   if (!job.applicationId || !job.businessName || !job.accessToken) throw new Error('The selected UEZ application is incomplete.');
-  if (job.workflow === 'tax_clearance') {
+  if (job.workflow === 'tax_clearance' || job.workflow === 'pbs_login') {
     const result = await api(job, `/api/uez/applications/${job.applicationId}/credentials/mynj`);
     if (!result.exists || !result.credentials) throw new Error('MyNJ / PBS login information is missing.');
     job.credentials = result.credentials;
@@ -121,7 +121,7 @@ async function startWorkflow(message, sender) {
   await setJob(job);
   const url = job.workflow === 'brc'
     ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp'
-    : job.workflow === 'tax_clearance'
+    : job.workflow === 'tax_clearance' || job.workflow === 'pbs_login'
       ? 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp'
       : job.workflow === 'pbs_signup'
         ? 'https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/'
@@ -131,7 +131,7 @@ async function startWorkflow(message, sender) {
   const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });
   const tab = popup.tabs?.[0];
   job = { ...job, tabId: tab?.id || null, windowId: popup.id };
-  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : job.workflow === 'pbs_signup' ? 'opening_pbs_signup' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
+  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : (job.workflow === 'tax_clearance' || job.workflow === 'pbs_login') ? 'opening_pbs' : job.workflow === 'pbs_signup' ? 'opening_pbs_signup' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
   await notify(job, openingStatus);
   if (tab?.id && !['ldc_jotform', 'lakewood_portal'].includes(job.workflow)) await injectNjHelper(tab.id).catch(() => {});
   return { ok: true, jobId: job.id };
@@ -246,6 +246,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       await notify(job, 'complete');
       if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
+      await setJob(null);
+      return { ok: true };
+    }
+    if (message?.type === 'COR_PBS_LOGIN_COMPLETE') {
+      if (job.workflow !== 'pbs_login' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching PBS login workflow is active.' };
+      await notify(job, 'complete');
       await setJob(null);
       return { ok: true };
     }

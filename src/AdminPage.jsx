@@ -563,6 +563,29 @@ export default function AdminPage() {
     }
   }
 
+  async function runPbsLogin() {
+    setBusy(true);
+    setMessage('Starting the COR Chrome extension…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before opening PBS.');
+      if (!myNjCredentials) throw new Error('MyNJ / PBS login information is missing.');
+
+      const outcome = await runExtensionWorkflow('pbs_login', {
+        applicationId: detail.application.id,
+        businessName: detail.application.registered_business_name || detail.application.brc_registered_name || detail.application.business_name_input,
+        ein: detail.application.ein,
+        accessToken: currentSession.access_token
+      });
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'PBS login did not finish.');
+      setMessage('PBS is open and signed in.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function runTaxClearance() {
     setBusy(true);
     setMessage('Starting the COR Chrome extension…');
@@ -1004,7 +1027,8 @@ export default function AdminPage() {
               <div className="ops-panel actions-panel">
                 <div className="ops-action-grid clean-action-grid">
                   <button className={`ops-action ${docFor(detail, 'brc') ? 'success-action' : 'primary'}`} onClick={runBrcLookup} disabled={busy}><span>FETCH</span><strong>BRC</strong></button>
-                  <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
+                  <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
+                  <button className="ops-action primary" onClick={runPbsLogin} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
                   <button className={`ops-action ${docFor(detail, 'tax_clearance') ? 'success-action' : 'primary'}`} onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>FETCH</span><strong>TAX CLEARANCE</strong></button>
                   <button className={`ops-action ${docFor(detail, 'ldc_application') ? 'success-action' : 'primary'}`} onClick={runLdcJotform} disabled={busy}><span>FILL OUT</span><strong>LDC APP</strong></button>
                   <button className={`ops-action ${detail.application.status === 'applied' ? 'success-action' : packetReady(detail) ? 'ready-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>SUBMIT</span><strong>GRANT APP</strong></button>

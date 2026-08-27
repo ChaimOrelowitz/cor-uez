@@ -254,6 +254,65 @@
       return;
     }
 
+    if (job.workflow === 'pbs_login') {
+      const usernameInput = document.querySelector('input[name="IDToken1"]');
+      const passwordInput = document.querySelector('input[name="IDToken2"]');
+
+      if (usernameInput && passwordInput && job.credentials) {
+        const loginKey = `corPbsLogin:${job.id}`;
+        if (!sessionStorage.getItem(loginKey)) {
+          sessionStorage.setItem(loginKey, '1');
+          setValue(usernameInput, job.credentials.username || '');
+          setValue(passwordInput, job.credentials.password || '');
+          notice('COR filled the stored MyNJ login and is signing in to PBS.');
+          await send({ type: 'COR_NJ_STATUS', status: 'signing_in_to_pbs' });
+          const submitBtn = document.querySelector('input[name="Login.Submit"], input[type="submit"], button[type="submit"]');
+          submitBtn?.click();
+        }
+        return;
+      }
+
+      if (usernameInput && !passwordInput && job.credentials?.challengeAnswer && /challenge|security question|secret question/i.test(text)) {
+        const challengeKey = `corPbsLoginChallenge:${job.id}`;
+        if (!sessionStorage.getItem(challengeKey)) {
+          sessionStorage.setItem(challengeKey, '1');
+          setValue(usernameInput, job.credentials.challengeAnswer);
+          notice('COR filled the MyNJ challenge answer and is continuing.');
+          await send({ type: 'COR_NJ_STATUS', status: 'signing_in_to_pbs' });
+          const submitBtn = document.querySelector('input[type="submit"], button[type="submit"]');
+          submitBtn?.click();
+        }
+        return;
+      }
+
+      const pbsLoginLink = document.querySelector('a[href*="my.nj.gov/aui/Login"]');
+      if (pbsLoginLink) {
+        const linkKey = `corPbsLoginLink:${job.id}`;
+        if (!sessionStorage.getItem(linkKey)) {
+          sessionStorage.setItem(linkKey, '1');
+          notice('COR is opening the MyNJ login.');
+          await send({ type: 'COR_NJ_STATUS', status: 'opening_mynj_login' });
+          navigateLink(pbsLoginLink);
+        }
+        return;
+      }
+
+      const onPbs = /NJ_PREMIER_EBIZ/i.test(location.pathname) || /Premier Business Services/i.test(text);
+      const signedInSignal = [...document.querySelectorAll('a')].some((link) =>
+        /Tax & Revenue Center|Add a Business|Manage Business|Sign Out|Log Out/i.test(link.textContent || '')
+      );
+      if (onPbs && signedInSignal) {
+        sent = true;
+        notice('PBS is open and signed in. COR stopped here.');
+        await send({ type: 'COR_PBS_LOGIN_COMPLETE', jobId: job.id });
+        return;
+      }
+
+      notice('COR is waiting for PBS to finish signing in.');
+      await send({ type: 'COR_NJ_STATUS', status: 'waiting_for_pbs_page' });
+      return;
+    }
+
     if (job.workflow === 'tax_clearance') {
       const usernameInput = document.querySelector('input[name="IDToken1"]');
       const passwordInput = document.querySelector('input[name="IDToken2"]');
