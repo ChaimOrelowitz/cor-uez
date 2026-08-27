@@ -10,21 +10,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Fix tax clearance state and client recheck
-        run: python .github/scripts/fix_tax_clearance_state_and_client_recheck.py
-      - name: Verify frontend and backend
+      - name: Separate submitted applications from waiting
+        run: python .github/scripts/separate_submitted_queue.py
+      - name: Verify frontend
         run: |
-          node --check backend/routes/uez.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add backend/routes/uez.js src/api.js src/App.jsx src/AdminPage.jsx src/workflow.css
+          git add src/AdminPage.jsx src/workflow.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Fix tax clearance workflow state"
+            git commit -m "Separate submitted applications from waiting"
             git push
           fi
