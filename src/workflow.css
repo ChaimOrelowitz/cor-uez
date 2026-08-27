@@ -83,7 +83,7 @@
 .admin-sidebar-head > div { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .admin-sidebar-head span { color: #8b91a2; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
 .admin-sidebar-head input { padding: 11px 12px; border-radius: 10px; }
-.admin-filter-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; padding: 0 12px 12px; border-bottom: 1px solid #edf0f5; }
+.admin-filter-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 5px; padding: 0 12px 12px; border-bottom: 1px solid #edf0f5; }
 .admin-filter-row button { border: 0; border-radius: 10px; padding: 8px 4px; background: #f6f7fa; font-size: 10px; color: #73798b; font-weight: 700; }
 .admin-filter-row button span { display: block; margin-top: 3px; font-size: 11px; }
 .admin-filter-row button.active { background: #676fe0; color: white; }
@@ -667,3 +667,7 @@
 
 /* Tax clearance tri-state and client recheck */
 .tax-tristate button.active-warn{background:#fff0d8!important;color:#9d6115!important;border-color:#e9c982!important}.tax-recheck-note{display:block;margin-top:3px;color:#a66718;font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.04em}.tax-issue-client-panel .status-pill{margin-top:12px}.tax-issue-client-panel button{margin-top:14px}
+
+.queue-next-action.submitted { color: #357a52; }
+.queue-next-action.submitted i { background: #56a66f; }
+.queue-submitted { background: #fbfdfb; }

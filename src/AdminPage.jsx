@@ -136,7 +136,7 @@ function adminQueueInfo(app) {
   if (types.has('formation') && formationReview === 'not_reviewed') return { bucket: 'needs', action: 'Review Formation', tone: 'danger', stage, rank: 3 };
   if (types.has('uez_approval_email') && approvalReview === 'not_reviewed') return { bucket: 'needs', action: 'Review UEZ approval', tone: 'danger', stage, rank: 4 };
 
-  if (submittedGrant) return { bucket: 'waiting', action: 'Grant submitted', tone: 'quiet', stage, rank: 90 };
+  if (submittedGrant) return { bucket: 'submitted', action: 'Grant submitted', tone: 'submitted', stage, rank: 0 };
   if (!app.submitted_at) return { bucket: 'waiting', action: 'Applicant still completing signup', tone: 'quiet', stage, rank: 80 };
 
   // Process sequence after the applicant submits.
@@ -980,7 +980,7 @@ export default function AdminPage() {
       .sort((a, b) => {
         const qa = adminQueueInfo(a);
         const qb = adminQueueInfo(b);
-        const bucketPriority = { needs: 0, ready: 1, waiting: 2 };
+        const bucketPriority = { needs: 0, ready: 1, waiting: 2, submitted: 3 };
         const bucketDelta = (bucketPriority[qa.bucket] ?? 9) - (bucketPriority[qb.bucket] ?? 9);
         if (bucketDelta) return bucketDelta;
         if (qa.rank !== qb.rank) return qa.rank - qb.rank;
@@ -994,6 +994,7 @@ export default function AdminPage() {
     needs: applications.filter((app) => adminQueueInfo(app).bucket === 'needs').length,
     waiting: applications.filter((app) => adminQueueInfo(app).bucket === 'waiting').length,
     ready: applications.filter((app) => adminQueueInfo(app).bucket === 'ready').length,
+    submitted: applications.filter((app) => adminQueueInfo(app).bucket === 'submitted').length,
     all: applications.length
   }), [applications]);
 
@@ -1051,6 +1052,7 @@ export default function AdminPage() {
             ['needs', 'Needs Me', counts.needs],
             ['waiting', 'Waiting', counts.waiting],
             ['ready', 'Ready', counts.ready],
+            ['submitted', 'Submitted', counts.submitted],
             ['all', 'All', counts.all]
           ].map(([key, label, count]) => <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}<span>{count}</span></button>)}
         </div>
