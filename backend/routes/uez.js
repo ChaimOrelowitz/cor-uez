@@ -24,13 +24,13 @@ const DEFAULT_SIGNUP_LAYOUT = {
   business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
   ownerCore: ['title', 'firstName', 'lastName', 'email', 'phone', 'dob', 'ssn', 'ownershipPercent'],
   ownerAddress: ['addressLine1', 'addressLine2', 'city', 'state', 'zip'],
-  documents: ['formation', 'soleProp', 'supporting'],
+  documents: ['formation', 'soleProp', 'pbsAccount', 'supporting'],
   widths: {
     account: { email: 1, password: 1 },
     business: { businessName: 2, businessDescription: 2, ein: 1, yearFounded: 1, hasDba: 1, dbaName: 1, fullTimeEmployees: 1, partTimeEmployees: 1 },
     ownerCore: { title: 1, firstName: 1, lastName: 1, email: 1, phone: 1, dob: 1, ssn: 1, ownershipPercent: 1 },
     ownerAddress: { addressLine1: 1, addressLine2: 1, city: 1, state: 1, zip: 1 },
-    documents: { formation: 2, soleProp: 2, supporting: 2 }
+    documents: { formation: 2, soleProp: 2, pbsAccount: 2, supporting: 2 }
   }
 };
 
@@ -668,6 +668,47 @@ router.get('/applications/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+router.put('/applications/:id/pbs-account-info', async (req, res) => {
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+    const hasExisting = req.body?.hasExistingPbsAccount;
+    if (typeof hasExisting !== 'boolean') return res.status(400).json({ error: 'Please answer whether you already have a New Jersey PBS account.' });
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '');
+    const now = new Date().toISOString();
+
+    const { data: existingCredential, error: credentialReadError } = await supabase.from('uez_credentials')
+      .select('*').eq('application_id', application.id).eq('provider', 'mynj').maybeSingle();
+    if (credentialReadError) throw credentialReadError;
+
+    if (hasExisting) {
+      if (!username || !password) return res.status(400).json({ error: 'Enter the MyNJ username and password for the existing PBS account.' });
+      const { error: credentialError } = await supabase.from('uez_credentials').upsert({
+        application_id: application.id, provider: 'mynj',
+        username_enc: encryptText(username), password_enc: encryptText(password),
+        challenge_question_enc: existingCredential?.challenge_question_enc || null,
+        challenge_answer_enc: existingCredential?.challenge_answer_enc || null, updated_at: now
+      }, { onConflict: 'application_id,provider' });
+      if (credentialError) throw credentialError;
+    } else if (application.pbs_status === 'existing_account_reported' && existingCredential) {
+      const { error: deleteError } = await supabase.from('uez_credentials').delete().eq('id', existingCredential.id);
+      if (deleteError) throw deleteError;
+    }
+
+    const patch = { has_existing_pbs_account: hasExisting, updated_at: now };
+    if (hasExisting) { patch.pbs_account_created = true; patch.pbs_status = 'existing_account_reported'; }
+    else if (application.pbs_status === 'existing_account_reported') { patch.pbs_account_created = false; patch.pbs_status = 'not_started'; }
+
+    const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();
+    if (error) throw error;
+    if (application.has_existing_pbs_account !== hasExisting) {
+      await addStatusEvent(application.id, hasExisting ? 'existing_pbs_reported' : 'pbs_account_needed', hasExisting ? 'Existing PBS account reported' : 'PBS account needed', hasExisting ? 'Applicant reported that the business already has a New Jersey PBS account and supplied the MyNJ login.' : 'Applicant reported that the business does not already have a New Jersey PBS account.', req.user.id, false);
+    }
+    res.json({ application: data });
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 router.get('/applications/:id/credentials/mynj', async (req, res) => {

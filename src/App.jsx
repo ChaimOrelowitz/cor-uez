@@ -9,6 +9,7 @@ import {
   getMyNjCredentials,
   saveBusiness,
   saveOwners,
+  savePbsAccountInfo,
   signInApplicant,
   signOutApplicant,
   signUpApplicant,
@@ -28,13 +29,13 @@ const DEFAULT_SIGNUP_LAYOUT = {
   business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
   ownerCore: ['title', 'firstName', 'lastName', 'email', 'phone', 'dob', 'ssn', 'ownershipPercent'],
   ownerAddress: ['addressLine1', 'addressLine2', 'city', 'state', 'zip'],
-  documents: ['formation', 'soleProp', 'supporting'],
+  documents: ['formation', 'soleProp', 'pbsAccount', 'supporting'],
   widths: {
     account: { email: 1, password: 1 },
     business: { businessName: 2, businessDescription: 2, ein: 1, yearFounded: 1, hasDba: 1, dbaName: 1, fullTimeEmployees: 1, partTimeEmployees: 1 },
     ownerCore: { title: 1, firstName: 1, lastName: 1, email: 1, phone: 1, dob: 1, ssn: 1, ownershipPercent: 1 },
     ownerAddress: { addressLine1: 1, addressLine2: 1, city: 1, state: 1, zip: 1 },
-    documents: { formation: 2, soleProp: 2, supporting: 2 }
+    documents: { formation: 2, soleProp: 2, pbsAccount: 2, supporting: 2 }
   }
 };
 
@@ -103,7 +104,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const needsBrc = ['not_found', 'missing', 'required'].includes(app.brc_status) || app.status === 'waiting_for_brc';
   const brcConfirmed = app.brc_status === 'found' || app.status === 'brc_confirmed';
   const latestPayment = [...(bundle.payments || [])].reverse()[0] || null;
-  const approvalStageReached = app.pbs_status === 'account_created' || app.pbs_status === 'uez_approval_uploaded' || app.status === 'waiting_for_uez_approval' || Boolean(approval);
+  const approvalStageReached = app.pbs_status === 'account_created' || app.pbs_status === 'existing_account_reported' || app.pbs_status === 'uez_approval_uploaded' || app.status === 'waiting_for_uez_approval' || Boolean(approval);
   const taxIssueOpen = (app.tax_clearance_status || 'no') === 'issue';
   const taxRecheckRequested = Boolean(app.tax_clearance_recheck_requested_at);
 
@@ -309,8 +310,8 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
           <div className="credential-grid applicant-credential-grid">
             <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong></div>
             <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong></div>
-            <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong></div>
-            <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong></div>
+            {myNjCredentials.challengeQuestion && <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong></div>}
+            {myNjCredentials.challengeAnswer && <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong></div>}
           </div>
           <button className="secondary portal-secret-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
           <p className="muted credential-note">Keep this login information private. You may need it to access New Jersey services related to your application.</p>
@@ -354,11 +355,11 @@ export default function App({ demoMode = false }) {
   const [form, setForm] = useState(() => demoMode ? {
     address: '123 Demo Street, Lakewood, NJ 08701', email: 'demo@corsolutions.io', password: 'Demo123!',
     businessName: 'Demo Lakewood Business LLC', businessDescription: 'Demo business for testing the COR client flow', ein: '12-3456789', yearFounded: '2024',
-    isSoleProprietorship: 'no', fullTimeEmployees: '1', partTimeEmployees: '0', hasDba: 'no', dbaName: '',
+    isSoleProprietorship: 'no', fullTimeEmployees: '1', partTimeEmployees: '0', hasDba: 'no', dbaName: '', hasExistingPbsAccount: 'no', pbsUsername: '', pbsPassword: '',
     owners: [{ title: 'Mr.', titleOther: '', firstName: 'Demo', lastName: 'Owner', email: 'demo@corsolutions.io', phone: '(732) 555-0100', dob: '01/01/1980', ssn: '123-45-6789', ownershipPercent: '100', addressLine1: '123 Demo Street', addressLine2: '', city: 'Lakewood', state: 'NJ', zip: '08701' }]
   } : {
     address: '', email: '', password: '', businessName: '', businessDescription: '', ein: '', yearFounded: '',
-    isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '',
+    isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '', hasExistingPbsAccount: '', pbsUsername: '', pbsPassword: '',
     owners: [blankOwner()]
   });
 
@@ -424,6 +425,7 @@ export default function App({ demoMode = false }) {
     if (!latest) return null;
 
     const full = await getApplication(latest.id);
+    const existingPbsLogin = latest.has_existing_pbs_account === true ? await getMyNjCredentials(latest.id).catch(() => ({ exists: false, credentials: null })) : { exists: false, credentials: null };
     setBundle(full);
     setApplicationId(latest.id);
     setDocuments(full.documents || []);
@@ -440,6 +442,9 @@ export default function App({ demoMode = false }) {
       partTimeEmployees: latest.part_time_employees ?? old.partTimeEmployees,
       hasDba: latest.has_dba == null ? old.hasDba : (latest.has_dba ? 'yes' : 'no'),
       dbaName: latest.dba_name || old.dbaName,
+      hasExistingPbsAccount: latest.has_existing_pbs_account == null ? old.hasExistingPbsAccount : (latest.has_existing_pbs_account ? 'yes' : 'no'),
+      pbsUsername: existingPbsLogin?.credentials?.username || old.pbsUsername,
+      pbsPassword: existingPbsLogin?.credentials?.password || old.pbsPassword,
       owners: full.owners?.length
         ? full.owners.map((owner) => ({
             title: ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Rabbi'].includes(owner.honorific_title) ? owner.honorific_title : (owner.honorific_title ? 'Other' : ''),
@@ -828,10 +833,13 @@ export default function App({ demoMode = false }) {
       setMessage('Upload the Certificate of Formation, or confirm below that the business is legally a sole proprietorship.');
       return;
     }
+    if (!form.hasExistingPbsAccount) { setMessage('Please answer whether you already have a New Jersey PBS account.'); return; }
+    if (form.hasExistingPbsAccount === 'yes' && (!form.pbsUsername.trim() || !form.pbsPassword)) { setMessage('Enter the MyNJ username and password for your existing PBS account.'); return; }
     setBusy(true); setMessage('');
     try {
       // Formation present means this should not remain marked sole prop because of an earlier misunderstood answer.
       await persistSoleProprietorship(!hasFormation && solePropConfirmedHere);
+      await savePbsAccountInfo(applicationId, { hasExistingPbsAccount: form.hasExistingPbsAccount === 'yes', username: form.hasExistingPbsAccount === 'yes' ? form.pbsUsername.trim() : '', password: form.hasExistingPbsAccount === 'yes' ? form.pbsPassword : '' });
       setStep(6);
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
@@ -1076,6 +1084,12 @@ export default function App({ demoMode = false }) {
                 <div><strong>Don't have a Certificate of Formation?</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship.</p></div>
                 <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Sole proprietorship confirmed' : "I don't have a Certificate of Formation because this business is a sole proprietorship"}</button>{solePropConfirmedHere && <button type="button" className="sole-prop-undo" title="Undo sole proprietorship selection" aria-label="Undo sole proprietorship selection" onClick={undoSoleProprietorship} disabled={busy}>↶</button>}</div>
               </div> : null;
+              if (key === 'pbsAccount') return <div className={`upload-card pbs-account-question ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
+                <div><strong>Do you already have a New Jersey Premier Business Services (PBS) account? <span className="required-star">*</span></strong><p>If you already use PBS/MyNJ for this business, choose Yes and provide the login so COR can use the existing account.</p></div>
+                <div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="yes" checked={form.hasExistingPbsAccount==='yes'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="no" checked={form.hasExistingPbsAccount==='no'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value,pbsUsername:'',pbsPassword:''}))} />No</label></div>
+                <a className="pbs-check-link" href="https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/jsp/home.jsp" target="_blank" rel="noreferrer">Not sure? Open PBS / MyNJ to check for a saved login or reset your password.</a>
+                {form.hasExistingPbsAccount === 'yes' && <div className="field-grid pbs-existing-login-grid"><div><label>MyNJ username <span className="required-star">*</span></label><input value={form.pbsUsername} onChange={update('pbsUsername')} required /></div><div><label>MyNJ password <span className="required-star">*</span></label><input type="password" value={form.pbsPassword} onChange={update('pbsPassword')} required /></div></div>}
+              </div>;
               if (key === 'supporting') return <div className={`upload-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}><div><strong>Other supporting document</strong><p>Optional. Add anything you think COR should have for this application.</p></div><label className="secondary inline-button file-button">{uploadingType === 'supporting' ? 'Uploading…' : 'Upload another file'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('supporting', e.target.files?.[0])} /></label></div>;
               return null;
             })}

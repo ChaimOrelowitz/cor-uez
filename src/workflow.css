@@ -671,3 +671,5 @@
 .queue-next-action.submitted { color: #357a52; }
 .queue-next-action.submitted i { background: #56a66f; }
 .queue-submitted { background: #fbfdfb; }
+
+.pbs-account-question .pbs-check-link{display:inline-block;margin-top:10px;font-weight:700}.pbs-existing-login-grid{margin-top:14px}.admin-pbs-answer-box{border:1px solid #d9dee8;border-radius:14px;padding:14px;margin-bottom:14px;background:#f8fafc}.admin-pbs-answer-box>label{display:block;font-weight:800;margin-bottom:7px}.admin-pbs-answer-box>select{width:100%;margin-bottom:10px}

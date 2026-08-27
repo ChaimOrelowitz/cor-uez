@@ -125,6 +125,13 @@ export function saveOwners(applicationId, owners) {
   });
 }
 
+export function savePbsAccountInfo(applicationId, payload) {
+  return request(`/api/uez/applications/${applicationId}/pbs-account-info`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
 export function uploadApplicationDocument(applicationId, documentType, file) {
   const body = new FormData();
   body.append('documentType', documentType);

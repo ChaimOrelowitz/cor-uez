@@ -12,6 +12,7 @@ import {
   markAdminBrcNotFound,
   markAdminPbsAccountCreated,
   saveOwners,
+  savePbsAccountInfo,
   signInApplicant,
   signOutApplicant,
   updateAdminApplication,
@@ -145,6 +146,7 @@ function adminQueueInfo(app) {
     return { bucket: 'needs', action: 'Fetch BRC', tone: 'danger', stage, rank: 5 };
   }
 
+  if (app.has_existing_pbs_account == null) return { bucket: 'needs', action: 'Confirm PBS account answer', tone: 'danger', stage, rank: 6 };
   if (!app.pbs_account_created) return { bucket: 'needs', action: 'Set up PBS', tone: 'danger', stage, rank: 6 };
 
   if (app.uez_application_status === 'not_started' || !app.uez_application_status) {
@@ -306,6 +308,8 @@ export default function AdminPage() {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [pbsAnswerDraft, setPbsAnswerDraft] = useState('');
+  const [pbsLoginDraft, setPbsLoginDraft] = useState({ username: '', password: '' });
   const [editMode, setEditMode] = useState(false);
   const [applicationDraft, setApplicationDraft] = useState(null);
   const [ownerDrafts, setOwnerDrafts] = useState([]);
@@ -841,6 +845,18 @@ export default function AdminPage() {
     }
   }
 
+
+  async function saveExistingPbsAnswer() {
+    if (!pbsAnswerDraft) return setMessage('Choose Yes or No for the PBS account question.');
+    if (pbsAnswerDraft === 'yes' && (!pbsLoginDraft.username.trim() || !pbsLoginDraft.password)) return setMessage('Enter the existing MyNJ username and password.');
+    setBusy(true); setMessage('Saving PBS account answer…');
+    try {
+      await savePbsAccountInfo(detail.application.id, { hasExistingPbsAccount: pbsAnswerDraft === 'yes', username: pbsAnswerDraft === 'yes' ? pbsLoginDraft.username.trim() : '', password: pbsAnswerDraft === 'yes' ? pbsLoginDraft.password : '' });
+      await refreshList(detail.application.id);
+      setMessage('PBS account answer saved.');
+    } catch (err) { setMessage(err.message); } finally { setBusy(false); }
+  }
+
   async function createMyNjCredentials() {
     setBusy(true);
     setMessage('Creating encrypted MyNJ account information…');
@@ -1239,6 +1255,12 @@ export default function AdminPage() {
 
             <details className="admin-accordion"><summary><strong>MyNJ / PBS</strong><span>{myNjCredentials ? 'Login ready' : 'Not created'}</span></summary><section className="admin-card mynj-card admin-account-card admin-secondary-card">
               <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{detail.application.pbs_status === 'account_created' || detail.application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span></div>
+              <div className="admin-pbs-answer-box">
+                <label>Does this business already have a PBS account?</label>
+                <select value={pbsAnswerDraft || (detail.application.has_existing_pbs_account == null ? '' : detail.application.has_existing_pbs_account ? 'yes' : 'no')} onChange={(e)=>{ setPbsAnswerDraft(e.target.value); if(e.target.value==='no') setPbsLoginDraft({username:'',password:''}); }}><option value="">Not answered</option><option value="yes">Yes — existing PBS account</option><option value="no">No — COR needs to create it</option></select>
+                {(pbsAnswerDraft || (detail.application.has_existing_pbs_account ? 'yes' : '')) === 'yes' && <div className="credential-edit-grid"><label>Existing MyNJ username<input value={pbsLoginDraft.username || myNjCredentials?.username || ''} onChange={(e)=>setPbsLoginDraft((old)=>({...old,username:e.target.value}))} /></label><label>Existing MyNJ password<input type="password" value={pbsLoginDraft.password || myNjCredentials?.password || ''} onChange={(e)=>setPbsLoginDraft((old)=>({...old,password:e.target.value}))} /></label></div>}
+                <button className="secondary admin-full-button" onClick={saveExistingPbsAnswer} disabled={busy}>Save PBS answer</button>
+              </div>
               {myNjCredentials ? <>
                 {myNjEditMode ? <div className="credential-edit-grid">
                   <label>MyNJ username <span className="required-star">*</span><input value={myNjDraft?.username || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, username: e.target.value }))} /></label>

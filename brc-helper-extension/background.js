@@ -433,6 +433,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+
+chrome.windows.onRemoved.addListener(async (windowId) => {
+  const job = await getJob().catch(() => null);
+  if (!job || !job.windowId || Number(job.windowId) !== Number(windowId)) return;
+  // Closing the workflow popup is an explicit cancel. Clear the job immediately so
+  // content scripts in any surviving tabs cannot continue the prior applicant's workflow.
+  await setJob(null);
+  const tabs = await chrome.tabs.query({}).catch(() => []);
+  const appTabs = tabs.filter((t) => t.url && (() => { try { return isAllowedOrigin(new URL(t.url).origin); } catch (_) { return false; } })());
+  await Promise.all(appTabs.map((tab) => chrome.tabs.sendMessage(tab.id, { source: 'cor-uez-background', type: 'COR_UEZ_STATUS', jobId: job.id, workflow: job.workflow, status: 'cancelled' }).catch(() => {})));
+});
+
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || !tab.url) return;
   const host = new URL(tab.url).hostname.toLowerCase();

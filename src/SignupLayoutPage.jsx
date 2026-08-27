@@ -6,7 +6,7 @@ const GROUPS = {
   business: { title: 'Business page', fields: { businessName: 'Business name', businessDescription: 'Business description', ein: 'EIN', yearFounded: 'Year founded', hasDba: 'DBA question', dbaName: 'DBA name (conditional)', fullTimeEmployees: 'Full-time employees', partTimeEmployees: 'Part-time employees' } },
   ownerCore: { title: 'Owners · main fields', fields: { title: 'Title', firstName: 'First name', lastName: 'Last name', email: 'Email', phone: 'Best phone', dob: 'Date of birth', ssn: 'SSN', ownershipPercent: 'Ownership percentage (when applicable)' } },
   ownerAddress: { title: 'Owners · home address', fields: { addressLine1: 'Street address', addressLine2: 'Address line 2', city: 'City', state: 'State', zip: 'ZIP' } },
-  documents: { title: 'Documents page', fields: { formation: 'Certificate of Formation upload', soleProp: 'Sole proprietorship alternative', supporting: 'Other supporting document' } }
+  documents: { title: 'Documents page', fields: { formation: 'Certificate of Formation upload', soleProp: 'Sole proprietorship alternative', pbsAccount: 'Existing PBS account question', supporting: 'Other supporting document' } }
 };
 
 export default function SignupLayoutPage() {
