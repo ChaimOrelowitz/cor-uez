@@ -20,6 +20,7 @@ import {
   updateAdminProcessFlags,
   saveAdminPayment,
   reviewAdminDocument,
+  uploadApplicationDocument,
   whoAmI
 } from './api';
 
@@ -253,6 +254,9 @@ export default function AdminPage() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const [pbsModalOpen, setPbsModalOpen] = useState(false);
+  const [manualDocType, setManualDocType] = useState('supporting');
+  const [manualDocFile, setManualDocFile] = useState(null);
+  const [manualDocUploading, setManualDocUploading] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [dragStatusKey, setDragStatusKey] = useState(null);
   const [statusOrder, setStatusOrder] = useState(() => {
@@ -455,6 +459,8 @@ export default function AdminPage() {
       waiting_for_human_verification: 'Complete New Jersey’s verification in the visible PBS window.',
       requesting_tax_clearance_pdf: 'Selecting the Department of Community Affairs and requesting the letter…',
       uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…',
+      capturing_tax_issue: 'NJ reported a tax-clearance problem. Capturing the error screenshot…',
+      sending_tax_issue_email: 'Saving the screenshot and emailing the client the tax-clearance instructions…',
       opening_ldc_form: 'Opening the Lakewood LDC incentive application…',
       filling_ldc_form: 'COR is filling the Lakewood LDC application…',
       starting_ldc_sign: 'Opening JotForm Sign so the required signature can be added…',
@@ -498,7 +504,7 @@ export default function AdminPage() {
         }
         if (message.jobId !== requestId || message.type !== 'COR_UEZ_STATUS') return;
         if (statusMessages[message.status]) setMessage(statusMessages[message.status]);
-        if (message.status === 'complete') finish(null, { status: 'complete' });
+        if (message.status === 'complete') finish(null, { status: 'complete', taxIssue: Boolean(message.taxIssue) });
         if (message.status === 'not_found') finish(null, { status: 'not_found' });
         if (message.status === 'error') finish(new Error(message.error || 'The document retrieval did not finish.'));
       };
@@ -601,11 +607,29 @@ export default function AdminPage() {
       });
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');
       await refreshList(detail.application.id);
-      setMessage('Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');
+      setMessage(outcome.taxIssue
+        ? 'NJ could not issue the tax clearance. The error screenshot was saved and the client was emailed the follow-up instructions.'
+        : 'Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');
     } catch (err) {
       setMessage(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function uploadManualAdminDocument() {
+    if (!manualDocFile) { setMessage('Choose a file to upload.'); return; }
+    setManualDocUploading(true);
+    setMessage('Uploading document…');
+    try {
+      await uploadApplicationDocument(detail.application.id, manualDocType, manualDocFile);
+      await refreshList(detail.application.id);
+      setManualDocFile(null);
+      setMessage('Document added to the applicant file.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setManualDocUploading(false);
     }
   }
 
@@ -1037,6 +1061,21 @@ export default function AdminPage() {
                     const doc = docFor(detail, type);
                     return <div key={type} className={`ops-doc-row ${doc ? 'ready' : ''}`}><button className="ops-doc-name" onClick={() => doc && previewDocument(doc)} disabled={!doc}><b>{doc ? '✓' : '○'}</b><span>{label}</span></button><small>{doc ? 'Received' : 'Missing'}</small></div>;
                   })}
+                </div>
+                <div className="admin-manual-upload">
+                  <div className="admin-manual-upload-head"><strong>Manual document upload</strong><small>Fallback / records</small></div>
+                  <select value={manualDocType} onChange={(e) => setManualDocType(e.target.value)}>
+                    <option value="formation">Certificate of Formation</option>
+                    <option value="brc">Business Registration Certificate</option>
+                    <option value="uez_pending_certification">UEZ Pending Certification Application</option>
+                    <option value="uez_approval_email">UEZ Approval Email</option>
+                    <option value="tax_clearance">Tax Clearance Letter</option>
+                    <option value="tax_clearance_issue">Tax Clearance Issue Screenshot</option>
+                    <option value="ldc_application">Signed LDC Application</option>
+                    <option value="supporting">Other / Supporting Document</option>
+                  </select>
+                  <input type="file" accept=".pdf,.eml,image/*" onChange={(e) => setManualDocFile(e.target.files?.[0] || null)} />
+                  <button className="secondary" onClick={uploadManualAdminDocument} disabled={manualDocUploading || !manualDocFile}>{manualDocUploading ? 'Uploading…' : 'Upload document'}</button>
                 </div>
               </div>
 

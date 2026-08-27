@@ -86,6 +86,13 @@ async function uploadTaxPdf(job, base64, filename) {
   await uploadPdf(job, 'tax_clearance', base64, filename || 'NJ-Tax-Clearance.pdf');
 }
 
+async function reportTaxClearanceIssue(job, base64) {
+  const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+  const body = new FormData();
+  body.append('file', new Blob([bytes], { type: 'image/png' }), 'NJ-Tax-Clearance-Issue.png');
+  return api(job, `/api/uez/admin/applications/${job.applicationId}/tax-clearance-issue`, { method: 'POST', body });
+}
+
 async function uploadLdcPdf(job, base64, filename, submissionId) {
   await uploadPdf(job, 'ldc_application', base64, filename || `Lakewood-LDC-Incentive-Application-${submissionId || 'submitted'}.pdf`);
   await api(job, `/api/uez/admin/applications/${job.applicationId}/status`, {
@@ -303,6 +310,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await api(job, `/api/uez/brc/${job.applicationId}/admin/captured-certificate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ result: message.result, html: message.html }) });
         await notify(job, 'complete');
         if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1500);
+      } catch (err) {
+        await fail(job, err);
+      }
+      await setJob(null);
+      return { ok: true };
+    }
+    if (message?.type === 'COR_TAX_ISSUE_CAPTURE_REQUEST') {
+      if (job.workflow !== 'tax_clearance' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching tax-clearance workflow is active.' };
+      await notify(job, 'capturing_tax_issue');
+      try {
+        const dataUrl = await chrome.tabs.captureVisibleTab(job.windowId, { format: 'png' });
+        const base64 = String(dataUrl || '').split(',')[1] || '';
+        if (!base64) throw new Error('COR could not capture the New Jersey tax-clearance error.');
+        await notify(job, 'sending_tax_issue_email');
+        await reportTaxClearanceIssue(job, base64);
+        await notify(job, 'complete', { taxIssue: true });
+        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
       } catch (err) {
         await fail(job, err);
       }

@@ -144,7 +144,10 @@ async function sendApplicationEmail(application, templateKey, options = {}) {
         reply_to: REPLY_TO,
         subject,
         text: body,
-        html: textToHtml(body)
+        html: textToHtml(body),
+        ...(Array.isArray(options.attachments) && options.attachments.length
+          ? { attachments: options.attachments.map((item) => ({ filename: item.filename, content: item.content })) }
+          : {})
       })
     });
     const payload = await response.json().catch(() => ({}));

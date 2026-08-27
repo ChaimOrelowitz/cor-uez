@@ -377,6 +377,19 @@
         return;
       }
 
+      // Bad tax-clearance result: NJ returns to this same screen with an eligibility error.
+      if (/We cannot verify that you are eligible to receive a Tax Clearance Certificate at this time/i.test(text)) {
+        sent = true;
+        const issue = [...document.querySelectorAll('td, div, table, section, form')].find((element) =>
+          /We cannot verify that you are eligible to receive a Tax Clearance Certificate at this time/i.test(element.innerText || '')
+        );
+        issue?.scrollIntoView({ block: 'start', inline: 'nearest' });
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        notice('NJ could not issue the tax clearance. COR is saving this screen and notifying the client.');
+        await send({ type: 'COR_TAX_ISSUE_CAPTURE_REQUEST', jobId: job.id });
+        return;
+      }
+
       // Step E: Business Incentive Tax Clearance Button
       const incentiveBtn = document.querySelector('input[name="Submit"][value="Business Incentive Tax Clearance"]');
       if (incentiveBtn) {

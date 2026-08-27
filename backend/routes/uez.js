@@ -465,6 +465,60 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
   }
 });
 
+router.post('/admin/applications/:id/tax-clearance-issue', requireUezAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+    if (!req.file) return res.status(400).json({ error: 'Tax-clearance screenshot is required.' });
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(req.file.mimetype)) {
+      return res.status(400).json({ error: 'Tax-clearance issue evidence must be an image.' });
+    }
+
+    const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${safeFilename(req.file.originalname || 'NJ-Tax-Clearance-Issue.png')}`;
+    const { error: storageError } = await supabase.storage.from(DOCUMENT_BUCKET).upload(storagePath, req.file.buffer, {
+      contentType: req.file.mimetype,
+      upsert: false
+    });
+    if (storageError) throw storageError;
+
+    const { data: document, error: documentError } = await supabase.from('uez_documents').insert({
+      application_id: application.id,
+      document_type: 'tax_clearance_issue',
+      storage_path: storagePath,
+      filename: req.file.originalname || 'NJ-Tax-Clearance-Issue.png',
+      source: 'extension_capture',
+      status: 'received',
+      metadata: { mimeType: req.file.mimetype, size: req.file.size, referenceOnly: true },
+      created_by: req.user.id
+    }).select('id, document_type, filename, source, status, metadata, created_at').single();
+    if (documentError) throw documentError;
+
+    const { error: appError } = await supabase.from('uez_applications').update({
+      tax_clearance_good: false,
+      updated_at: new Date().toISOString()
+    }).eq('id', application.id);
+    if (appError) throw appError;
+
+    await addStatusEvent(
+      application.id,
+      'tax_clearance_issue',
+      'Tax clearance follow-up needed',
+      'New Jersey could not issue the Tax Clearance Certificate. COR saved the state error and sent follow-up instructions.',
+      req.user.id,
+      true
+    );
+
+    const emailResult = await safeSendApplicationEmail(application, 'tax_issue', {
+      attachments: [{ filename: req.file.originalname || 'NJ-Tax-Clearance-Issue.png', content: req.file.buffer.toString('base64') }],
+      dedupeKey: `tax_issue:${application.id}:${document.id}`
+    });
+
+    res.status(201).json({ document, email: emailResult });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.get('/applications/:id/documents/:documentId/url', async (req, res) => {
   try {
     const application = await getOwnedApplication(req.params.id, req.user);
