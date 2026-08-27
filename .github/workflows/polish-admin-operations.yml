@@ -10,21 +10,23 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Add required owner title
-        run: python .github/scripts/add_required_owner_title.py
-      - name: Verify backend and frontend
+      - name: Wire PBS HAR workflow
+        run: python .github/scripts/wire_pbs_har_workflow.py
+      - name: Verify backend, extension, and frontend
         run: |
           node --check backend/routes/uez.js
+          node --check brc-helper-extension/background.js
+          node --check brc-helper-extension/pbs.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx backend/routes/uez.js
+          git add src/AdminPage.jsx backend/routes/uez.js brc-helper-extension/background.js brc-helper-extension/manifest.json brc-helper-extension/pbs.js
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Require owner title in signup"
+            git commit -m "Wire OPEN PBS to HAR workflow"
             git push
           fi
