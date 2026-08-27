@@ -10,20 +10,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Separate submitted applications from waiting
-        run: python .github/scripts/separate_submitted_queue.py
-      - name: Verify frontend
+      - name: Make extension workflows clean incognito sessions
+        run: python .github/scripts/make_extension_incognito_clean.py
+      - name: Verify extension
         run: |
-          npm install --ignore-scripts
-          npm run build
+          node --check brc-helper-extension/background.js
+          node -e "JSON.parse(require('fs').readFileSync('brc-helper-extension/manifest.json','utf8')); console.log('manifest ok')"
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/AdminPage.jsx src/workflow.css
+          git add brc-helper-extension/background.js brc-helper-extension/manifest.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Separate submitted applications from waiting"
+            git commit -m "Run extension workflows in clean incognito sessions"
             git push
           fi
