@@ -10,23 +10,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Add PBS account question and cancel closed workflows
-        run: python .github/scripts/tighten_pbs_question_and_cancel.py
-      - name: Verify frontend backend and extension
+      - name: Point PBS actions to the MyNJ login
+        run: python .github/scripts/fix_pbs_login_url.py
+      - name: Verify frontend and extension
         run: |
           npm install --ignore-scripts
           npm run build
-          node --check backend/routes/uez.js
           node --check brc-helper-extension/background.js
           node -e "JSON.parse(require('fs').readFileSync('brc-helper-extension/manifest.json','utf8')); console.log('manifest ok')"
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx src/AdminPage.jsx src/SignupLayoutPage.jsx src/api.js src/workflow.css backend/routes/uez.js brc-helper-extension/background.js brc-helper-extension/manifest.json
+          git add src/App.jsx src/AdminPage.jsx brc-helper-extension/background.js brc-helper-extension/manifest.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Add PBS account intake and cancel closed workflows"
+            git commit -m "Point PBS actions to MyNJ login"
             git push
           fi
