@@ -108,6 +108,48 @@ async function uploadLdcPdf(job, base64, filename, submissionId) {
   });
 }
 
+const CLEAN_WORKFLOW_COOKIE_DOMAINS = [
+  'state.nj.us',
+  'nj.gov',
+  'njportal.com',
+  'jotform.com',
+  'lakewoodnj.gov'
+];
+
+function isIncognitoAllowed() {
+  return new Promise((resolve) => {
+    chrome.extension.isAllowedIncognitoAccess((allowed) => resolve(Boolean(allowed)));
+  });
+}
+
+async function cookieStoreForTab(tabId) {
+  const stores = await chrome.cookies.getAllCookieStores();
+  return stores.find((store) => (store.tabIds || []).includes(tabId))?.id || null;
+}
+
+function workflowCookieDomain(cookieDomain) {
+  const host = String(cookieDomain || '').replace(/^\./, '').toLowerCase();
+  return CLEAN_WORKFLOW_COOKIE_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+async function clearIncognitoWorkflowCookies(tabId) {
+  const storeId = await cookieStoreForTab(tabId);
+  if (!storeId) throw new Error('COR could not identify the clean incognito cookie store.');
+  const cookies = await chrome.cookies.getAll({ storeId });
+  const relevant = cookies.filter((cookie) => workflowCookieDomain(cookie.domain));
+  await Promise.all(relevant.map(async (cookie) => {
+    const host = String(cookie.domain || '').replace(/^\./, '');
+    const scheme = cookie.secure ? 'https' : 'http';
+    const path = cookie.path || '/';
+    await chrome.cookies.remove({
+      url: `${scheme}://${host}${path}`,
+      name: cookie.name,
+      storeId
+    }).catch(() => null);
+  }));
+  return relevant.length;
+}
+
 async function startWorkflow(message, sender) {
   const senderOrigin = sender.tab?.url ? new URL(sender.tab.url).origin : '';
   if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
@@ -125,6 +167,10 @@ async function startWorkflow(message, sender) {
     if (!result.exists || !result.credentials) throw new Error('MyNJ / PBS login information is missing.');
     job.credentials = result.credentials;
   }
+  const incognitoAllowed = await isIncognitoAllowed();
+  if (!incognitoAllowed) {
+    throw new Error('COR workflows require Incognito access. Open chrome://extensions, choose COR UEZ Document Helper → Details, turn on Allow in Incognito, then try again.');
+  }
   await setJob(job);
   const url = job.workflow === 'brc'
     ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp'
@@ -135,12 +181,31 @@ async function startWorkflow(message, sender) {
       : job.workflow === 'ldc_jotform'
         ? 'https://form.jotform.com/241936732268060'
         : 'https://form.jotform.com/222748639284165';
-  const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });
+  let popup;
+  try {
+    popup = await chrome.windows.create({ url: 'about:blank', type: 'popup', incognito: true, width: 1200, height: 900, focused: true });
+  } catch (error) {
+    await setJob(null);
+    throw new Error('COR could not open a clean Incognito window. In chrome://extensions → COR UEZ Document Helper → Details, turn on Allow in Incognito, then try again.');
+  }
   const tab = popup.tabs?.[0];
-  job = { ...job, tabId: tab?.id || null, windowId: popup.id };
+  if (!tab?.id) {
+    if (popup.id) await chrome.windows.remove(popup.id).catch(() => {});
+    await setJob(null);
+    throw new Error('COR could not create the clean Incognito workflow tab.');
+  }
+  job = { ...job, tabId: tab.id, windowId: popup.id, incognito: true };
+  await setJob(job);
+  try {
+    await clearIncognitoWorkflowCookies(tab.id);
+    await chrome.tabs.update(tab.id, { url });
+  } catch (error) {
+    if (popup.id) await chrome.windows.remove(popup.id).catch(() => {});
+    await setJob(null);
+    throw error;
+  }
   const openingStatus = job.workflow === 'brc' ? 'opening_brc' : (job.workflow === 'tax_clearance' || job.workflow === 'pbs_login') ? 'opening_pbs' : job.workflow === 'pbs_signup' ? 'opening_pbs_signup' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
   await notify(job, openingStatus);
-  if (tab?.id && !['ldc_jotform', 'lakewood_portal'].includes(job.workflow)) await injectNjHelper(tab.id).catch(() => {});
   return { ok: true, jobId: job.id };
 }
 
