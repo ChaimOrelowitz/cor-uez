@@ -253,6 +253,7 @@ export default function AdminPage() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const [pbsModalOpen, setPbsModalOpen] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [dragStatusKey, setDragStatusKey] = useState(null);
   const [statusOrder, setStatusOrder] = useState(() => {
     try {
@@ -740,6 +741,7 @@ export default function AdminPage() {
       setApplications(rows || []);
       setSelectedId(null);
       setDetail(null);
+      setMobileDetailOpen(false);
       setEditMode(false);
       if (rows?.[0]?.id) await openApplication(rows[0].id);
       setMessage('The UEZ application and its documents were permanently deleted. The person’s login was not deleted.');
@@ -925,10 +927,20 @@ export default function AdminPage() {
   return <div className="admin-shell">
     <header className="admin-topbar">
       <div className="admin-brand"><div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div></div>
-      <div className="admin-top-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button onClick={handleSignOut}>Log out</button></div>
+      <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button onClick={handleSignOut}>Log out</button></div>
+      <details className="admin-mobile-menu">
+        <summary aria-label="Open admin menu">•••</summary>
+        <div className="admin-mobile-menu-popover">
+          <a href="/admin/email-settings">Email settings</a>
+          <a href="/admin/signup-layout">Signup layout</a>
+          <a href="/admin/demo-client" target="_blank" rel="noreferrer">Demo client</a>
+          <a href="/" target="_blank" rel="noreferrer">Applicant site</a>
+          <button onClick={handleSignOut}>Log out</button>
+        </div>
+      </details>
     </header>
 
-    <main className="admin-layout">
+    <main className={`admin-layout ${mobileDetailOpen ? 'mobile-detail-open' : 'mobile-list-open'}`}>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-head">
           <div><span>APPLICATIONS</span><strong>{applications.length}</strong></div>
@@ -948,7 +960,7 @@ export default function AdminPage() {
               || app.brc_status === 'client_created'
               || ((app.document_types || []).includes('formation') && app.formation_review_status !== 'approved')
               || ((app.document_types || []).includes('uez_approval_email') && (app.uez_approval_review_status || 'not_reviewed') === 'not_reviewed');
-            return <button key={app.id} className={`application-list-item ops-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => openApplication(app.id)}>
+            return <button key={app.id} className={`application-list-item ops-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => { setMobileDetailOpen(true); openApplication(app.id); window.scrollTo({ top: 0, behavior: 'instant' }); }}>
               <div className="ops-list-main"><strong>{app.business_name_input || 'Unnamed business'}{needsAttention && <i className="attention-dot" title="Needs attention" />}</strong><small>{app.required_document_ready_count || 0}/5 docs · UEZ {uezStatusLabel(app.uez_application_status)}</small></div>
               <div className="list-item-meta"><span className={`mini-status ${app.payment_status === 'paid' ? 'good' : app.payment_status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(app.payment_status)}</span><small>{statusLabel(app.status)}</small></div>
             </button>;
@@ -958,6 +970,10 @@ export default function AdminPage() {
       </aside>
 
       <section className="admin-detail">
+        {detail && <div className="mobile-detail-nav">
+          <button type="button" onClick={() => { setMobileDetailOpen(false); window.scrollTo({ top: 0, behavior: 'instant' }); }}>‹ Applicants</button>
+          <div><strong>{detail.application.business_name_input || 'Application'}</strong><small>{readyDocumentCount(detail)}/5 docs · {paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</small></div>
+        </div>}
         {message && <div className="admin-message">{message}</div>}
         {!detail && <div className="admin-empty"><h2>Select an application</h2><p>New submissions will appear on the left.</p></div>}
 
@@ -1025,6 +1041,7 @@ export default function AdminPage() {
               </div>
 
               <div className="ops-panel actions-panel">
+                <div className="mobile-desktop-workflow-note">Desktop automation · These workflow buttons use the COR Chrome extension.</div>
                 <div className="ops-action-grid clean-action-grid">
                   <button className={`ops-action ${docFor(detail, 'brc') ? 'success-action' : 'primary'}`} onClick={runBrcLookup} disabled={busy}><span>FETCH</span><strong>BRC</strong></button>
                   <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
