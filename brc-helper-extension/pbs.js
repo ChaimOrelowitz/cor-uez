@@ -75,6 +75,12 @@
     const job = jobResponse?.job;
     if (!job || job.workflow !== 'pbs_signup') return;
 
+    // Once COR fills the PBS Business Information page, the user owns the rest of
+    // the session. Do not keep touching fields or reacting to later pages until a
+    // future version explicitly supports those steps.
+    const manualHandoffKey = `corPbs:manual-handoff:${job.id}`;
+    if (sessionStorage.getItem(manualHandoffKey)) return;
+
     const text = pageText();
     const data = await getData(job.id);
 
@@ -162,30 +168,23 @@
       return;
     }
 
-    // HAR Step 6: Fill every deterministic business field. Business Type is intentionally HITL.
+    // HAR Step 6: Fill deterministic business information ONCE, then fully hand
+    // control to the user. PIN and Business Type are intentionally untouched.
     const einInput = document.querySelector('#EINNo, input[name="EINNo"]');
     const businessType = document.querySelector('#buzType, select[name="buzType"]');
     if (einInput && businessType) {
       setValue(einInput, data.business.einNo);
       setValue(document.querySelector('#businessName, input[name="businessName"]'), data.business.businessName);
-      setValue(document.querySelector('#PINNo, input[name="PINNo"]'), '');
       setValue(document.querySelector('#regiYear, input[name="regiYear"]'), data.business.yearFounded);
       setValue(document.querySelector('#zipCode, input[name="zipCode"]'), data.business.taxZip);
       setValue(document.querySelector('input[name="clientEmailAddress"]'), data.owner.email);
       setValue(document.querySelector('input[name="clientPhoneNumber"]'), data.owner.phone);
       setValue(document.querySelector('input[name="REPSFULLNAME"]'), `${data.owner.firstName} ${data.owner.lastName}`.trim());
 
-      const syncBusinessTypeText = () => {
-        const hidden = document.querySelector('input[name="busTypeHidden"]');
-        if (hidden) setValue(hidden, businessType.options?.[businessType.selectedIndex]?.text || '');
-      };
-      businessType.addEventListener('change', syncBusinessTypeText, { once: false });
-      syncBusinessTypeText();
-      businessType.style.outline = '3px solid #f0a202';
-      businessType.style.outlineOffset = '2px';
       businessType.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      notice('COR needs you: select the correct Business Type, then click Continue. Everything else is filled.');
+      notice('COR filled the PBS business information. You are in control from here.');
       await status('waiting_for_pbs_business_type');
+      sessionStorage.setItem(manualHandoffKey, '1');
       return;
     }
 
