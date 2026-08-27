@@ -10,21 +10,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Simplify client tasks and enable replacement uploads
-        run: python .github/scripts/simplify_client_tasks.py
-      - name: Verify backend and frontend
+      - name: Normalize geocoder address and document colors
+        run: python .github/scripts/normalize_geocoder_address_and_doc_colors.py
+      - name: Verify frontend
         run: |
-          node --check backend/routes/uez.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx backend/routes/uez.js
+          git add src/eligibility.js src/App.jsx src/AdminPage.jsx src/styles.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Simplify client tasks and replacement uploads"
+            git commit -m "Normalize UEZ street addresses and document states"
             git push
           fi
