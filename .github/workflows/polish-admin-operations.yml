@@ -10,12 +10,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Fix bad tax clearance and manual document upload
-        run: python .github/scripts/fix_bad_tax_clearance_and_manual_upload.py
+      - name: Fix tax capture, retry, and manual attachment
+        run: python .github/scripts/fix_tax_capture_manual_attachment_and_retry.py
       - name: Verify frontend, backend, and extension
         run: |
-          node --check backend/routes/uez.js
-          node --check backend/services/uezEmail.js
+          node --check backend/routes/uezEmail.js
           node --check brc-helper-extension/content.js
           node --check brc-helper-extension/background.js
           npm install --ignore-scripts
@@ -24,10 +23,10 @@ jobs:
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add backend/routes/uez.js backend/services/uezEmail.js brc-helper-extension/content.js brc-helper-extension/background.js brc-helper-extension/manifest.json src/AdminPage.jsx src/workflow.css
+          git add backend/routes/uezEmail.js brc-helper-extension/content.js brc-helper-extension/manifest.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Handle bad tax clearance and manual uploads"
+            git commit -m "Fix tax clearance capture and email attachment"
             git push
           fi
