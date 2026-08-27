@@ -22,6 +22,7 @@ function AdminWithAnalytics() {
 const path = window.location.pathname;
 let Root;
 if (path === '/admin') Root = AdminWithAnalytics;
+else if (path === '/admin/demo-client') Root = () => <App demoMode />;
 else if (path === '/admin/email-settings') Root = EmailSettingsPage;
 else if (path === '/brc-test') Root = BrcLiveTestPage;
 else if (path === '/forgot-password') Root = () => <AccountRecoveryPage mode="forgot" />;

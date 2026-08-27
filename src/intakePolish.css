@@ -24,3 +24,12 @@
 @media(max-width:760px){.service-intro-wrap{width:min(100% - 18px,1000px);padding:20px 0 34px}.service-intro-hero{padding:24px 20px;border-radius:20px;margin-bottom:12px}.service-intro-hero h1{font-size:34px}.service-intro-hero p{font-size:14px}.service-intro-actions{align-items:stretch}.service-intro-actions>*{width:100%}.service-explainer-grid{grid-template-columns:1fr;gap:8px;margin-bottom:12px}.service-explainer-grid article{padding:16px}.service-faq-card{padding:20px 18px;border-radius:18px;margin-bottom:12px}.service-faq-head{display:block}.service-faq-head>p{margin-top:7px}.service-faq-list summary{font-size:13px}.service-contact-card{grid-template-columns:1fr;padding:20px;border-radius:18px}.service-contact-actions{justify-content:flex-start}.service-contact-actions a{flex:1;text-align:center}.service-phone{grid-column:auto}}
 
 .intake-back-to-intro{margin:0 0 14px!important;width:auto!important}
+
+
+/* Launch safety: sole-prop declaration + admin demo client */
+.demo-mode-banner{position:sticky;top:0;z-index:1000;background:#fff3cd;border-bottom:1px solid #e5c65b;color:#6b5200;text-align:center;padding:9px 14px;font-size:12px;font-weight:900;letter-spacing:.03em}
+.sole-prop-choice{margin:14px 0 20px;padding:18px;border:1px solid #dfe3ee;border-radius:16px;background:#f8f9fc;display:grid;gap:12px}
+.sole-prop-choice.selected{background:#eff9f3;border-color:#afd8bd}
+.sole-prop-choice strong{font-size:15px}.sole-prop-choice p{margin:5px 0 0;color:#697188;font-size:13px;line-height:1.55}
+.sole-prop-choice button{justify-self:start;text-align:left;line-height:1.35}.sole-prop-confirmed{color:#247447;background:#e3f4e8}
+@media(max-width:760px){.sole-prop-choice button{width:100%}}

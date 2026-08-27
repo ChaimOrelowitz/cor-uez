@@ -16,7 +16,8 @@ import {
   uploadApplicationDocument,
   deleteDocument,
   reportApplicantPayment,
-  reportBrcCreated
+  reportBrcCreated,
+  whoAmI
 } from './api';
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
@@ -64,7 +65,7 @@ function formatDob(value) {
   return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
 }
 
-function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
+function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [myNjCredentials, setMyNjCredentials] = useState(null);
@@ -85,23 +86,29 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
 
 
   useEffect(() => {
+    if (demoMode) {
+      setMyNjCredentials({ username: 'demo.user', password: 'DemoPassword1!', challengeQuestion: 'Demo challenge question', challengeAnswer: 'Demo answer' });
+      return undefined;
+    }
     let active = true;
     getMyNjCredentials(app.id).then((result) => {
       if (active) setMyNjCredentials(result.exists ? result.credentials : null);
     }).catch(() => {});
     return () => { active = false; };
-  }, [app.id]);
+  }, [app.id, demoMode]);
 
   useEffect(() => {
+    if (demoMode) return undefined;
     let active = true;
     const refresh = () => { if (active && document.visibilityState === 'visible') onRefresh().catch(() => {}); };
     const timer = window.setInterval(refresh, 4000);
     window.addEventListener('focus', refresh);
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
-  }, [app.id, onRefresh]);
+  }, [app.id, onRefresh, demoMode]);
 
   async function uploadFormation(file) {
     if (!file) return;
+    if (demoMode) { setMessage('Demo only: Certificate of Formation upload simulated.'); return; }
     setUploading(true);
     setMessage('');
     try {
@@ -117,6 +124,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
 
   async function uploadApprovalEmail(file) {
     if (!file) return;
+    if (demoMode) { setMessage('Demo only: UEZ approval upload simulated.'); return; }
     setUploading(true);
     setMessage('');
     try {
@@ -131,6 +139,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   }
 
   async function reportPaymentSent() {
+    if (demoMode) { setMessage('Demo only: payment reported. Nothing was saved.'); return; }
     setPaymentBusy(true); setMessage('');
     try {
       await reportApplicantPayment(app.id);
@@ -141,6 +150,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   }
 
   async function reportBrcMade() {
+    if (demoMode) { setMessage('Demo only: BRC follow-up simulated. Nothing was saved.'); return; }
     setBrcBusy(true); setMessage('');
     try {
       await reportBrcCreated(app.id);
@@ -153,6 +163,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
 
 
   return <div className="app-shell">
+    {demoMode && <div className="demo-mode-banner">DEMO MODE · No data is saved, no emails are sent, and no applications are created.</div>}
     <header className="topbar">
       <div className="brand-mark">COR</div>
       <div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Application Portal</div></div>
@@ -274,7 +285,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   </div>;
 }
 
-export default function App() {
+export default function App({ demoMode = false }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -293,7 +304,13 @@ export default function App() {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [documents, setDocuments] = useState([]);
   const [uploadingType, setUploadingType] = useState('');
-  const [form, setForm] = useState({
+  const [solePropConfirmedHere, setSolePropConfirmedHere] = useState(false);
+  const [form, setForm] = useState(() => demoMode ? {
+    address: '123 Demo Street, Lakewood, NJ 08701', email: 'demo@corsolutions.io', password: 'Demo123!',
+    businessName: 'Demo Lakewood Business LLC', businessDescription: 'Demo business for testing the COR client flow', ein: '12-3456789', yearFounded: '2024',
+    isSoleProprietorship: 'no', fullTimeEmployees: '1', partTimeEmployees: '0', hasDba: 'no', dbaName: '',
+    owners: [{ title: 'Mr.', titleOther: '', firstName: 'Demo', lastName: 'Owner', email: 'demo@corsolutions.io', phone: '(732) 555-0100', dob: '01/01/1980', ssn: '123-45-6789', ownershipPercent: '100', addressLine1: '123 Demo Street', addressLine2: '', city: 'Lakewood', state: 'NJ', zip: '08701' }]
+  } : {
     address: '', email: '', password: '', businessName: '', businessDescription: '', ein: '', yearFounded: '',
     isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '',
     owners: [blankOwner()]
@@ -311,15 +328,22 @@ export default function App() {
     let active = true;
     getApplicantSession().then(async (current) => {
       if (!active) return;
+      if (demoMode) {
+        if (!current) { window.location.href = '/admin'; return; }
+        const me = await whoAmI();
+        if (me.role !== 'admin') { window.location.href = '/admin'; return; }
+        if (active) setSession(current);
+        return;
+      }
       if (current) {
         await loadLatestApplication().catch(() => {});
         if (active) setSession(current);
       } else if (active) {
         setSession(null);
       }
-    }).catch(() => {}).finally(() => { if (active) setAuthResolved(true); });
+    }).catch(() => { if (demoMode) window.location.href = '/admin'; }).finally(() => { if (active) setAuthResolved(true); });
     return () => { active = false; };
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     if (step !== 0 || addressMagicKey || form.address.trim().length < 3) {
@@ -392,7 +416,9 @@ export default function App() {
       programs: latest.program_code ? [{ code: latest.program_code, name: programNameFromCode(latest.program_code) }] : []
     } : null);
 
-    if (latest.business_name_input && full.owners?.length) setStep((full.documents || []).length ? 6 : 5);
+    // Always resume an unfinished application with saved owners at Documents. This forces
+    // the applicant to either upload a Formation document or explicitly confirm sole-prop status.
+    if (latest.business_name_input && full.owners?.length) { setSolePropConfirmedHere(false); setStep(5); }
     else if (latest.business_name_input) setStep(4);
     else setStep(3);
     return full;
@@ -436,6 +462,11 @@ export default function App() {
 
   async function runAddressCheck(e) {
     e.preventDefault();
+    if (demoMode) {
+      setEligibility({ eligible: true, matchedAddress: form.address, addressLine1: form.address, city: 'Lakewood', state: 'NJ', zip: '08701', latitude: 40.0821, longitude: -74.2097, zoneIdentifier: 'lakewood', zoneName: 'Lakewood Urban Enterprise Zone (UEZ)', programs: [{ code: 'lakewood_technology_grant', name: 'Lakewood LDC Technology Grant' }] });
+      setMessage('');
+      return;
+    }
     setBusy(true);
     setMessage('');
     setShowAddressSuggestions(false);
@@ -453,6 +484,7 @@ export default function App() {
   }
 
   async function createAccountAndCase() {
+    if (demoMode) { setApplicationId('demo-application'); setStep(3); setMessage(''); return; }
     if (!form.email.trim() || !form.password || form.password.length < 6) {
       setMessage('Enter your email and a password of at least 6 characters.');
       return;
@@ -564,12 +596,13 @@ export default function App() {
   }
 
   async function saveBusinessStep() {
+    if (demoMode) { setForm((old) => ({ ...old, isSoleProprietorship: 'no' })); setStep(4); setMessage(''); return; }
     const einDigits = form.ein.replace(/\D/g, '');
     const foundedDigits = String(form.yearFounded || '').replace(/\D/g, '');
     if (
       !form.businessName.trim() || !form.businessDescription.trim() || einDigits.length !== 9 ||
       foundedDigits.length !== 4 || form.fullTimeEmployees === '' || form.partTimeEmployees === '' ||
-      !form.isSoleProprietorship || !form.hasDba || (form.hasDba === 'yes' && !form.dbaName.trim())
+      !form.hasDba || (form.hasDba === 'yes' && !form.dbaName.trim())
     ) {
       setMessage('Complete every business field before continuing. All fields are required.');
       return;
@@ -587,13 +620,14 @@ export default function App() {
         businessDescription: form.businessDescription,
         ein: form.ein,
         yearFounded: form.yearFounded,
-        isSoleProprietorship: form.isSoleProprietorship === 'yes',
+        isSoleProprietorship: false,
         fullTimeEmployees: form.fullTimeEmployees,
         partTimeEmployees: form.partTimeEmployees,
         hasDba: form.hasDba === 'yes',
         dbaName: form.hasDba === 'yes' ? form.dbaName.trim() : '',
         contactPhone: form.owners[0]?.phone || null
       });
+      setForm((old) => ({ ...old, isSoleProprietorship: 'no' }));
       setStep(4);
     } catch (err) {
       setMessage(err.message);
@@ -603,6 +637,7 @@ export default function App() {
   }
 
   async function saveOwnerStep() {
+    if (demoMode) { setStep(5); setOwnerError(''); return; }
     const ownersForSave = primaryIs100 ? [{ ...form.owners[0], ownershipPercent: '100' }] : form.owners;
     const total = ownersForSave.reduce((sum, owner) => sum + (Number(owner.ownershipPercent) || 0), 0);
     if (Math.abs(total - 100) > 0.001) {
@@ -658,12 +693,44 @@ export default function App() {
     if (index) setForm((old) => ({ ...old, owners: old.owners.filter((_, i) => i !== index) }));
   }
 
+  async function persistSoleProprietorship(value) {
+    if (demoMode) {
+      setForm((old) => ({ ...old, isSoleProprietorship: value ? 'yes' : 'no' }));
+      setSolePropConfirmedHere(value);
+      return;
+    }
+    await saveBusiness(applicationId, {
+      businessName: form.businessName, businessDescription: form.businessDescription, ein: form.ein, yearFounded: form.yearFounded,
+      isSoleProprietorship: value, fullTimeEmployees: form.fullTimeEmployees, partTimeEmployees: form.partTimeEmployees,
+      hasDba: form.hasDba === 'yes', dbaName: form.hasDba === 'yes' ? form.dbaName.trim() : '', contactPhone: form.owners[0]?.phone || null
+    });
+    setForm((old) => ({ ...old, isSoleProprietorship: value ? 'yes' : 'no' }));
+    setSolePropConfirmedHere(value);
+  }
+
+  async function declareSoleProprietorship() {
+    setBusy(true); setMessage('');
+    try {
+      await persistSoleProprietorship(true);
+      setMessage('Sole proprietorship confirmed. No Certificate of Formation is required.');
+    } catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function uploadDoc(type, file) {
     if (!file || !applicationId) return;
+    if (demoMode) {
+      const demoDoc = { id: `demo-${Date.now()}`, document_type: type, filename: file.name || 'demo-document.pdf' };
+      setDocuments((old) => [...old.filter((doc) => doc.document_type !== type || type === 'supporting'), demoDoc]);
+      if (type === 'formation') { await persistSoleProprietorship(false); setSolePropConfirmedHere(false); }
+      setMessage(`${file.name || 'Document'} added in demo mode. Nothing was uploaded.`);
+      return;
+    }
     setUploadingType(type);
     setMessage('');
     try {
       await uploadApplicationDocument(applicationId, type, file);
+      if (type === 'formation') { await persistSoleProprietorship(false); setSolePropConfirmedHere(false); }
       const refreshed = await getApplication(applicationId);
       setBundle(refreshed);
       setDocuments(refreshed.documents || []);
@@ -675,6 +742,7 @@ export default function App() {
   }
 
   async function removeUploadedDocument(doc) {
+    if (demoMode) { setDocuments((old) => old.filter((item) => item.id !== doc.id)); setMessage('Demo document removed.'); return; }
     setUploadingType('remove'); setMessage('');
     try {
       await deleteDocument(applicationId, doc.id);
@@ -692,16 +760,29 @@ export default function App() {
     setStep(1);
   }
 
-  function continueFromDocuments() {
-    if (form.isSoleProprietorship !== 'yes' && !hasFormation) {
-      setMessage('Upload the Certificate of Formation or formation document before continuing.');
+  async function continueFromDocuments() {
+    if (demoMode) { setMessage(''); setStep(6); return; }
+    if (!hasFormation && !solePropConfirmedHere) {
+      setMessage('Upload the Certificate of Formation, or confirm below that the business is legally a sole proprietorship.');
       return;
     }
-    setMessage('');
-    setStep(6);
+    setBusy(true); setMessage('');
+    try {
+      // Formation present means this should not remain marked sole prop because of an earlier misunderstood answer.
+      await persistSoleProprietorship(!hasFormation && solePropConfirmedHere);
+      setStep(6);
+    } catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
   }
 
   async function submitFinal() {
+    if (demoMode) {
+      setPortalBundle({
+        application: { id: 'demo-application', business_name_input: form.businessName, status: 'in_progress', is_sole_proprietorship: form.isSoleProprietorship === 'yes', formation_review_status: hasFormation ? 'not_reviewed' : 'approved', brc_status: 'found', pbs_status: 'account_created', uez_approval_review_status: 'not_reviewed' },
+        documents: documents, payments: [], statusEvents: [{ id: 'demo-event', status: 'submitted_for_review', label: 'Application submitted', created_at: new Date().toISOString() }]
+      });
+      return;
+    }
     setBusy(true);
     setMessage('');
     try {
@@ -716,12 +797,14 @@ export default function App() {
   }
 
   async function refreshPortal() {
+    if (demoMode) return;
     if (!portalBundle?.application?.id) return;
     const refreshed = await getApplication(portalBundle.application.id);
     setPortalBundle(refreshed);
   }
 
   async function handleSignOut() {
+    if (demoMode) { window.location.href = '/admin'; return; }
     await signOutApplicant();
     window.location.href = '/';
   }
@@ -760,7 +843,7 @@ export default function App() {
   }
 
   if (portalBundle) {
-    return <ApplicantPortal bundle={portalBundle} onRefresh={refreshPortal} onSignOut={handleSignOut} />;
+    return <ApplicantPortal bundle={portalBundle} onRefresh={refreshPortal} onSignOut={handleSignOut} demoMode={demoMode} />;
   }
 
   if (!session && showServiceIntro) {
@@ -812,6 +895,7 @@ export default function App() {
   }
 
   return <div className="app-shell">
+    {demoMode && <div className="demo-mode-banner">DEMO MODE · No data is saved, no emails are sent, and no applications are created.</div>}
     <header className="topbar">
       <div className="brand-mark">COR</div>
       <div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Enrollment & Grant Support</div></div>
@@ -876,7 +960,6 @@ export default function App() {
           <div className="field-grid">
             <div><label>EIN <span className="required-star">*</span></label><input required inputMode="numeric" value={form.ein} onChange={(e) => { const d=e.target.value.replace(/\D/g,'').slice(0,9); setForm((old)=>({...old,ein:d.length>2?`${d.slice(0,2)}-${d.slice(2)}`:d})); }} maxLength="10" placeholder="12-3456789" /></div>
             <div><label>Year founded <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="4" value={form.yearFounded} onChange={(e) => setForm((old)=>({...old,yearFounded:e.target.value.replace(/\D/g,'').slice(0,4)}))} /></div>
-            <div><label>Is this business a sole proprietorship? <span className="required-star">*</span></label><div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="soleProp" value="yes" checked={form.isSoleProprietorship==='yes'} onChange={update('isSoleProprietorship')} required />Yes</label><label className="cor-radio-option"><input type="radio" name="soleProp" value="no" checked={form.isSoleProprietorship==='no'} onChange={update('isSoleProprietorship')} />No</label></div></div>
             <div><label>Does the business have a DBA? <span className="required-star">*</span></label><div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasDba" value="yes" checked={form.hasDba==='yes'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasDba" value="no" checked={form.hasDba==='no'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value,dbaName:''}))} />No</label></div></div>
             {form.hasDba === 'yes' && <div><label>What is the DBA name? <span className="required-star">*</span></label><input value={form.dbaName} onChange={update('dbaName')} required /></div>}
             <div><label>Full-time employees <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="3" value={form.fullTimeEmployees} onChange={(e)=>setForm((old)=>({...old,fullTimeEmployees:e.target.value.replace(/\D/g,'').slice(0,3)}))} /></div>
@@ -916,13 +999,19 @@ export default function App() {
         {step === 5 && <div className="content-block">
           <div className="intro-copy"><h3>Documents</h3><p>Upload your formation document and any other supporting documents you want COR to have.</p></div>
 
-          <div className="upload-card">
-            <div><strong>Certificate of Formation / formation document {form.isSoleProprietorship !== 'yes' && <span className="required-star">*</span>}</strong><p>{form.isSoleProprietorship === 'yes' ? 'Optional for a sole proprietorship.' : 'Required before submission.'}</p></div>
+          <div className="upload-card formation-choice-card">
+            <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Upload the business's Certificate of Formation.</p></div>
             <label className="secondary inline-button file-button">
-              {uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload document'}
-              <input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} />
+              {uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}
+              <input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || solePropConfirmedHere} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} />
             </label>
           </div>
+          {!hasFormation && <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''}`}>
+            <div><strong>Don't have a Certificate of Formation?</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship.</p></div>
+            <button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>
+              {solePropConfirmedHere ? '✓ Sole proprietorship confirmed' : "I don't have a Certificate of Formation because this business is a sole proprietorship"}
+            </button>
+          </div>}
 
           <div className="upload-card">
             <div><strong>Other supporting document</strong><p>Optional. Add anything you think COR should have for this application.</p></div>
