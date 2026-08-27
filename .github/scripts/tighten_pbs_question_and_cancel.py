@@ -1,0 +1,81 @@
+from pathlib import Path
+
+
+def once(text, old, new, label):
+    if old not in text:
+        raise SystemExit(f'Missing anchor: {label}')
+    return text.replace(old, new, 1)
+
+# ---------------- api ----------------
+p = Path('src/api.js')
+s = p.read_text()
+s = once(s, "export function saveOwners(applicationId, owners) {\n  return request(`/api/uez/applications/${applicationId}/owners`, {\n    method: 'PUT',\n    body: JSON.stringify({ owners })\n  });\n}\n", "export function saveOwners(applicationId, owners) {\n  return request(`/api/uez/applications/${applicationId}/owners`, {\n    method: 'PUT',\n    body: JSON.stringify({ owners })\n  });\n}\n\nexport function savePbsAccountInfo(applicationId, payload) {\n  return request(`/api/uez/applications/${applicationId}/pbs-account-info`, {\n    method: 'PUT',\n    body: JSON.stringify(payload)\n  });\n}\n", 'api helper')
+p.write_text(s)
+
+# ---------------- backend ----------------
+p = Path('backend/routes/uez.js')
+s = p.read_text()
+s = s.replace("documents: ['formation', 'soleProp', 'supporting']", "documents: ['formation', 'soleProp', 'pbsAccount', 'supporting']", 1)
+s = s.replace("documents: { formation: 2, soleProp: 2, supporting: 2 }", "documents: { formation: 2, soleProp: 2, pbsAccount: 2, supporting: 2 }", 1)
+
+endpoint = '''router.put('/applications/:id/pbs-account-info', async (req, res) => {\n  try {\n    const application = await getOwnedApplication(req.params.id, req.user);\n    if (!application) return res.status(404).json({ error: 'Application not found' });\n    const hasExisting = req.body?.hasExistingPbsAccount;\n    if (typeof hasExisting !== 'boolean') return res.status(400).json({ error: 'Please answer whether you already have a New Jersey PBS account.' });\n    const username = String(req.body?.username || '').trim();\n    const password = String(req.body?.password || '');\n    const now = new Date().toISOString();\n\n    const { data: existingCredential, error: credentialReadError } = await supabase.from('uez_credentials')\n      .select('*').eq('application_id', application.id).eq('provider', 'mynj').maybeSingle();\n    if (credentialReadError) throw credentialReadError;\n\n    if (hasExisting) {\n      if (!username || !password) return res.status(400).json({ error: 'Enter the MyNJ username and password for the existing PBS account.' });\n      const { error: credentialError } = await supabase.from('uez_credentials').upsert({\n        application_id: application.id, provider: 'mynj',\n        username_enc: encryptText(username), password_enc: encryptText(password),\n        challenge_question_enc: existingCredential?.challenge_question_enc || null,\n        challenge_answer_enc: existingCredential?.challenge_answer_enc || null, updated_at: now\n      }, { onConflict: 'application_id,provider' });\n      if (credentialError) throw credentialError;\n    } else if (application.pbs_status === 'existing_account_reported' && existingCredential) {\n      const { error: deleteError } = await supabase.from('uez_credentials').delete().eq('id', existingCredential.id);\n      if (deleteError) throw deleteError;\n    }\n\n    const patch = { has_existing_pbs_account: hasExisting, updated_at: now };\n    if (hasExisting) { patch.pbs_account_created = true; patch.pbs_status = 'existing_account_reported'; }\n    else if (application.pbs_status === 'existing_account_reported') { patch.pbs_account_created = false; patch.pbs_status = 'not_started'; }\n\n    const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();\n    if (error) throw error;\n    if (application.has_existing_pbs_account !== hasExisting) {\n      await addStatusEvent(application.id, hasExisting ? 'existing_pbs_reported' : 'pbs_account_needed', hasExisting ? 'Existing PBS account reported' : 'PBS account needed', hasExisting ? 'Applicant reported that the business already has a New Jersey PBS account and supplied the MyNJ login.' : 'Applicant reported that the business does not already have a New Jersey PBS account.', req.user.id, false);\n    }\n    res.json({ application: data });\n  } catch (err) { res.status(400).json({ error: err.message }); }\n});\n\n'''
+s = once(s, "router.get('/applications/:id/credentials/mynj', async (req, res) => {", endpoint + "router.get('/applications/:id/credentials/mynj', async (req, res) => {", 'pbs endpoint')
+p.write_text(s)
+
+# ---------------- App ----------------
+p = Path('src/App.jsx')
+s = p.read_text()
+s = once(s, "  saveOwners,\n", "  saveOwners,\n  savePbsAccountInfo,\n", 'app import')
+s = s.replace("documents: ['formation', 'soleProp', 'supporting']", "documents: ['formation', 'soleProp', 'pbsAccount', 'supporting']", 1)
+s = s.replace("documents: { formation: 2, soleProp: 2, supporting: 2 }", "documents: { formation: 2, soleProp: 2, pbsAccount: 2, supporting: 2 }", 1)
+s = s.replace("isSoleProprietorship: 'no', fullTimeEmployees: '1', partTimeEmployees: '0', hasDba: 'no', dbaName: '',", "isSoleProprietorship: 'no', fullTimeEmployees: '1', partTimeEmployees: '0', hasDba: 'no', dbaName: '', hasExistingPbsAccount: 'no', pbsUsername: '', pbsPassword: '',", 1)
+s = s.replace("isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '',", "isSoleProprietorship: '', fullTimeEmployees: '', partTimeEmployees: '', hasDba: '', dbaName: '', hasExistingPbsAccount: '', pbsUsername: '', pbsPassword: '',", 1)
+s = once(s, "    const full = await getApplication(latest.id);\n    setBundle(full);", "    const full = await getApplication(latest.id);\n    const existingPbsLogin = latest.has_existing_pbs_account === true ? await getMyNjCredentials(latest.id).catch(() => ({ exists: false, credentials: null })) : { exists: false, credentials: null };\n    setBundle(full);", 'load pbs login')
+s = once(s, "      dbaName: latest.dba_name || old.dbaName,\n      owners:", "      dbaName: latest.dba_name || old.dbaName,\n      hasExistingPbsAccount: latest.has_existing_pbs_account == null ? old.hasExistingPbsAccount : (latest.has_existing_pbs_account ? 'yes' : 'no'),\n      pbsUsername: existingPbsLogin?.credentials?.username || old.pbsUsername,\n      pbsPassword: existingPbsLogin?.credentials?.password || old.pbsPassword,\n      owners:", 'load pbs fields')
+
+pbs_block = '''              if (key === 'pbsAccount') return <div className={`upload-card pbs-account-question ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>\n                <div><strong>Do you already have a New Jersey Premier Business Services (PBS) account? <span className="required-star">*</span></strong><p>If you already use PBS/MyNJ for this business, choose Yes and provide the login so COR can use the existing account.</p></div>\n                <div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="yes" checked={form.hasExistingPbsAccount==='yes'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="no" checked={form.hasExistingPbsAccount==='no'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value,pbsUsername:'',pbsPassword:''}))} />No</label></div>\n                <a className="pbs-check-link" href="https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/jsp/home.jsp" target="_blank" rel="noreferrer">Not sure? Open PBS / MyNJ to check for a saved login or reset your password.</a>\n                {form.hasExistingPbsAccount === 'yes' && <div className="field-grid pbs-existing-login-grid"><div><label>MyNJ username <span className="required-star">*</span></label><input value={form.pbsUsername} onChange={update('pbsUsername')} required /></div><div><label>MyNJ password <span className="required-star">*</span></label><input type="password" value={form.pbsPassword} onChange={update('pbsPassword')} required /></div></div>}\n              </div>;\n'''
+s = once(s, "              if (key === 'supporting') return <div className={`upload-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>", pbs_block + "              if (key === 'supporting') return <div className={`upload-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>", 'pbs block')
+s = once(s, "    setBusy(true); setMessage('');\n    try {\n      // Formation present means this should not remain marked sole prop because of an earlier misunderstood answer.", "    if (!form.hasExistingPbsAccount) { setMessage('Please answer whether you already have a New Jersey PBS account.'); return; }\n    if (form.hasExistingPbsAccount === 'yes' && (!form.pbsUsername.trim() || !form.pbsPassword)) { setMessage('Enter the MyNJ username and password for your existing PBS account.'); return; }\n    setBusy(true); setMessage('');\n    try {\n      // Formation present means this should not remain marked sole prop because of an earlier misunderstood answer.", 'pbs validation')
+s = once(s, "      await persistSoleProprietorship(!hasFormation && solePropConfirmedHere);\n      setStep(6);", "      await persistSoleProprietorship(!hasFormation && solePropConfirmedHere);\n      await savePbsAccountInfo(applicationId, { hasExistingPbsAccount: form.hasExistingPbsAccount === 'yes', username: form.hasExistingPbsAccount === 'yes' ? form.pbsUsername.trim() : '', password: form.hasExistingPbsAccount === 'yes' ? form.pbsPassword : '' });\n      setStep(6);", 'pbs save')
+s = s.replace("const approvalStageReached = app.pbs_status === 'account_created' ||", "const approvalStageReached = app.pbs_status === 'account_created' || app.pbs_status === 'existing_account_reported' ||", 1)
+s = s.replace("<div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong></div>\n            <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong></div>", "{myNjCredentials.challengeQuestion && <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong></div>}\n            {myNjCredentials.challengeAnswer && <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong></div>}", 1)
+p.write_text(s)
+
+# ---------------- layout editor ----------------
+p = Path('src/SignupLayoutPage.jsx')
+s = p.read_text()
+s = s.replace("documents: { title: 'Documents page', fields: { formation: 'Certificate of Formation upload', soleProp: 'Sole proprietorship alternative', supporting: 'Other supporting document' } }", "documents: { title: 'Documents page', fields: { formation: 'Certificate of Formation upload', soleProp: 'Sole proprietorship alternative', pbsAccount: 'Existing PBS account question', supporting: 'Other supporting document' } }", 1)
+p.write_text(s)
+
+# ---------------- Admin ----------------
+p = Path('src/AdminPage.jsx')
+s = p.read_text()
+s = once(s, "  saveOwners,\n", "  saveOwners,\n  savePbsAccountInfo,\n", 'admin import')
+s = once(s, "  if (!app.pbs_account_created) return { bucket: 'needs', action: 'Set up PBS', tone: 'danger', stage, rank: 6 };", "  if (app.has_existing_pbs_account == null) return { bucket: 'needs', action: 'Confirm PBS account answer', tone: 'danger', stage, rank: 6 };\n  if (!app.pbs_account_created) return { bucket: 'needs', action: 'Set up PBS', tone: 'danger', stage, rank: 6 };", 'admin queue')
+s = once(s, "  const [message, setMessage] = useState('');", "  const [message, setMessage] = useState('');\n  const [pbsAnswerDraft, setPbsAnswerDraft] = useState('');\n  const [pbsLoginDraft, setPbsLoginDraft] = useState({ username: '', password: '' });", 'admin states')
+
+save_fn = '''\n  async function saveExistingPbsAnswer() {\n    if (!pbsAnswerDraft) return setMessage('Choose Yes or No for the PBS account question.');\n    if (pbsAnswerDraft === 'yes' && (!pbsLoginDraft.username.trim() || !pbsLoginDraft.password)) return setMessage('Enter the existing MyNJ username and password.');\n    setBusy(true); setMessage('Saving PBS account answer…');\n    try {\n      await savePbsAccountInfo(detail.application.id, { hasExistingPbsAccount: pbsAnswerDraft === 'yes', username: pbsAnswerDraft === 'yes' ? pbsLoginDraft.username.trim() : '', password: pbsAnswerDraft === 'yes' ? pbsLoginDraft.password : '' });\n      await refreshList(detail.application.id);\n      setMessage('PBS account answer saved.');\n    } catch (err) { setMessage(err.message); } finally { setBusy(false); }\n  }\n\n'''
+s = once(s, "  async function createMyNjCredentials() {", save_fn + "  async function createMyNjCredentials() {", 'admin save fn')
+
+pbs_admin_ui = '''              <div className="admin-pbs-answer-box">\n                <label>Does this business already have a PBS account?</label>\n                <select value={pbsAnswerDraft || (detail.application.has_existing_pbs_account == null ? '' : detail.application.has_existing_pbs_account ? 'yes' : 'no')} onChange={(e)=>{ setPbsAnswerDraft(e.target.value); if(e.target.value==='no') setPbsLoginDraft({username:'',password:''}); }}><option value="">Not answered</option><option value="yes">Yes — existing PBS account</option><option value="no">No — COR needs to create it</option></select>\n                {(pbsAnswerDraft || (detail.application.has_existing_pbs_account ? 'yes' : '')) === 'yes' && <div className="credential-edit-grid"><label>Existing MyNJ username<input value={pbsLoginDraft.username || myNjCredentials?.username || ''} onChange={(e)=>setPbsLoginDraft((old)=>({...old,username:e.target.value}))} /></label><label>Existing MyNJ password<input type="password" value={pbsLoginDraft.password || myNjCredentials?.password || ''} onChange={(e)=>setPbsLoginDraft((old)=>({...old,password:e.target.value}))} /></label></div>}\n                <button className="secondary admin-full-button" onClick={saveExistingPbsAnswer} disabled={busy}>Save PBS answer</button>\n              </div>\n'''
+s = once(s, "              {myNjCredentials ? <>", pbs_admin_ui + "              {myNjCredentials ? <>", 'admin pbs ui')
+p.write_text(s)
+
+# ---------------- extension: cancel job if popup closed ----------------
+p = Path('brc-helper-extension/background.js')
+s = p.read_text()
+cancel = '''\nchrome.windows.onRemoved.addListener(async (windowId) => {\n  const job = await getJob().catch(() => null);\n  if (!job || !job.windowId || Number(job.windowId) !== Number(windowId)) return;\n  // Closing the workflow popup is an explicit cancel. Clear the job immediately so\n  // content scripts in any surviving tabs cannot continue the prior applicant's workflow.\n  await setJob(null);\n  const tabs = await chrome.tabs.query({}).catch(() => []);\n  const appTabs = tabs.filter((t) => t.url && (() => { try { return isAllowedOrigin(new URL(t.url).origin); } catch (_) { return false; } })());\n  await Promise.all(appTabs.map((tab) => chrome.tabs.sendMessage(tab.id, { source: 'cor-uez-background', type: 'COR_UEZ_STATUS', jobId: job.id, workflow: job.workflow, status: 'cancelled' }).catch(() => {})));\n});\n\n'''
+s = once(s, "chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {", cancel + "chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {", 'window close cancel')
+# bump version
+mp = Path('brc-helper-extension/manifest.json')
+m = mp.read_text().replace('"version": "1.3.12"', '"version": "1.3.13"', 1)
+mp.write_text(m)
+p.write_text(s)
+
+# light css
+p = Path('src/workflow.css')
+s = p.read_text()
+s += '''\n.pbs-account-question .pbs-check-link{display:inline-block;margin-top:10px;font-weight:700}.pbs-existing-login-grid{margin-top:14px}.admin-pbs-answer-box{border:1px solid #d9dee8;border-radius:14px;padding:14px;margin-bottom:14px;background:#f8fafc}.admin-pbs-answer-box>label{display:block;font-weight:800;margin-bottom:7px}.admin-pbs-answer-box>select{width:100%;margin-bottom:10px}\n'''
+p.write_text(s)
+
+print('PBS question/admin + popup cancel patch applied')
