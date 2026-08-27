@@ -6,6 +6,7 @@ import {
   getApplicantSession,
   getApplication,
   getMyApplications,
+  getMyNjCredentials,
   saveBusiness,
   saveOwners,
   signInApplicant,
@@ -66,6 +67,8 @@ function formatDob(value) {
 function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
+  const [myNjCredentials, setMyNjCredentials] = useState(null);
+  const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [brcBusy, setBrcBusy] = useState(false);
   const app = bundle.application;
@@ -80,6 +83,14 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   const latestPayment = [...(bundle.payments || [])].reverse()[0] || null;
   const approvalStageReached = app.pbs_status === 'account_created' || app.pbs_status === 'uez_approval_uploaded' || app.status === 'waiting_for_uez_approval' || Boolean(approval);
 
+
+  useEffect(() => {
+    let active = true;
+    getMyNjCredentials(app.id).then((result) => {
+      if (active) setMyNjCredentials(result.exists ? result.credentials : null);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [app.id]);
 
   useEffect(() => {
     let active = true;
@@ -237,6 +248,18 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
             : <><p className="muted">After you send the $500 payment, click below.</p><button className="primary admin-full-button" onClick={reportPaymentSent} disabled={paymentBusy}>{paymentBusy ? 'Saving…' : 'I sent my payment'}</button></>}
         </section>
 
+        {myNjCredentials && <section className="wizard-card portal-card portal-wide mynj-card">
+          <div className="portal-section-head"><h3>MyNJ / PBS account information</h3><span>✓</span></div>
+          <div className="credential-grid applicant-credential-grid">
+            <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong></div>
+            <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong></div>
+            <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong></div>
+            <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong></div>
+          </div>
+          <button className="secondary portal-secret-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
+          <p className="muted credential-note">Keep this login information private. You may need it to access New Jersey services related to your application.</p>
+        </section>}
+
         <section className="wizard-card portal-card portal-wide">
           <div className="portal-section-head"><h3>Updates</h3></div>
           <div className="timeline">
@@ -261,6 +284,7 @@ export default function App() {
   const [portalBundle, setPortalBundle] = useState(null);
   const [ownerError, setOwnerError] = useState('');
   const [signInMode, setSignInMode] = useState(() => new URLSearchParams(window.location.search).get('login') === '1');
+  const [showServiceIntro, setShowServiceIntro] = useState(true);
   const [session, setSession] = useState(null);
   const [authResolved, setAuthResolved] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -737,6 +761,56 @@ export default function App() {
 
   if (portalBundle) {
     return <ApplicantPortal bundle={portalBundle} onRefresh={refreshPortal} onSignOut={handleSignOut} />;
+  }
+
+  if (!session && showServiceIntro) {
+    return <div className="app-shell service-intro-shell">
+      <header className="topbar">
+        <div className="brand-mark">COR</div>
+        <div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Enrollment & Grant Support</div></div>
+        <button className="signin-link" onClick={openSignIn}>Log in</button>
+      </header>
+      <main className="service-intro-wrap">
+        <section className="service-intro-hero">
+          <div className="eyebrow">LAKEWOOD UEZ SIGNUP & GRANT SUPPORT</div>
+          <h1>UEZ signup and grant applications, without figuring it all out yourself.</h1>
+          <p>COR Solutions provides a start-to-finish application service for eligible Lakewood businesses. Start with a quick address check, complete one intake, and use your account to follow the application as it moves forward.</p>
+          <div className="service-intro-actions">
+            <button className="primary" onClick={() => { setShowServiceIntro(false); setMessage(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Check my business address</button>
+            <a className="secondary service-link-button" href="tel:+17329300739">Call 732-930-0739</a>
+          </div>
+        </section>
+
+        <section className="service-explainer-grid" aria-label="About the service">
+          <article><span>WHAT</span><h3>UEZ enrollment + grant application</h3><p>One intake for your New Jersey UEZ enrollment and the available Lakewood grant application.</p></article>
+          <article><span>WHO</span><h3>Eligible Lakewood businesses</h3><p>The first step checks whether your business location is inside the UEZ. If it is, you can continue directly into the application.</p></article>
+          <article><span>HOW</span><h3>Complete one online intake</h3><p>Provide the requested business and ownership information, upload your Certificate of Formation when applicable, and respond to any action items that appear in your account.</p></article>
+          <article><span>COST</span><h3>$500 service fee</h3><p>The $500 service fee covers UEZ signup and the grant application service. If the LDC rejects the application, the fee is refunded; after LDC approval it is non-refundable.</p></article>
+        </section>
+
+        <section className="service-faq-card">
+          <div className="service-faq-head"><div><span className="eyebrow">FAQ</span><h2>Questions before you start?</h2></div><p>Open any question below, or reach out directly.</p></div>
+          <div className="service-faq-list">
+            <details><summary>What is the UEZ?</summary><p>New Jersey's Urban Enterprise Zone program provides benefits to qualifying businesses located within designated UEZ areas. This service starts by checking your business location against the UEZ map.</p></details>
+            <details><summary>What does COR Solutions do?</summary><p>COR Solutions collects the information needed for the process, prepares the UEZ enrollment and applicable Lakewood grant application, and gives you an online account where you can see updates and anything that still needs your attention.</p></details>
+            <details><summary>What will I need to provide?</summary><p>You will enter basic business and owner information. If the business is not a sole proprietorship, you will also upload its Certificate of Formation. If another item is needed later, it will appear clearly in your account.</p></details>
+            <details><summary>How do I know if my business is eligible?</summary><p>Click “Check my business address.” The next page checks the location against the UEZ map before you create an account or complete the full intake.</p></details>
+            <details><summary>Is a grant guaranteed?</summary><p>No. Eligibility and final approval are determined by the applicable government and grant agencies. COR Solutions provides the application service but cannot guarantee an approval or award.</p></details>
+            <details><summary>What happens after I submit?</summary><p>You can log back into your COR account at any time. Your activity tracker shows the application moving forward, and any item you need to provide or replace will appear as an action in your account.</p></details>
+          </div>
+        </section>
+
+        <section className="service-contact-card">
+          <div><span className="eyebrow">QUESTIONS?</span><h2>Talk to Chaim before you apply.</h2><p>Call, text, or WhatsApp and ask anything you need to know about the service or the UEZ process.</p></div>
+          <div className="service-contact-actions">
+            <a href="tel:+17329300739">Call</a>
+            <a href="sms:+17329300739">Text</a>
+            <a href="https://wa.me/17329300739" target="_blank" rel="noreferrer">WhatsApp</a>
+          </div>
+          <strong className="service-phone">732-930-0739</strong>
+        </section>
+      </main>
+    </div>;
   }
 
   return <div className="app-shell">

@@ -174,6 +174,7 @@ function applicationDraftFrom(app) {
 
 function ownerDraftFrom(owner = {}) {
   return {
+    title: owner.title || '',
     firstName: owner.firstName || '',
     lastName: owner.lastName || '',
     email: owner.email || '',
@@ -674,6 +675,10 @@ export default function AdminPage() {
       setMessage('Business name and contact email are required.');
       return;
     }
+    if (ownerDrafts.some((owner) => !String(owner.title || '').trim())) {
+      setMessage('Choose a title for each owner before saving.');
+      return;
+    }
     if (!applicationDraft.hasDba || (applicationDraft.hasDba === 'yes' && !applicationDraft.dbaName.trim())) {
       setMessage('Complete the DBA information before saving.');
       return;
@@ -1119,6 +1124,7 @@ export default function AdminPage() {
                       <button className="owner-remove-button" type="button" onClick={() => removeOwner(index)}>Remove owner</button>
                     </div>
                     <div className="admin-edit-grid owner-edit-grid">
+                      <div><label>Title (Mr., Mrs., etc.) <span className="required-star">*</span></label><select value={owner.title || ''} onChange={(e) => updateOwnerDraft(index, 'title', e.target.value)}><option value="">Select title</option><option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Ms.">Ms.</option><option value="Dr.">Dr.</option><option value="Rabbi">Rabbi</option>{owner.title && !['Mr.','Mrs.','Ms.','Dr.','Rabbi'].includes(owner.title) && <option value={owner.title}>{owner.title}</option>}</select></div>
                       <div><label>First name <span className="required-star">*</span></label><input value={owner.firstName} onChange={(e) => updateOwnerDraft(index, 'firstName', e.target.value)} /></div>
                       <div><label>Last name <span className="required-star">*</span></label><input value={owner.lastName} onChange={(e) => updateOwnerDraft(index, 'lastName', e.target.value)} /></div>
                       <div><label>Email <span className="required-star">*</span></label><input type="email" value={owner.email} onChange={(e) => updateOwnerDraft(index, 'email', e.target.value)} /></div>
@@ -1140,6 +1146,7 @@ export default function AdminPage() {
                 {detail.owners.map((owner) => <div className="owner-admin-card" key={owner.id}>
                   <div className="owner-admin-title"><strong>{owner.firstName} {owner.lastName}</strong><span>{owner.ownershipPercent}%</span></div>
                   <dl className="data-grid compact-data">
+                    <div><dt>Title</dt><dd>{owner.title || '—'}</dd></div>
                     <div><dt>Email</dt><dd>{owner.email || '—'}</dd></div>
                     <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>
                     <div><dt>Position / title</dt><dd>{owner.positionTitle || (detail.owners.length === 1 ? 'Owner' : 'Partner')}</dd></div>
