@@ -10,20 +10,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply service intro feedback
-        run: python .github/scripts/polish_service_intro_feedback.py
-      - name: Verify frontend
+      - name: Add PBS login-only action and clean Address back button
+        run: python .github/scripts/add_pbs_login_action_and_cleanup.py
+      - name: Verify extension and frontend
         run: |
+          node --check brc-helper-extension/background.js
+          node --check brc-helper-extension/content.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx src/intakePolish.css
+          git add src/App.jsx src/AdminPage.jsx brc-helper-extension/background.js brc-helper-extension/content.js brc-helper-extension/manifest.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Polish UEZ service intro feedback"
+            git commit -m "Add PBS login-only action"
             git push
           fi
