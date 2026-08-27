@@ -354,9 +354,12 @@
         /TYTR_ACE_App\/servlet\/common\/portalRequest/i.test(link.href || '')
       );
       if (taxLink) {
-        const centerKey = `corTaxCenter:${job.id}`;
-        if (!sessionStorage.getItem(centerKey)) {
-          sessionStorage.setItem(centerKey, '1');
+        // Do not permanently mark this step complete until navigation actually succeeds.
+        // Retry every two seconds while the Tax & Revenue link is still on the page.
+        const centerKey = `corTaxCenterAttempt:${job.id}`;
+        const lastAttempt = Number(sessionStorage.getItem(centerKey) || 0);
+        if (!lastAttempt || Date.now() - lastAttempt > 2000) {
+          sessionStorage.setItem(centerKey, String(Date.now()));
           notice('COR is opening Tax & Revenue Center.');
           await send({ type: 'COR_NJ_STATUS', status: 'opening_tax_revenue_center' });
           navigateLink(taxLink);
@@ -380,12 +383,17 @@
       // Bad tax-clearance result: NJ returns to this same screen with an eligibility error.
       if (/We cannot verify that you are eligible to receive a Tax Clearance Certificate at this time/i.test(text)) {
         sent = true;
-        const issue = [...document.querySelectorAll('td, div, table, section, form')].find((element) =>
-          /We cannot verify that you are eligible to receive a Tax Clearance Certificate at this time/i.test(element.innerText || '')
-        );
-        issue?.scrollIntoView({ block: 'start', inline: 'nearest' });
-        await new Promise((resolve) => setTimeout(resolve, 180));
-        notice('NJ could not issue the tax clearance. COR is saving this screen and notifying the client.');
+
+        // This screenshot becomes part of the client's permanent record. Hide COR's helper
+        // notice and capture from the absolute top so the NJ header, Representative line,
+        // red error message, and Registration Status are all visible with no COR overlay.
+        const helperNotice = document.getElementById('cor-uez-helper-notice');
+        if (helperNotice) helperNotice.style.display = 'none';
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        if (document.documentElement) document.documentElement.scrollTop = 0;
+        if (document.body) document.body.scrollTop = 0;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
         await send({ type: 'COR_TAX_ISSUE_CAPTURE_REQUEST', jobId: job.id });
         return;
       }

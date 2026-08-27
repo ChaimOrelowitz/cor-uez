@@ -9,6 +9,7 @@ const {
 } = require('../services/uezEmail');
 
 const router = express.Router();
+const DOCUMENT_BUCKET = 'uez-documents';
 router.use(requireUezAuth);
 
 router.get('/admin/templates', requireUezAdmin, async (_req, res) => {
@@ -47,6 +48,29 @@ async function credentialVars(applicationId) {
   };
 }
 
+
+async function latestTaxIssueAttachment(applicationId) {
+  const { data: document, error } = await supabase.from('uez_documents')
+    .select('storage_path, filename, created_at')
+    .eq('application_id', applicationId)
+    .eq('document_type', 'tax_clearance_issue')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!document?.storage_path) return null;
+
+  const { data: file, error: downloadError } = await supabase.storage
+    .from(DOCUMENT_BUCKET)
+    .download(document.storage_path);
+  if (downloadError) throw downloadError;
+  const bytes = Buffer.from(await file.arrayBuffer());
+  return {
+    filename: document.filename || 'NJ-Tax-Clearance-Issue.png',
+    content: bytes.toString('base64')
+  };
+}
+
 router.post('/admin/applications/:id/send/:key', requireUezAdmin, async (req, res) => {
   try {
     const application = await applicationForId(req.params.id);
@@ -57,9 +81,16 @@ router.post('/admin/applications/:id/send/:key', requireUezAdmin, async (req, re
       extra = { ...extra, ...(await credentialVars(application.id)) };
     }
 
+    const attachments = [];
+    if (req.params.key === 'tax_issue') {
+      const screenshot = await latestTaxIssueAttachment(application.id);
+      if (screenshot) attachments.push(screenshot);
+    }
+
     const result = await sendApplicationEmail(application, req.params.key, {
       mode: 'manual',
-      extra
+      extra,
+      attachments
     });
     res.json(result);
   } catch (err) {
