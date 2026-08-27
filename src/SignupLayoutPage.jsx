@@ -35,12 +35,26 @@ export default function SignupLayoutPage() {
     });
   }
 
+  function setSpan(group, key, span) {
+    setLayout((old) => ({
+      ...old,
+      widths: {
+        ...(old.widths || {}),
+        [group]: { ...(old.widths?.[group] || {}), [key]: span }
+      }
+    }));
+  }
+
+  function spanFor(group, key) {
+    return Number(layout.widths?.[group]?.[key]) === 2 ? 2 : 1;
+  }
+
   async function save() {
     setBusy(true); setMessage('');
     try {
       const result = await saveAdminSignupLayout(layout);
       setLayout(result.layout);
-      setMessage('Signup field order saved. New applicants will see this order.');
+      setMessage('Signup layout saved. Field order and row widths are live for new applicants.');
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   }
@@ -64,23 +78,29 @@ export default function SignupLayoutPage() {
       <div className="admin-top-actions"><a href="/admin">BACK TO ADMIN</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">PREVIEW CLIENT</a></div>
     </header>
     <main className="signup-layout-wrap">
-      <div className="signup-layout-heading"><div><span className="eyebrow">CLIENT SIGNUP</span><h1>Arrange signup fields</h1><p>Drag fields to reorder them. Guardrails keep every field on its current page so validation and saving continue to work correctly.</p></div><div className="layout-actions"><button className="secondary" onClick={reset} disabled={busy}>Reset to default</button><button className="primary compact" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save layout'}</button></div></div>
+      <div className="signup-layout-heading"><div><span className="eyebrow">CLIENT SIGNUP</span><h1>Arrange the actual form grid</h1><p>Drag fields into order, then choose whether each field takes half a row or the full row by itself. Guardrails keep every field on its current signup page.</p></div><div className="layout-actions"><button className="secondary" onClick={reset} disabled={busy}>Reset to default</button><button className="primary compact" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save layout'}</button></div></div>
       {message && <div className="form-message layout-message">{message}</div>}
       <div className="layout-groups">
         {Object.entries(GROUPS).map(([group, info]) => <section className="wizard-card layout-group" key={group}>
           <div className="layout-group-head"><h2>{info.title}</h2><span>{layout[group].length} fields</span></div>
-          <div className="layout-list">
+          <div className="layout-visual-grid">
             {layout[group].map((key, index) => <div
               key={key}
-              className={`layout-row ${drag?.group === group && drag?.index === index ? 'dragging' : ''}`}
+              className={`layout-field-tile ${spanFor(group, key) === 2 ? 'span-full' : 'span-half'} ${drag?.group === group && drag?.index === index ? 'dragging' : ''}`}
               draggable
               onDragStart={() => setDrag({ group, index })}
               onDragEnd={() => setDrag(null)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); if (drag?.group === group) move(group, drag.index, index); setDrag(null); }}
             >
-              <span className="drag-handle" aria-hidden="true">⋮⋮</span><strong>{info.fields[key] || key}</strong>
-              <div className="layout-row-actions"><button title="Move up" onClick={() => move(group, index, index - 1)} disabled={index === 0}>↑</button><button title="Move down" onClick={() => move(group, index, index + 1)} disabled={index === layout[group].length - 1}>↓</button></div>
+              <div className="layout-field-main"><span className="drag-handle" aria-hidden="true">⋮⋮</span><strong>{info.fields[key] || key}</strong></div>
+              <div className="layout-field-controls">
+                <div className="layout-span-toggle" aria-label={`Width for ${info.fields[key] || key}`}>
+                  <button type="button" className={spanFor(group, key) === 1 ? 'active' : ''} onClick={() => setSpan(group, key, 1)}>Half row</button>
+                  <button type="button" className={spanFor(group, key) === 2 ? 'active' : ''} onClick={() => setSpan(group, key, 2)}>Full row</button>
+                </div>
+                <div className="layout-row-actions"><button title="Move up" onClick={() => move(group, index, index - 1)} disabled={index === 0}>↑</button><button title="Move down" onClick={() => move(group, index, index + 1)} disabled={index === layout[group].length - 1}>↓</button></div>
+              </div>
             </div>)}
           </div>
         </section>)}

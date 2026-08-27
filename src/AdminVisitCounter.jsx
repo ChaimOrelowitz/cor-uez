@@ -7,7 +7,7 @@ export default function AdminVisitCounter() {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    const locateHost = () => setHost(document.querySelector('.admin-top-actions'));
+    const locateHost = () => setHost(document.querySelector('.admin-sidebar-head'));
     locateHost();
     const observer = new MutationObserver(locateHost);
     observer.observe(document.body, { childList: true, subtree: true });
@@ -41,6 +41,7 @@ export default function AdminVisitCounter() {
     <div className="admin-visit-counter" title={`Last 30 days: ${stats.last30Days}`}>
       <div><span>Today</span><strong>{stats.today}</strong></div>
       <div><span>7 days</span><strong>{stats.last7Days}</strong></div>
+      <div><span>30 days</span><strong>{stats.last30Days}</strong></div>
       <div><span>Total</span><strong>{stats.total}</strong></div>
     </div>,
     host

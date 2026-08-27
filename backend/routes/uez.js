@@ -24,17 +24,30 @@ const DEFAULT_SIGNUP_LAYOUT = {
   business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
   ownerCore: ['title', 'firstName', 'lastName', 'email', 'phone', 'dob', 'ssn', 'ownershipPercent'],
   ownerAddress: ['addressLine1', 'addressLine2', 'city', 'state', 'zip'],
-  documents: ['formation', 'soleProp', 'supporting']
+  documents: ['formation', 'soleProp', 'supporting'],
+  widths: {
+    account: { email: 1, password: 1 },
+    business: { businessName: 2, businessDescription: 2, ein: 1, yearFounded: 1, hasDba: 1, dbaName: 1, fullTimeEmployees: 1, partTimeEmployees: 1 },
+    ownerCore: { title: 1, firstName: 1, lastName: 1, email: 1, phone: 1, dob: 1, ssn: 1, ownershipPercent: 1 },
+    ownerAddress: { addressLine1: 1, addressLine2: 1, city: 1, state: 1, zip: 1 },
+    documents: { formation: 2, soleProp: 2, supporting: 2 }
+  }
 };
 
 function validateSignupLayout(layout) {
-  const clean = {};
+  const clean = { widths: {} };
   for (const [group, defaults] of Object.entries(DEFAULT_SIGNUP_LAYOUT)) {
+    if (group === 'widths') continue;
     const received = Array.isArray(layout?.[group]) ? layout[group] : defaults;
     if (received.length !== defaults.length || new Set(received).size !== defaults.length || received.some((key) => !defaults.includes(key))) {
       throw new Error(`Invalid signup layout for ${group}. Fields can only be reordered within their existing page.`);
     }
     clean[group] = received;
+    clean.widths[group] = {};
+    for (const key of defaults) {
+      const requested = Number(layout?.widths?.[group]?.[key]);
+      clean.widths[group][key] = requested === 2 ? 2 : requested === 1 ? 1 : (DEFAULT_SIGNUP_LAYOUT.widths[group][key] || 1);
+    }
   }
   return clean;
 }
