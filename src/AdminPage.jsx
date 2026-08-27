@@ -109,6 +109,69 @@ function paymentStatusLabel(value) {
   return 'Not recorded';
 }
 
+
+function adminStageLabel(app) {
+  const types = new Set(app.document_types || []);
+  if (app.status === 'applied' || app.status === 'grant_submitted') return 'SUBMITTED';
+  if ((app.required_document_ready_count || 0) >= 5) return 'READY TO SUBMIT';
+  if (app.uez_application_status === 'approved') return 'GRANT DOCS';
+  if (app.uez_application_status === 'applied') return 'UEZ PENDING';
+  if (app.pbs_account_created) return 'PBS READY';
+  if (types.has('brc')) return 'PBS SETUP';
+  if (app.submitted_at) return 'BRC';
+  return 'APPLICANT SIGNUP';
+}
+
+function adminQueueInfo(app) {
+  const types = new Set(app.document_types || []);
+  const formationReview = app.formation_review_status || 'not_reviewed';
+  const approvalReview = app.uez_approval_review_status || 'not_reviewed';
+  const submittedGrant = app.status === 'applied' || app.status === 'grant_submitted';
+  const stage = adminStageLabel(app);
+
+  // Immediate human-review items always win.
+  if (app.payment_status === 'client_reported') return { bucket: 'needs', action: 'Confirm payment', tone: 'danger', stage, rank: 1 };
+  if (app.brc_status === 'client_created') return { bucket: 'needs', action: 'Recheck BRC', tone: 'danger', stage, rank: 2 };
+  if (types.has('formation') && formationReview === 'not_reviewed') return { bucket: 'needs', action: 'Review Formation', tone: 'danger', stage, rank: 3 };
+  if (types.has('uez_approval_email') && approvalReview === 'not_reviewed') return { bucket: 'needs', action: 'Review UEZ approval', tone: 'danger', stage, rank: 4 };
+
+  if (submittedGrant) return { bucket: 'waiting', action: 'Grant submitted', tone: 'quiet', stage, rank: 90 };
+  if (!app.submitted_at) return { bucket: 'waiting', action: 'Applicant still completing signup', tone: 'quiet', stage, rank: 80 };
+
+  // Process sequence after the applicant submits.
+  if (!types.has('brc')) {
+    if (app.brc_status === 'not_found') return { bucket: 'waiting', action: 'Waiting on BRC follow-up', tone: 'warn', stage, rank: 50 };
+    return { bucket: 'needs', action: 'Fetch BRC', tone: 'danger', stage, rank: 5 };
+  }
+
+  if (!app.pbs_account_created) return { bucket: 'needs', action: 'Set up PBS', tone: 'danger', stage, rank: 6 };
+
+  if (app.uez_application_status === 'not_started' || !app.uez_application_status) {
+    return { bucket: 'needs', action: 'UEZ application next', tone: 'danger', stage, rank: 7 };
+  }
+
+  if (app.uez_application_status === 'applied') {
+    if (types.has('uez_approval_email') && approvalReview === 'rejected') return { bucket: 'waiting', action: 'Waiting for UEZ email replacement', tone: 'warn', stage, rank: 52 };
+    if (!types.has('uez_approval_email') || approvalReview !== 'approved') return { bucket: 'waiting', action: 'Waiting for UEZ approval', tone: 'quiet', stage, rank: 55 };
+  }
+
+  if (!app.tax_clearance_good || !types.has('tax_clearance')) {
+    if (types.has('tax_clearance_issue')) return { bucket: 'waiting', action: 'Tax clearance issue — waiting on client', tone: 'warn', stage, rank: 51 };
+    return { bucket: 'needs', action: 'Fetch tax clearance', tone: 'danger', stage, rank: 8 };
+  }
+
+  if (!app.is_sole_proprietorship && !types.has('formation')) return { bucket: 'waiting', action: 'Waiting for Formation document', tone: 'warn', stage, rank: 53 };
+  if (types.has('formation') && formationReview === 'rejected') return { bucket: 'waiting', action: 'Waiting for Formation replacement', tone: 'warn', stage, rank: 54 };
+
+  if (app.payment_status !== 'paid') return { bucket: 'waiting', action: 'Waiting for payment', tone: 'quiet', stage, rank: 60 };
+
+  if (!types.has('ldc_application')) return { bucket: 'needs', action: 'Fill out LDC application', tone: 'danger', stage, rank: 9 };
+
+  if ((app.required_document_ready_count || 0) >= 5) return { bucket: 'ready', action: 'Ready for grant submission', tone: 'ready', stage, rank: 0 };
+
+  return { bucket: 'waiting', action: 'Waiting for next document', tone: 'quiet', stage, rank: 70 };
+}
+
 function docFor(detail, type) {
   return [...(detail?.documents || [])].reverse().find((doc) => doc.document_type === type) || null;
 }
@@ -237,7 +300,7 @@ export default function AdminPage() {
   const [applications, setApplications] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [filter, setFilter] = useState('progress');
+  const [filter, setFilter] = useState('needs');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -904,20 +967,31 @@ export default function AdminPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return applications.filter((app) => {
-      const matchesSearch = !q || [app.business_name_input, app.registered_business_name, app.contact_email, app.ein]
-        .some((value) => String(value || '').toLowerCase().includes(q));
-      if (!matchesSearch) return false;
-      if (filter === 'all') return true;
-      if (filter === 'progress') return app.status !== 'applied';
-      if (filter === 'applied') return app.status === 'applied';
-      return true;
-    });
+    return applications
+      .filter((app) => {
+        const matchesSearch = !q || [app.business_name_input, app.registered_business_name, app.contact_email, app.ein]
+          .some((value) => String(value || '').toLowerCase().includes(q));
+        if (!matchesSearch) return false;
+        if (filter === 'all') return true;
+        return adminQueueInfo(app).bucket === filter;
+      })
+      .sort((a, b) => {
+        const qa = adminQueueInfo(a);
+        const qb = adminQueueInfo(b);
+        const bucketPriority = { needs: 0, ready: 1, waiting: 2 };
+        const bucketDelta = (bucketPriority[qa.bucket] ?? 9) - (bucketPriority[qb.bucket] ?? 9);
+        if (bucketDelta) return bucketDelta;
+        if (qa.rank !== qb.rank) return qa.rank - qb.rank;
+        const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+        const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+        return aTime - bTime;
+      });
   }, [applications, filter, search]);
 
   const counts = useMemo(() => ({
-    progress: applications.filter((app) => app.status !== 'applied').length,
-    applied: applications.filter((app) => app.status === 'applied').length,
+    needs: applications.filter((app) => adminQueueInfo(app).bucket === 'needs').length,
+    waiting: applications.filter((app) => adminQueueInfo(app).bucket === 'waiting').length,
+    ready: applications.filter((app) => adminQueueInfo(app).bucket === 'ready').length,
     all: applications.length
   }), [applications]);
 
@@ -972,21 +1046,23 @@ export default function AdminPage() {
         </div>
         <div className="admin-filter-row">
           {[
-            ['progress', 'In Progress', counts.progress],
-            ['applied', 'Applied', counts.applied],
+            ['needs', 'Needs Me', counts.needs],
+            ['waiting', 'Waiting', counts.waiting],
+            ['ready', 'Ready', counts.ready],
             ['all', 'All', counts.all]
           ].map(([key, label, count]) => <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}<span>{count}</span></button>)}
         </div>
 
         <div className="application-list">
           {filtered.map((app) => {
-            const needsAttention = app.payment_status === 'client_reported'
-              || app.brc_status === 'client_created'
-              || ((app.document_types || []).includes('formation') && app.formation_review_status !== 'approved')
-              || ((app.document_types || []).includes('uez_approval_email') && (app.uez_approval_review_status || 'not_reviewed') === 'not_reviewed');
-            return <button key={app.id} className={`application-list-item ops-list-item ${selectedId === app.id ? 'active' : ''}`} onClick={() => { setMobileDetailOpen(true); openApplication(app.id); window.scrollTo({ top: 0, behavior: 'instant' }); }}>
-              <div className="ops-list-main"><strong>{app.business_name_input || 'Unnamed business'}{needsAttention && <i className="attention-dot" title="Needs attention" />}</strong><small>{app.required_document_ready_count || 0}/5 docs · UEZ {uezStatusLabel(app.uez_application_status)}</small></div>
-              <div className="list-item-meta"><span className={`mini-status ${app.payment_status === 'paid' ? 'good' : app.payment_status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(app.payment_status)}</span><small>{statusLabel(app.status)}</small></div>
+            const queue = adminQueueInfo(app);
+            const showPayment = app.payment_status === 'client_reported';
+            return <button key={app.id} className={`application-list-item ops-list-item queue-${queue.bucket} ${selectedId === app.id ? 'active' : ''}`} onClick={() => { setMobileDetailOpen(true); openApplication(app.id); window.scrollTo({ top: 0, behavior: 'instant' }); }}>
+              <div className="ops-list-main queue-list-main">
+                <div className="queue-list-title"><strong>{app.business_name_input || 'Unnamed business'}</strong><span className="queue-stage">{queue.stage}</span></div>
+                <div className={`queue-next-action ${queue.tone}`}><i aria-hidden="true" />{queue.action}</div>
+                {showPayment && <div className="queue-payment-flag">Payment reported</div>}
+              </div>
             </button>;
           })}
           {filtered.length === 0 && <div className="empty-list">No applications in this view.</div>}
