@@ -10,8 +10,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Normalize geocoder address and document colors
-        run: python .github/scripts/normalize_geocoder_address_and_doc_colors.py
+      - name: Add service intro, admin title, and client credentials
+        run: python .github/scripts/add_service_intro_admin_title_restore_creds.py
       - name: Verify frontend
         run: |
           npm install --ignore-scripts
@@ -20,10 +20,10 @@ jobs:
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/eligibility.js src/App.jsx src/AdminPage.jsx src/styles.css
+          git add src/App.jsx src/AdminPage.jsx src/intakePolish.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Normalize UEZ street addresses and document states"
+            git commit -m "Add UEZ service intro and legacy owner title support"
             git push
           fi
