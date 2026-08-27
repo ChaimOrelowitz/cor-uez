@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "COR UEZ Document Helper",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "description": "Runs BRC, tax-clearance, Lakewood LDC, and Lakewood grant-submission workflows from the COR UEZ admin app.",
   "permissions": [
     "storage",
@@ -51,6 +51,18 @@
       ],
       "js": [
         "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    },
+    {
+      "matches": [
+        "https://www-njlib.nj.gov/*",
+        "https://my.nj.gov/*"
+      ],
+      "js": [
+        "pbs.js"
       ],
       "run_at": "document_idle",
       "all_frames": true,

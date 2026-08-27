@@ -464,7 +464,18 @@ export default function AdminPage() {
       opening_lakewood_portal: 'Opening the Lakewood UEZ grant application…',
       filling_lakewood_portal: 'COR is filling the Lakewood grant application…',
       attaching_lakewood_documents: 'COR is attaching the required grant documents…',
-      waiting_for_lakewood_submit: 'Grant packet ready. Review it and click the final Submit Form button.'
+      waiting_for_lakewood_submit: 'Grant packet ready. Review it and click the final Submit Form button.',
+      opening_pbs_signup: 'Opening New Jersey Premier Business Services…',
+      pbs_opening_identification: 'Starting the PBS account setup…',
+      pbs_filling_contact: 'COR is filling the PBS contact information…',
+      pbs_creating_mynj: 'Creating the applicant’s myNewJersey login…',
+      pbs_account_opened: 'PBS account opened. Moving to Add a Business…',
+      pbs_opening_business_information: 'Opening PBS Business Information…',
+      waiting_for_pbs_business_type: 'COR filled the PBS business information. Select Business Type in the NJ window, then click Continue.',
+      waiting_for_pbs_verification: 'Complete New Jersey’s security verification in the visible PBS window.',
+      waiting_for_pbs_human_step: 'COR reached a PBS step that was not completed in the HAR. Review and continue manually.',
+      waiting_for_pbs_page: 'Waiting for the next PBS page…',
+      pbs_needs_attention: 'PBS needs your attention in the visible NJ window.'
     };
     const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     return new Promise((resolve, reject) => {
@@ -517,6 +528,33 @@ export default function AdminPage() {
       } else {
         throw new Error(outcome.error || 'The BRC check did not finish.');
       }
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runPbsSignup() {
+    setBusy(true);
+    setMessage('Starting the COR Chrome extension…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before opening PBS.');
+      const primary = detail.owners?.[0];
+      if (!primary) throw new Error('A primary owner is required before opening PBS.');
+      if (!primary.title) throw new Error('The primary owner needs a title before opening PBS.');
+      if (!myNjCredentials) throw new Error('MyNJ login information is missing. Confirm the BRC and generate the MyNJ login first.');
+
+      const outcome = await runExtensionWorkflow('pbs_signup', {
+        applicationId: detail.application.id,
+        businessName: detail.application.registered_business_name || detail.application.brc_registered_name || detail.application.business_name_input,
+        ein: detail.application.ein,
+        accessToken: currentSession.access_token
+      });
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The PBS workflow did not finish.');
+      await refreshList(detail.application.id);
+      setMessage('PBS account and business setup completed.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -961,7 +999,7 @@ export default function AdminPage() {
               <div className="ops-panel actions-panel">
                 <div className="ops-action-grid clean-action-grid">
                   <button className={`ops-action ${docFor(detail, 'brc') ? 'success-action' : 'primary'}`} onClick={runBrcLookup} disabled={busy}><span>FETCH</span><strong>BRC</strong></button>
-                  <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={() => setPbsModalOpen(true)} disabled={busy}><span>OPEN</span><strong>PBS</strong></button>
+                  <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
                   <button className={`ops-action ${docFor(detail, 'tax_clearance') ? 'success-action' : 'primary'}`} onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>FETCH</span><strong>TAX CLEARANCE</strong></button>
                   <button className={`ops-action ${docFor(detail, 'ldc_application') ? 'success-action' : 'primary'}`} onClick={runLdcJotform} disabled={busy}><span>FILL OUT</span><strong>LDC APP</strong></button>
                   <button className={`ops-action ${detail.application.status === 'applied' ? 'success-action' : packetReady(detail) ? 'ready-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>SUBMIT</span><strong>GRANT APP</strong></button>

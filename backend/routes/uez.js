@@ -916,6 +916,7 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
     const owners = (ownersResult.data || []).map((owner) => ({
       id: owner.id,
       ownerOrder: owner.owner_order,
+      title: owner.honorific_title,
       firstName: owner.first_name,
       lastName: owner.last_name,
       email: owner.email,

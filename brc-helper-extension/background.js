@@ -104,7 +104,7 @@ async function uploadLdcPdf(job, base64, filename, submissionId) {
 async function startWorkflow(message, sender) {
   const senderOrigin = sender.tab?.url ? new URL(sender.tab.url).origin : '';
   if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
-  if (!['brc', 'tax_clearance', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
+  if (!['brc', 'tax_clearance', 'pbs_signup', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
   const existing = await getJob();
   if (existing && Date.now() - (existing.createdAt || 0) < 30 * 60 * 1000 && existing.status !== 'complete' && existing.status !== 'error') {
     throw new Error('A COR document retrieval is already running. Finish it first.');
@@ -123,20 +123,24 @@ async function startWorkflow(message, sender) {
     ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp'
     : job.workflow === 'tax_clearance'
       ? 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp'
+      : job.workflow === 'pbs_signup'
+        ? 'https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/'
       : job.workflow === 'ldc_jotform'
         ? 'https://form.jotform.com/241936732268060'
         : 'https://form.jotform.com/222748639284165';
   const popup = await chrome.windows.create({ url, type: 'popup', width: 1200, height: 900, focused: true });
   const tab = popup.tabs?.[0];
   job = { ...job, tabId: tab?.id || null, windowId: popup.id };
-  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
+  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : job.workflow === 'tax_clearance' ? 'opening_pbs' : job.workflow === 'pbs_signup' ? 'opening_pbs_signup' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
   await notify(job, openingStatus);
   if (tab?.id && !['ldc_jotform', 'lakewood_portal'].includes(job.workflow)) await injectNjHelper(tab.id).catch(() => {});
   return { ok: true, jobId: job.id };
 }
 
 async function injectNjHelper(tabId) {
-  await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['content.js'] }).catch(() => {});
+  const job = await getJob().catch(() => null);
+  const file = job?.workflow === 'pbs_signup' ? 'pbs.js' : 'content.js';
+  await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: [file] }).catch(() => {});
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -146,6 +150,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const job = await getJob();
     if (!job) return { ok: false, error: 'No COR workflow is active.' };
     if (message?.type === 'COR_NJ_GET_JOB') return { ok: true, job: { id: job.id, workflow: job.workflow, applicationId: job.applicationId, businessName: job.businessName, ein: job.ein, status: job.status, credentials: job.credentials || null } };
+    if (message?.type === 'COR_PBS_GET_DATA') {
+      if (job.workflow !== 'pbs_signup' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching PBS workflow is active.' };
+      const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
+      const application = detail.application || {};
+      const owner = detail.owners?.[0] || {};
+      const credentialResult = await api(job, `/api/uez/applications/${job.applicationId}/credentials/mynj`);
+      if (!credentialResult.exists || !credentialResult.credentials) throw new Error('MyNJ login information is missing.');
+      const einDigits = String(application.ein || '').replace(/\D/g, '').slice(0, 9);
+      if (einDigits.length !== 9) throw new Error('A valid 9-digit EIN is required for PBS.');
+      return {
+        ok: true,
+        data: {
+          owner: {
+            title: owner.title || '', firstName: owner.firstName || '', lastName: owner.lastName || '',
+            addressLine1: owner.addressLine1 || '', addressLine2: owner.addressLine2 || '', city: owner.city || '',
+            state: owner.state || '', zip: owner.zip || '', phone: owner.phone || '', email: owner.email || ''
+          },
+          business: {
+            einNo: `${einDigits}000`,
+            businessName: application.registered_business_name || application.brc_registered_name || application.business_name_input || '',
+            yearFounded: String(application.year_founded || ''),
+            taxZip: '08701'
+          },
+          credentials: credentialResult.credentials
+        }
+      };
+    }
     if (message?.type === 'COR_JOTFORM_GET_DATA') {
       if (job.workflow !== 'ldc_jotform' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching LDC form workflow is active.' };
       const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
@@ -215,6 +246,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       await notify(job, 'complete');
       if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
+      await setJob(null);
+      return { ok: true };
+    }
+    if (message?.type === 'COR_PBS_NEEDS_ATTENTION') {
+      if (job.workflow !== 'pbs_signup') return { ok: false, error: 'No matching PBS workflow is active.' };
+      await notify(job, 'pbs_needs_attention', { reason: message.reason || '' });
+      return { ok: true };
+    }
+    if (message?.type === 'COR_PBS_COMPLETE') {
+      if (job.workflow !== 'pbs_signup' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching PBS workflow is active.' };
+      await api(job, `/api/uez/admin/applications/${job.applicationId}/pbs-account-created`, { method: 'POST' });
+      await notify(job, 'complete');
       await setJob(null);
       return { ok: true };
     }
