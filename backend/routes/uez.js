@@ -331,6 +331,14 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
 
     if (documentType === 'formation') {
       await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
+      await addStatusEvent(
+        application.id,
+        'formation_uploaded',
+        'Certificate of Formation uploaded',
+        'Certificate of Formation uploaded and awaiting review.',
+        req.user.id,
+        true
+      );
     }
 
     if (documentType === 'brc') {
@@ -702,10 +710,10 @@ router.post('/admin/applications/:id/documents/:documentId/review', requireUezAd
       eventStatus,
       eventLabel,
       decision === 'approved'
-        ? `${document.filename} was reviewed and approved by COR.`
-        : `${document.filename} was reviewed and marked as the wrong document.`,
+        ? `${document.filename} was reviewed and accepted.`
+        : `${document.filename} needs to be replaced.`,
       req.user.id,
-      false
+      true
     );
     if (document.document_type === 'formation' && decision === 'rejected') {
       await safeSendApplicationEmail(updated, 'formation_rejected', {

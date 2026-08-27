@@ -5,9 +5,7 @@ import {
   createApplication,
   getApplicantSession,
   getApplication,
-  getDocumentUrl,
   getMyApplications,
-  getMyNjCredentials,
   saveBusiness,
   saveOwners,
   signInApplicant,
@@ -68,25 +66,19 @@ function formatDob(value) {
 function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
-  const [myNjCredentials, setMyNjCredentials] = useState(null);
-  const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [brcBusy, setBrcBusy] = useState(false);
   const app = bundle.application;
+  const latestDocument = (type) => [...(bundle.documents || [])].reverse().find((doc) => doc.document_type === type) || null;
+  const formation = latestDocument('formation');
+  const formationRequired = !app.is_sole_proprietorship;
+  const formationReview = app.formation_review_status || 'not_reviewed';
+  const approval = latestDocument('uez_approval_email');
+  const approvalReview = app.uez_approval_review_status || 'not_reviewed';
   const needsBrc = ['not_found', 'missing', 'required'].includes(app.brc_status) || app.status === 'waiting_for_brc';
-  const brcUploaded = app.brc_status === 'uploaded' || app.status === 'brc_uploaded';
   const brcConfirmed = app.brc_status === 'found' || app.status === 'brc_confirmed';
-  const approvalUploaded = bundle.documents.some((doc) => doc.document_type === 'uez_approval_email');
   const latestPayment = [...(bundle.payments || [])].reverse()[0] || null;
-  const needsApprovalEmail = app.pbs_status === 'account_created' || app.status === 'waiting_for_uez_approval';
-
-  useEffect(() => {
-    let active = true;
-    getMyNjCredentials(app.id).then((result) => {
-      if (active) setMyNjCredentials(result.exists ? result.credentials : null);
-    }).catch(() => {});
-    return () => { active = false; };
-  }, [app.id]);
+  const approvalStageReached = app.pbs_status === 'account_created' || app.pbs_status === 'uez_approval_uploaded' || app.status === 'waiting_for_uez_approval' || Boolean(approval);
 
 
   useEffect(() => {
@@ -97,6 +89,21 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [app.id, onRefresh]);
 
+  async function uploadFormation(file) {
+    if (!file) return;
+    setUploading(true);
+    setMessage('');
+    try {
+      await uploadApplicationDocument(app.id, 'formation', file);
+      await onRefresh();
+      setMessage('Certificate of Formation uploaded.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function uploadApprovalEmail(file) {
     if (!file) return;
     setUploading(true);
@@ -104,7 +111,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     try {
       await uploadApplicationDocument(app.id, 'uez_approval_email', file);
       await onRefresh();
-      setMessage('Your UEZ approval email was uploaded. COR will verify it.');
+      setMessage('UEZ approval email uploaded.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -117,7 +124,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     try {
       await reportApplicantPayment(app.id);
       await onRefresh();
-      setMessage('Thanks. COR will verify the payment and update your account.');
+      setMessage('Payment reported. Your account will update when it is confirmed.');
     } catch (err) { setMessage(err.message); }
     finally { setPaymentBusy(false); }
   }
@@ -127,19 +134,12 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
     try {
       await reportBrcCreated(app.id);
       await onRefresh();
-      setMessage('Thanks. COR was notified and will recheck your BRC.');
+      setMessage('Thanks. Your BRC will be rechecked.');
     } catch (err) { setMessage(err.message); }
     finally { setBrcBusy(false); }
   }
 
-  async function openDocument(doc) {
-    try {
-      const result = await getDocumentUrl(app.id, doc.id);
-      window.open(result.url, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      setMessage(err.message);
-    }
-  }
+
 
   return <div className="app-shell">
     <header className="topbar">
@@ -151,7 +151,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
       <section className="hero portal-hero">
         <div className="eyebrow">YOUR UEZ APPLICATION</div>
         <h1>{app.business_name_input || 'Your application'}</h1>
-        <p>COR will post each next step here as your application moves forward.</p>
+        <p>Your next steps and application updates appear here.</p>
       </section>
 
       <div className="portal-grid">
@@ -164,71 +164,85 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut }) {
             <span className={`status-pill ${brcConfirmed ? 'good' : needsBrc ? 'warn' : ''}`}>{statusLabel(app.status)}</span>
           </div>
 
-          {brcConfirmed && <div className="action-panel good-panel">
-            <h3>✓ BRC confirmed</h3>
-            <p>{app.registered_business_name || app.brc_registered_name || app.business_name_input}</p>
+          <div className="portal-section-head"><h3>What you need to do</h3></div>
+
+          {formationRequired && !formation && <div className="action-panel warn-panel">
+            <h3>Upload your Certificate of Formation <span className="required-star">*</span></h3>
+            <p>Upload your Certificate of Formation to continue.</p>
+            <label className="primary compact inline-button file-button">
+              {uploading ? 'Uploading…' : 'Upload Certificate of Formation'}
+              <input type="file" accept=".pdf,image/*" disabled={uploading} onChange={(e) => uploadFormation(e.target.files?.[0])} />
+            </label>
+          </div>}
+
+          {formationRequired && formation && formationReview === 'not_reviewed' && <div className="action-panel">
+            <h3>Certificate of Formation uploaded</h3>
+            <p>Under review.</p>
+          </div>}
+
+          {formationRequired && formation && formationReview === 'approved' && <div className="action-panel good-panel">
+            <h3>✓ Certificate of Formation accepted</h3>
+          </div>}
+
+          {formationRequired && formationReview === 'rejected' && <div className="action-panel warn-panel">
+            <h3>Certificate of Formation needs replacement</h3>
+            <p>Please upload a new Certificate of Formation.</p>
+            <label className="primary compact inline-button file-button">
+              {uploading ? 'Uploading…' : 'Upload replacement Certificate of Formation'}
+              <input type="file" accept=".pdf,image/*" disabled={uploading} onChange={(e) => uploadFormation(e.target.files?.[0])} />
+            </label>
           </div>}
 
           {needsBrc && <div className="action-panel warn-panel">
             <h3>Business Registration Certificate needed</h3>
-            <p>COR could not locate a current New Jersey BRC. Create/register for it with New Jersey, then come back here and tell us when you're done. You do not need to upload the BRC.</p>
+            <p>Create/register for your New Jersey BRC, then come back here and tell us when you're done. You do not need to upload it.</p>
             <a className="primary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Create my BRC</a>
             <button className="secondary compact inline-button" onClick={reportBrcMade} disabled={brcBusy}>{brcBusy ? 'Saving…' : 'I created my BRC'}</button>
           </div>}
 
-          {needsApprovalEmail && !approvalUploaded && <div className="action-panel warn-panel">
+          {approvalStageReached && !approval && <div className="action-panel warn-panel">
             <h3>Upload your UEZ approval email <span className="required-star">*</span></h3>
-            <p>Upload the “Notice of Certification Application Approved” email you received from UEZdonotreply@dca.nj.gov as proof that the business is registered in the program.</p>
+            <p>Upload the “Notice of Certification Application Approved” email you received from UEZdonotreply@dca.nj.gov.</p>
             <label className="primary compact inline-button file-button">
-              {uploading ? 'Uploading…' : 'Upload required approval email'}
+              {uploading ? 'Uploading…' : 'Upload UEZ approval email'}
               <input type="file" accept=".pdf,.eml,image/*" disabled={uploading} onChange={(e) => uploadApprovalEmail(e.target.files?.[0])} />
             </label>
           </div>}
 
-          {approvalUploaded && <div className="action-panel good-panel">
-            <h3>✓ UEZ approval email received</h3>
-            <p>COR will verify the notice and continue your application.</p>
+          {approval && approvalReview === 'not_reviewed' && <div className="action-panel">
+            <h3>UEZ approval email uploaded</h3>
+            <p>Under review.</p>
+          </div>}
+
+          {approval && approvalReview === 'approved' && <div className="action-panel good-panel">
+            <h3>✓ UEZ approval email accepted</h3>
+          </div>}
+
+          {approvalReview === 'rejected' && <div className="action-panel warn-panel">
+            <h3>UEZ approval email needs replacement</h3>
+            <p>Please upload the correct “Notice of Certification Application Approved” email.</p>
+            <label className="primary compact inline-button file-button">
+              {uploading ? 'Uploading…' : 'Upload replacement approval email'}
+              <input type="file" accept=".pdf,.eml,image/*" disabled={uploading} onChange={(e) => uploadApprovalEmail(e.target.files?.[0])} />
+            </label>
           </div>}
 
           {message && <div className="form-message portal-message">{message}</div>}
         </section>
 
         <section className="wizard-card portal-card">
-          <div className="portal-section-head"><h3>Documents</h3><span>{bundle.documents.length}</span></div>
-          <div className="document-list">
-            {bundle.documents.length === 0 && <p className="muted">No documents uploaded yet.</p>}
-            {bundle.documents.map((doc) => <button className="document-row" key={doc.id} onClick={() => openDocument(doc)}>
-              <span><strong>{documentLabel(doc.document_type)}</strong><small>{doc.filename}</small></span>
-              <b>Open</b>
-            </button>)}
-          </div>
-        </section>
-
-        <section className="wizard-card portal-card">
           <div className="portal-section-head"><h3>Payment</h3><span>$500</span></div>
-          {latestPayment?.status === 'paid' ? <div className="action-panel good-panel"><h3>✓ Client payment recorded</h3><p>COR confirmed that your payment was received.</p></div>
+          {latestPayment?.status === 'paid' ? <div className="action-panel good-panel"><h3>✓ Payment received</h3></div>
             : latestPayment?.status === 'client_reported' ? <div className="action-panel"><h3>Payment reported</h3><p>You told COR the payment was sent. We are verifying it.</p></div>
-            : <><p className="muted">After you send the $500 payment, click below so COR knows to check for it.</p><button className="primary admin-full-button" onClick={reportPaymentSent} disabled={paymentBusy}>{paymentBusy ? 'Saving…' : 'I sent my payment'}</button></>}
+            : <><p className="muted">After you send the $500 payment, click below.</p><button className="primary admin-full-button" onClick={reportPaymentSent} disabled={paymentBusy}>{paymentBusy ? 'Saving…' : 'I sent my payment'}</button></>}
         </section>
-
-        {myNjCredentials && <section className="wizard-card portal-card portal-wide mynj-card">
-          <div className="portal-section-head"><h3>MyNJ / PBS account information</h3><span>✓</span></div>
-          <div className="credential-grid applicant-credential-grid">
-            <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong></div>
-            <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong></div>
-            <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong></div>
-            <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong></div>
-          </div>
-          <button className="secondary portal-secret-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
-          <p className="muted credential-note">Keep this information private. COR can also access it while completing your PBS account.</p>
-        </section>}
 
         <section className="wizard-card portal-card portal-wide">
           <div className="portal-section-head"><h3>Updates</h3></div>
           <div className="timeline">
             {[...bundle.statusEvents].reverse().map((event) => <div className="timeline-item" key={event.id}>
               <span className="timeline-dot"></span>
-              <div><strong>{event.label || statusLabel(event.status)}</strong><p>{event.message}</p><small>{new Date(event.created_at).toLocaleString()}</small></div>
+              <div><strong>{event.label || statusLabel(event.status)}</strong><small>{new Date(event.created_at).toLocaleString()}</small></div>
             </div>)}
           </div>
         </section>
