@@ -10,23 +10,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Wire PBS HAR workflow
-        run: python .github/scripts/wire_pbs_har_workflow.py
-      - name: Verify backend, extension, and frontend
+      - name: Simplify client tasks and enable replacement uploads
+        run: python .github/scripts/simplify_client_tasks.py
+      - name: Verify backend and frontend
         run: |
           node --check backend/routes/uez.js
-          node --check brc-helper-extension/background.js
-          node --check brc-helper-extension/pbs.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/AdminPage.jsx backend/routes/uez.js brc-helper-extension/background.js brc-helper-extension/manifest.json brc-helper-extension/pbs.js
+          git add src/App.jsx backend/routes/uez.js
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Wire OPEN PBS to HAR workflow"
+            git commit -m "Simplify client tasks and replacement uploads"
             git push
           fi
