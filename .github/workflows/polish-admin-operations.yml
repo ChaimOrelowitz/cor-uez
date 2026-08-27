@@ -10,20 +10,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply launch safety sole-prop and demo flow
-        run: python .github/scripts/run_launch_safety_v2.py
-      - name: Verify frontend
+      - name: Add signup layout editor and sole-prop undo
+        run: python .github/scripts/add_signup_layout_editor.py
+      - name: Verify frontend and backend syntax
         run: |
+          node --check backend/routes/uez.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx src/AdminPage.jsx src/main.jsx src/intakePolish.css
+          git add backend/routes/uez.js src/api.js src/SignupLayoutPage.jsx src/main.jsx src/AdminPage.jsx src/App.jsx src/styles.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Harden sole prop flow and add admin demo client"
+            git commit -m "Add signup layout editor and sole prop undo"
             git push
           fi
