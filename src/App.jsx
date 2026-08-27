@@ -951,7 +951,7 @@ export default function App() {
 
         {message && <div className="form-message">{message}</div>}
 
-        <div className="wizard-footer">
+        <div className={`wizard-footer ${step === 0 ? 'wizard-footer-single' : ''}`}>
           {step > 0 && <button className="secondary" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={busy}>Back</button>}
           {step === 0 && <button className="primary compact" onClick={continueFromAddress} disabled={busy}>Continue</button>}
           {step === 1 && <button className="primary compact" onClick={() => { setMessage(''); setStep(2); }}>Continue</button>}
