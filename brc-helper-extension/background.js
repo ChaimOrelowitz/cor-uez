@@ -175,7 +175,7 @@ async function startWorkflow(message, sender) {
   const url = job.workflow === 'brc'
     ? 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp'
     : job.workflow === 'tax_clearance' || job.workflow === 'pbs_login'
-      ? 'https://www16.state.nj.us/NJ_PREMIER_EBIZ/jsp/home.jsp'
+      ? 'https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login'
       : job.workflow === 'pbs_signup'
         ? 'https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/'
       : job.workflow === 'ldc_jotform'

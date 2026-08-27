@@ -27,7 +27,7 @@ import {
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
-const NJ_PBS_URL = 'https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/jsp/home.jsp';
+const NJ_PBS_URL = 'https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login';
 
 function statusLabel(status) {
   return status === 'applied' || status === 'grant_submitted' ? 'Applied' : 'In Progress';
