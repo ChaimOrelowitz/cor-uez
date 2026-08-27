@@ -236,6 +236,10 @@ export function reportBrcCreated(applicationId) {
   return request(`/api/uez/brc/${applicationId}/client-created`, { method: 'POST' });
 }
 
+export function reportTaxClearanceResolved(applicationId) {
+  return request(`/api/uez/applications/${applicationId}/tax-clearance-resolved`, { method: 'POST' });
+}
+
 export function saveAdminPayment(applicationId, payload) {
   return request(`/api/uez/admin/applications/${applicationId}/payment`, {
     method: 'PUT', body: JSON.stringify(payload)

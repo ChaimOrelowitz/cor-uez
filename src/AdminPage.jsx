@@ -130,6 +130,7 @@ function adminQueueInfo(app) {
   const stage = adminStageLabel(app);
 
   // Immediate human-review items always win.
+  if (app.tax_clearance_recheck_requested_at) return { bucket: 'needs', action: 'Recheck Tax Clearance', tone: 'danger', stage, rank: 0 };
   if (app.payment_status === 'client_reported') return { bucket: 'needs', action: 'Confirm payment', tone: 'danger', stage, rank: 1 };
   if (app.brc_status === 'client_created') return { bucket: 'needs', action: 'Recheck BRC', tone: 'danger', stage, rank: 2 };
   if (types.has('formation') && formationReview === 'not_reviewed') return { bucket: 'needs', action: 'Review Formation', tone: 'danger', stage, rank: 3 };
@@ -155,8 +156,8 @@ function adminQueueInfo(app) {
     if (!types.has('uez_approval_email') || approvalReview !== 'approved') return { bucket: 'waiting', action: 'Waiting for UEZ approval', tone: 'quiet', stage, rank: 55 };
   }
 
-  if (!app.tax_clearance_good || !types.has('tax_clearance')) {
-    if (types.has('tax_clearance_issue')) return { bucket: 'waiting', action: 'Tax clearance issue — waiting on client', tone: 'warn', stage, rank: 51 };
+  if ((app.tax_clearance_status || (app.tax_clearance_good ? 'good' : 'no')) !== 'good' || !types.has('tax_clearance')) {
+    if ((app.tax_clearance_status || 'no') === 'issue' || types.has('tax_clearance_issue')) return { bucket: 'waiting', action: 'Tax clearance issue — waiting on client', tone: 'warn', stage, rank: 51 };
     return { bucket: 'needs', action: 'Fetch tax clearance', tone: 'danger', stage, rank: 8 };
   }
 
@@ -207,6 +208,7 @@ function attentionItems(detail) {
   const approval = docFor(detail, 'uez_approval_email');
   if (payment?.status === 'client_reported') items.push('Client says payment was sent');
   if (detail.application.brc_status === 'client_created') items.push('Client says BRC was created — recheck BRC');
+  if (detail.application.tax_clearance_recheck_requested_at) items.push('Client says the tax-clearance issue is resolved — recheck Tax Clearance');
   if (formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
   if (formation && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
   if (approval && (detail.application.uez_approval_review_status || 'not_reviewed') === 'not_reviewed') items.push('Review UEZ approval email');
@@ -1108,7 +1110,7 @@ export default function AdminPage() {
                   {statusOrder.map((key) => {
                     const row = key === 'pbs' ? <><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></>
                       : key === 'uez' ? <><span>UEZ</span><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></>
-                      : key === 'tax' ? <><span>Tax clearance</span><div className="tiny-toggle"><button className={detail.application.tax_clearance_good ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceGood', true)} disabled={busy}>Good</button><button className={!detail.application.tax_clearance_good ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceGood', false)} disabled={busy}>No</button></div></>
+                      : key === 'tax' ? <><span>Tax clearance{detail.application.tax_clearance_recheck_requested_at ? <small className="tax-recheck-note">Client says resolved</small> : null}</span><div className="tiny-toggle tax-tristate"><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'no' ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'no')} disabled={busy}>No</button><button className={(detail.application.tax_clearance_status || 'no') === 'issue' ? 'active-warn' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'issue')} disabled={busy}>Issue</button><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'good' ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'good')} disabled={busy}>Good</button></div></>
                       : <><span>Payment</span><div className="status-payment-value"><strong className={detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'text-good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'text-warn' : ''}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</strong>{detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <button className="tiny-confirm" onClick={confirmPayment} disabled={busy}>Confirm</button>}</div></>;
                     return <div key={key} className="compact-status-item sortable-status-row" draggable onDragStart={() => setDragStatusKey(key)} onDragOver={(e) => e.preventDefault()} onDrop={() => dropStatus(key)}><i className="drag-handle" title="Drag to reorder">⋮⋮</i>{row}</div>;
                   })}

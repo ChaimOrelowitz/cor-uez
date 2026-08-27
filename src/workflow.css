@@ -663,3 +663,7 @@
   .queue-stage { font-size: 7.5px; }
   .queue-next-action { margin-top: 8px; font-size: 11.5px; }
 }
+
+
+/* Tax clearance tri-state and client recheck */
+.tax-tristate button.active-warn{background:#fff0d8!important;color:#9d6115!important;border-color:#e9c982!important}.tax-recheck-note{display:block;margin-top:3px;color:#a66718;font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.04em}.tax-issue-client-panel .status-pill{margin-top:12px}.tax-issue-client-panel button{margin-top:14px}

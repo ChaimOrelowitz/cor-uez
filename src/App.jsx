@@ -17,6 +17,7 @@ import {
   deleteDocument,
   reportApplicantPayment,
   reportBrcCreated,
+  reportTaxClearanceResolved,
   whoAmI,
   getSignupLayout
 } from './api';
@@ -91,6 +92,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [brcBusy, setBrcBusy] = useState(false);
+  const [taxBusy, setTaxBusy] = useState(false);
   const app = bundle.application;
   const latestDocument = (type) => [...(bundle.documents || [])].reverse().find((doc) => doc.document_type === type) || null;
   const formation = latestDocument('formation');
@@ -102,6 +104,8 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const brcConfirmed = app.brc_status === 'found' || app.status === 'brc_confirmed';
   const latestPayment = [...(bundle.payments || [])].reverse()[0] || null;
   const approvalStageReached = app.pbs_status === 'account_created' || app.pbs_status === 'uez_approval_uploaded' || app.status === 'waiting_for_uez_approval' || Boolean(approval);
+  const taxIssueOpen = (app.tax_clearance_status || 'no') === 'issue';
+  const taxRecheckRequested = Boolean(app.tax_clearance_recheck_requested_at);
 
 
   useEffect(() => {
@@ -179,6 +183,17 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
     finally { setBrcBusy(false); }
   }
 
+  async function reportTaxResolved() {
+    if (demoMode) { setMessage('Demo only: tax-clearance recheck request simulated. Nothing was saved.'); return; }
+    setTaxBusy(true); setMessage('');
+    try {
+      await reportTaxClearanceResolved(app.id);
+      await onRefresh();
+      setMessage('Thanks. COR will recheck your Tax Clearance Certificate.');
+    } catch (err) { setMessage(err.message); }
+    finally { setTaxBusy(false); }
+  }
+
 
 
   return <div className="app-shell">
@@ -239,6 +254,17 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
             <p>Create/register for your New Jersey BRC, then come back here and tell us when you're done. You do not need to upload it.</p>
             <a className="primary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Create my BRC</a>
             <button className="secondary compact inline-button" onClick={reportBrcMade} disabled={brcBusy}>{brcBusy ? 'Saving…' : 'I created my BRC'}</button>
+          </div>}
+
+          {taxIssueOpen && <div className="action-panel warn-panel tax-issue-client-panel">
+            <h3>Tax Clearance issue</h3>
+            {taxRecheckRequested ? <>
+              <p>You told COR that the State says this issue is resolved. We will recheck your Tax Clearance Certificate.</p>
+              <span className="status-pill warn">Recheck requested</span>
+            </> : <>
+              <p>New Jersey could not issue your Tax Clearance Certificate. Please follow the instructions COR sent you. Once the State tells you the issue is resolved, click below.</p>
+              <button className="primary compact inline-button" onClick={reportTaxResolved} disabled={taxBusy}>{taxBusy ? 'Saving…' : 'The state says my tax issue is resolved'}</button>
+            </>}
           </div>}
 
           {approvalStageReached && !approval && <div className="action-panel warn-panel">

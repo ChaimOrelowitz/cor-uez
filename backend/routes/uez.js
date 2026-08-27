@@ -448,7 +448,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     }
 
     if (documentType === 'tax_clearance') {
-      await supabase.from('uez_applications').update({ tax_clearance_good: true, updated_at: new Date().toISOString() }).eq('id', application.id);
+      await supabase.from('uez_applications').update({ tax_clearance_good: true, tax_clearance_status: 'good', tax_clearance_recheck_requested_at: null, updated_at: new Date().toISOString() }).eq('id', application.id);
       await addStatusEvent(
         application.id,
         'tax_clearance_received',
@@ -457,6 +457,15 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         req.user.id,
         true
       );
+    }
+
+    if (documentType === 'tax_clearance_issue') {
+      await supabase.from('uez_applications').update({
+        tax_clearance_good: false,
+        tax_clearance_status: 'issue',
+        tax_clearance_recheck_requested_at: null,
+        updated_at: new Date().toISOString()
+      }).eq('id', application.id);
     }
 
     res.status(201).json(data);
@@ -495,6 +504,8 @@ router.post('/admin/applications/:id/tax-clearance-issue', requireUezAdmin, uplo
 
     const { error: appError } = await supabase.from('uez_applications').update({
       tax_clearance_good: false,
+      tax_clearance_status: 'issue',
+      tax_clearance_recheck_requested_at: null,
       updated_at: new Date().toISOString()
     }).eq('id', application.id);
     if (appError) throw appError;
@@ -864,7 +875,16 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
       patch.pbs_account_created = body.pbsAccountCreated;
       patch.pbs_status = body.pbsAccountCreated ? 'account_created' : null;
     }
-    if (typeof body.taxClearanceGood === 'boolean') patch.tax_clearance_good = body.taxClearanceGood;
+    if (typeof body.taxClearanceGood === 'boolean') {
+      patch.tax_clearance_good = body.taxClearanceGood;
+      patch.tax_clearance_status = body.taxClearanceGood ? 'good' : 'no';
+      patch.tax_clearance_recheck_requested_at = null;
+    }
+    if (['no', 'issue', 'good'].includes(body.taxClearanceStatus)) {
+      patch.tax_clearance_status = body.taxClearanceStatus;
+      patch.tax_clearance_good = body.taxClearanceStatus === 'good';
+      patch.tax_clearance_recheck_requested_at = null;
+    }
     if (['not_started', 'applied', 'approved'].includes(body.uezApplicationStatus)) {
       patch.uez_application_status = body.uezApplicationStatus;
       patch.uez_application_submitted = body.uezApplicationStatus !== 'not_started';
@@ -923,6 +943,36 @@ router.post('/applications/:id/payment-reported', async (req, res) => {
     await addStatusEvent(application.id, 'payment_reported', 'Payment reported', 'You told COR that your payment was sent. We will verify receipt.', req.user.id, true);
     res.status(201).json(data);
   } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.post('/applications/:id/tax-clearance-resolved', async (req, res) => {
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+    if ((application.tax_clearance_status || 'no') !== 'issue') {
+      return res.status(400).json({ error: 'There is no open tax-clearance issue to report as resolved.' });
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase.from('uez_applications').update({
+      tax_clearance_recheck_requested_at: now,
+      updated_at: now
+    }).eq('id', application.id).select('*').single();
+    if (error) throw error;
+
+    await addStatusEvent(
+      application.id,
+      'tax_clearance_client_resolved',
+      'Tax-clearance issue reported resolved',
+      'You told COR that New Jersey says the tax-clearance issue is resolved. COR will recheck the Tax Clearance Certificate.',
+      req.user.id,
+      true
+    );
+
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 router.put('/admin/applications/:id/payment', requireUezAdmin, async (req, res) => {
