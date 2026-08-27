@@ -81,6 +81,25 @@ export async function updateApplicantPassword(password) {
   return data;
 }
 
+
+export async function getSignupLayout() {
+  const response = await fetch(`${API_BASE}/api/uez/signup-layout`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Could not load signup layout.');
+  return payload.layout;
+}
+
+export function saveAdminSignupLayout(layout) {
+  return request('/api/uez/admin/signup-layout', {
+    method: 'PUT',
+    body: JSON.stringify({ layout })
+  });
+}
+
+export function resetAdminSignupLayout() {
+  return request('/api/uez/admin/signup-layout/reset', { method: 'POST' });
+}
+
 export function whoAmI() {
   return request('/api/uez/whoami');
 }

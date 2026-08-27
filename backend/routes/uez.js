@@ -18,6 +18,26 @@ const upload = multer({
 });
 
 const DOCUMENT_BUCKET = 'uez-documents';
+
+const DEFAULT_SIGNUP_LAYOUT = {
+  account: ['email', 'password'],
+  business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
+  ownerCore: ['title', 'firstName', 'lastName', 'email', 'phone', 'dob', 'ssn', 'ownershipPercent'],
+  ownerAddress: ['addressLine1', 'addressLine2', 'city', 'state', 'zip'],
+  documents: ['formation', 'soleProp', 'supporting']
+};
+
+function validateSignupLayout(layout) {
+  const clean = {};
+  for (const [group, defaults] of Object.entries(DEFAULT_SIGNUP_LAYOUT)) {
+    const received = Array.isArray(layout?.[group]) ? layout[group] : defaults;
+    if (received.length !== defaults.length || new Set(received).size !== defaults.length || received.some((key) => !defaults.includes(key))) {
+      throw new Error(`Invalid signup layout for ${group}. Fields can only be reordered within their existing page.`);
+    }
+    clean[group] = received;
+  }
+  return clean;
+}
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
@@ -118,7 +138,43 @@ router.post('/signup', async (req, res) => {
   }
 });
 
+router.get('/signup-layout', async (_req, res) => {
+  try {
+    const { data, error } = await supabase.from('uez_signup_layout').select('layout').eq('id', 'default').maybeSingle();
+    if (error) throw error;
+    res.json({ layout: validateSignupLayout(data?.layout || DEFAULT_SIGNUP_LAYOUT) });
+  } catch (err) {
+    res.json({ layout: DEFAULT_SIGNUP_LAYOUT });
+  }
+});
+
 router.use(requireUezAuth);
+
+
+router.put('/admin/signup-layout', requireUezAdmin, async (req, res) => {
+  try {
+    const layout = validateSignupLayout(req.body?.layout);
+    const { data, error } = await supabase.from('uez_signup_layout')
+      .upsert({ id: 'default', layout, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+      .select('layout, updated_at').single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/admin/signup-layout/reset', requireUezAdmin, async (_req, res) => {
+  try {
+    const { data, error } = await supabase.from('uez_signup_layout')
+      .upsert({ id: 'default', layout: DEFAULT_SIGNUP_LAYOUT, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+      .select('layout, updated_at').single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 router.get('/whoami', (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, role: req.user.role });

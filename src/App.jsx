@@ -17,10 +17,18 @@ import {
   deleteDocument,
   reportApplicantPayment,
   reportBrcCreated,
-  whoAmI
+  whoAmI,
+  getSignupLayout
 } from './api';
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
+const DEFAULT_SIGNUP_LAYOUT = {
+  account: ['email', 'password'],
+  business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
+  ownerCore: ['title', 'firstName', 'lastName', 'email', 'phone', 'dob', 'ssn', 'ownershipPercent'],
+  ownerAddress: ['addressLine1', 'addressLine2', 'city', 'state', 'zip'],
+  documents: ['formation', 'soleProp', 'supporting']
+};
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
 const blankOwner = () => ({ title: '', titleOther: '', firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '' });
 
@@ -304,6 +312,7 @@ export default function App({ demoMode = false }) {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [documents, setDocuments] = useState([]);
   const [uploadingType, setUploadingType] = useState('');
+  const [signupLayout, setSignupLayout] = useState(DEFAULT_SIGNUP_LAYOUT);
   const [solePropConfirmedHere, setSolePropConfirmedHere] = useState(false);
   const [form, setForm] = useState(() => demoMode ? {
     address: '123 Demo Street, Lakewood, NJ 08701', email: 'demo@corsolutions.io', password: 'Demo123!',
@@ -323,6 +332,12 @@ export default function App({ demoMode = false }) {
   const eligibleProgramName = eligibility?.programs?.[0]?.name || programNameFromCode(bundle?.application?.program_code);
   const hasFormation = documents.some((doc) => doc.document_type === 'formation');
   const update = (key) => (e) => setForm((old) => ({ ...old, [key]: e.target.value }));
+
+  useEffect(() => {
+    let active = true;
+    getSignupLayout().then((layout) => { if (active && layout) setSignupLayout(layout); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -717,6 +732,16 @@ export default function App({ demoMode = false }) {
     finally { setBusy(false); }
   }
 
+  async function undoSoleProprietorship() {
+    setBusy(true); setMessage('');
+    try {
+      await persistSoleProprietorship(false);
+      setSolePropConfirmedHere(false);
+      setMessage('Sole proprietorship selection cleared. You can upload the Certificate of Formation.');
+    } catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function uploadDoc(type, file) {
     if (!file || !applicationId) return;
     if (demoMode) {
@@ -942,28 +967,29 @@ export default function App({ demoMode = false }) {
         </div>}
 
         {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); createAccountAndCase(); }}>
-          <div className="intro-copy">
-            <h3>Create your COR account</h3>
-            <p>Your account keeps your application, documents, and status in one place.</p>
-          </div>
-          <div className="field-grid">
-            <div><label>Email <span className="required-star">*</span></label><input type="email" value={form.email} onChange={update('email')} required /></div>
-            <div><label>Password <span className="required-star">*</span></label><input type="password" value={form.password} onChange={update('password')} required minLength="6" /></div>
+          <div className="intro-copy"><h3>Create your COR account</h3><p>Your account keeps your application, documents, and status in one place.</p></div>
+          <div className="field-grid ordered-field-grid">
+            {signupLayout.account.map((key) => key === 'email'
+              ? <div key={key}><label>Email <span className="required-star">*</span></label><input type="email" value={form.email} onChange={update('email')} required /></div>
+              : <div key={key}><label>Password <span className="required-star">*</span></label><input type="password" value={form.password} onChange={update('password')} required minLength="6" /></div>)}
           </div>
           <button type="submit" className="primary account-submit" disabled={busy}>{busy ? 'Please wait…' : 'Create account'}</button>
         </form>}
 
         {step === 3 && <div className="content-block">
           <div className="intro-copy"><h3>Tell us about the business</h3><p>We’ll use this information for your UEZ enrollment and available grant application.</p></div>
-          <label>Business name <span className="required-star">*</span></label><input required value={form.businessName} onChange={update('businessName')} />
-          <label>In a few words, what does the business do? <span className="required-star">*</span></label><textarea value={form.businessDescription} onChange={update('businessDescription')} placeholder="Example: HVAC installation and repair" required />
-          <div className="field-grid">
-            <div><label>EIN <span className="required-star">*</span></label><input required inputMode="numeric" value={form.ein} onChange={(e) => { const d=e.target.value.replace(/\D/g,'').slice(0,9); setForm((old)=>({...old,ein:d.length>2?`${d.slice(0,2)}-${d.slice(2)}`:d})); }} maxLength="10" placeholder="12-3456789" /></div>
-            <div><label>Year founded <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="4" value={form.yearFounded} onChange={(e) => setForm((old)=>({...old,yearFounded:e.target.value.replace(/\D/g,'').slice(0,4)}))} /></div>
-            <div><label>Does the business have a DBA? <span className="required-star">*</span></label><div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasDba" value="yes" checked={form.hasDba==='yes'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasDba" value="no" checked={form.hasDba==='no'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value,dbaName:''}))} />No</label></div></div>
-            {form.hasDba === 'yes' && <div><label>What is the DBA name? <span className="required-star">*</span></label><input value={form.dbaName} onChange={update('dbaName')} required /></div>}
-            <div><label>Full-time employees <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="3" value={form.fullTimeEmployees} onChange={(e)=>setForm((old)=>({...old,fullTimeEmployees:e.target.value.replace(/\D/g,'').slice(0,3)}))} /></div>
-            <div><label>Part-time employees <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="3" value={form.partTimeEmployees} onChange={(e)=>setForm((old)=>({...old,partTimeEmployees:e.target.value.replace(/\D/g,'').slice(0,3)}))} /></div>
+          <div className="field-grid ordered-field-grid business-ordered-grid">
+            {signupLayout.business.map((key) => {
+              if (key === 'businessName') return <div className="field-span-2" key={key}><label>Business name <span className="required-star">*</span></label><input required value={form.businessName} onChange={update('businessName')} /></div>;
+              if (key === 'businessDescription') return <div className="field-span-2" key={key}><label>In a few words, what does the business do? <span className="required-star">*</span></label><textarea value={form.businessDescription} onChange={update('businessDescription')} placeholder="Example: HVAC installation and repair" required /></div>;
+              if (key === 'ein') return <div key={key}><label>EIN <span className="required-star">*</span></label><input required inputMode="numeric" value={form.ein} onChange={(e) => { const d=e.target.value.replace(/\D/g,'').slice(0,9); setForm((old)=>({...old,ein:d.length>2?`${d.slice(0,2)}-${d.slice(2)}`:d})); }} maxLength="10" placeholder="12-3456789" /></div>;
+              if (key === 'yearFounded') return <div key={key}><label>Year founded <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="4" value={form.yearFounded} onChange={(e) => setForm((old)=>({...old,yearFounded:e.target.value.replace(/\D/g,'').slice(0,4)}))} /></div>;
+              if (key === 'hasDba') return <div key={key}><label>Does the business have a DBA? <span className="required-star">*</span></label><div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasDba" value="yes" checked={form.hasDba==='yes'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasDba" value="no" checked={form.hasDba==='no'} onChange={(e)=>setForm((old)=>({...old,hasDba:e.target.value,dbaName:''}))} />No</label></div></div>;
+              if (key === 'dbaName') return form.hasDba === 'yes' ? <div key={key}><label>What is the DBA name? <span className="required-star">*</span></label><input value={form.dbaName} onChange={update('dbaName')} required /></div> : null;
+              if (key === 'fullTimeEmployees') return <div key={key}><label>Full-time employees <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="3" value={form.fullTimeEmployees} onChange={(e)=>setForm((old)=>({...old,fullTimeEmployees:e.target.value.replace(/\D/g,'').slice(0,3)}))} /></div>;
+              if (key === 'partTimeEmployees') return <div key={key}><label>Part-time employees <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="3" value={form.partTimeEmployees} onChange={(e)=>setForm((old)=>({...old,partTimeEmployees:e.target.value.replace(/\D/g,'').slice(0,3)}))} /></div>;
+              return null;
+            })}
           </div>
         </div>}
 
@@ -974,22 +1000,27 @@ export default function App({ demoMode = false }) {
           {!primaryIs100 && <div className="ownership-summary"><span>Ownership accounted for</span><strong className={Math.abs(ownershipTotal - 100) < 0.001 ? 'ownership-ok' : ''}>{ownershipTotal}% / 100%</strong></div>}
           {form.owners.map((owner, index) => <div className="owner-card" key={index}>
             <div className="owner-card-head"><strong>{index === 0 ? 'Primary owner' : `Additional owner ${index + 1}`}</strong>{index > 0 && <button className="owner-remove" type="button" onClick={() => removeOwner(index)}>Remove</button>}</div>
-            <div className="field-grid">
-              <div><label>Title <span className="required-star">*</span></label><select required value={owner.title || ''} onChange={updateOwner(index, 'title')}><option value="" disabled>Select title</option><option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Ms.">Ms.</option><option value="Dr.">Dr.</option><option value="Rabbi">Rabbi</option><option value="Other">Other</option></select></div>
-              {owner.title === 'Other' && <div><label>Other title <span className="required-star">*</span></label><input required value={owner.titleOther || ''} onChange={updateOwner(index, 'titleOther')} /></div>}
-              <div><label>First name <span className="required-star">*</span></label><input required value={owner.firstName} onChange={updateOwner(index, 'firstName')} /></div>
-              <div><label>Last name <span className="required-star">*</span></label><input required value={owner.lastName} onChange={updateOwner(index, 'lastName')} /></div>
-              <div><label>Email <span className="required-star">*</span></label><input required type="email" value={owner.email} onChange={updateOwner(index, 'email')} /></div>
-              <div><label>Best phone <span className="required-star">*</span></label><input required inputMode="tel" value={owner.phone} onChange={updateOwner(index, 'phone')} /></div>
-              <div><label>Date of birth <span className="required-star">*</span></label><input required inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={updateOwner(index, 'dob')} /></div>
-              <div><label>SSN <span className="required-star">*</span></label><input required inputMode="numeric" value={owner.ssn} onChange={updateOwner(index, 'ssn')} placeholder="•••-••-••••" /></div>
-              {!primaryIs100 && <div><label>Ownership percentage <span className="required-star">*</span></label><input required type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={updateOwner(index, 'ownershipPercent')} /></div>}
-              <div className="owner-address-heading"><strong>Home address</strong></div>
-              <div><label>Street address <span className="required-star">*</span></label><input required autoComplete="street-address" value={owner.addressLine1 || ''} onChange={updateOwner(index, 'addressLine1')} /></div>
-              <div><label>Address line 2</label><input value={owner.addressLine2 || ''} onChange={updateOwner(index, 'addressLine2')} /></div>
-              <div><label>City <span className="required-star">*</span></label><input required value={owner.city || ''} onChange={updateOwner(index, 'city')} /></div>
-              <div><label>State <span className="required-star">*</span></label><input required maxLength="2" value={owner.state || ''} onChange={(e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0,2); updateOwner(index, 'state')(e); }} /></div>
-              <div><label>ZIP <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="5" value={owner.zip || ''} onChange={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0,5); updateOwner(index, 'zip')(e); }} /></div>
+            <div className="field-grid ordered-field-grid">
+              {signupLayout.ownerCore.map((key) => {
+                if (key === 'title') return <React.Fragment key={key}><div><label>Title <span className="required-star">*</span></label><select required value={owner.title || ''} onChange={updateOwner(index, 'title')}><option value="" disabled>Select title</option><option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Ms.">Ms.</option><option value="Dr.">Dr.</option><option value="Rabbi">Rabbi</option><option value="Other">Other</option></select></div>{owner.title === 'Other' && <div><label>Other title <span className="required-star">*</span></label><input required value={owner.titleOther || ''} onChange={updateOwner(index, 'titleOther')} /></div>}</React.Fragment>;
+                if (key === 'firstName') return <div key={key}><label>First name <span className="required-star">*</span></label><input required value={owner.firstName} onChange={updateOwner(index, 'firstName')} /></div>;
+                if (key === 'lastName') return <div key={key}><label>Last name <span className="required-star">*</span></label><input required value={owner.lastName} onChange={updateOwner(index, 'lastName')} /></div>;
+                if (key === 'email') return <div key={key}><label>Email <span className="required-star">*</span></label><input required type="email" value={owner.email} onChange={updateOwner(index, 'email')} /></div>;
+                if (key === 'phone') return <div key={key}><label>Best phone <span className="required-star">*</span></label><input required inputMode="tel" value={owner.phone} onChange={updateOwner(index, 'phone')} /></div>;
+                if (key === 'dob') return <div key={key}><label>Date of birth <span className="required-star">*</span></label><input required inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={updateOwner(index, 'dob')} /></div>;
+                if (key === 'ssn') return <div key={key}><label>SSN <span className="required-star">*</span></label><input required inputMode="numeric" value={owner.ssn} onChange={updateOwner(index, 'ssn')} placeholder="•••-••-••••" /></div>;
+                if (key === 'ownershipPercent') return !primaryIs100 ? <div key={key}><label>Ownership percentage <span className="required-star">*</span></label><input required type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={updateOwner(index, 'ownershipPercent')} /></div> : null;
+                return null;
+              })}
+              <div className="owner-address-heading field-span-2"><strong>Home address</strong></div>
+              {signupLayout.ownerAddress.map((key) => {
+                if (key === 'addressLine1') return <div key={key}><label>Street address <span className="required-star">*</span></label><input required autoComplete="street-address" value={owner.addressLine1 || ''} onChange={updateOwner(index, 'addressLine1')} /></div>;
+                if (key === 'addressLine2') return <div key={key}><label>Address line 2</label><input value={owner.addressLine2 || ''} onChange={updateOwner(index, 'addressLine2')} /></div>;
+                if (key === 'city') return <div key={key}><label>City <span className="required-star">*</span></label><input required value={owner.city || ''} onChange={updateOwner(index, 'city')} /></div>;
+                if (key === 'state') return <div key={key}><label>State <span className="required-star">*</span></label><input required maxLength="2" value={owner.state || ''} onChange={(e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0,2); updateOwner(index, 'state')(e); }} /></div>;
+                if (key === 'zip') return <div key={key}><label>ZIP <span className="required-star">*</span></label><input required inputMode="numeric" maxLength="5" value={owner.zip || ''} onChange={(e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0,5); updateOwner(index, 'zip')(e); }} /></div>;
+                return null;
+              })}
             </div>
           </div>)}
           {!primaryIs100 && ownershipTotal < 100 && <button className="secondary add-owner" type="button" onClick={addOwner}>+ Add another owner</button>}
@@ -998,33 +1029,21 @@ export default function App({ demoMode = false }) {
 
         {step === 5 && <div className="content-block">
           <div className="intro-copy"><h3>Documents</h3><p>Upload your formation document and any other supporting documents you want COR to have.</p></div>
-
-          <div className="upload-card formation-choice-card">
-            <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Upload the business's Certificate of Formation.</p></div>
-            <label className="secondary inline-button file-button">
-              {uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}
-              <input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || solePropConfirmedHere} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} />
-            </label>
+          <div className="ordered-documents">
+            {signupLayout.documents.map((key) => {
+              if (key === 'formation') return <div className="upload-card formation-choice-card" key={key}>
+                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Upload the business's Certificate of Formation.</p></div>
+                <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || solePropConfirmedHere} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>
+              </div>;
+              if (key === 'soleProp') return !hasFormation ? <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''}`} key={key}>
+                <div><strong>Don't have a Certificate of Formation?</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship.</p></div>
+                <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Sole proprietorship confirmed' : "I don't have a Certificate of Formation because this business is a sole proprietorship"}</button>{solePropConfirmedHere && <button type="button" className="sole-prop-undo" title="Undo sole proprietorship selection" aria-label="Undo sole proprietorship selection" onClick={undoSoleProprietorship} disabled={busy}>↶</button>}</div>
+              </div> : null;
+              if (key === 'supporting') return <div className="upload-card" key={key}><div><strong>Other supporting document</strong><p>Optional. Add anything you think COR should have for this application.</p></div><label className="secondary inline-button file-button">{uploadingType === 'supporting' ? 'Uploading…' : 'Upload another file'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('supporting', e.target.files?.[0])} /></label></div>;
+              return null;
+            })}
           </div>
-          {!hasFormation && <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''}`}>
-            <div><strong>Don't have a Certificate of Formation?</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship.</p></div>
-            <button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>
-              {solePropConfirmedHere ? '✓ Sole proprietorship confirmed' : "I don't have a Certificate of Formation because this business is a sole proprietorship"}
-            </button>
-          </div>}
-
-          <div className="upload-card">
-            <div><strong>Other supporting document</strong><p>Optional. Add anything you think COR should have for this application.</p></div>
-            <label className="secondary inline-button file-button">
-              {uploadingType === 'supporting' ? 'Uploading…' : 'Upload another file'}
-              <input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('supporting', e.target.files?.[0])} />
-            </label>
-          </div>
-
-          {documents.length > 0 && <div className="uploaded-docs">
-            <h4>Uploaded</h4>
-            {documents.map((doc) => <div className="uploaded-doc-row" key={doc.id}><span>{documentLabel(doc.document_type)}</span><strong>{doc.filename}</strong><button type="button" className="owner-remove" onClick={() => removeUploadedDocument(doc)} disabled={Boolean(uploadingType)}>Remove</button></div>)}
-          </div>}
+          {documents.length > 0 && <div className="uploaded-docs"><h4>Uploaded</h4>{documents.map((doc) => <div className="uploaded-doc-row" key={doc.id}><span>{documentLabel(doc.document_type)}</span><strong>{doc.filename}</strong><button type="button" className="owner-remove" onClick={() => removeUploadedDocument(doc)} disabled={Boolean(uploadingType)}>Remove</button></div>)}</div>}
         </div>}
 
         {step === 6 && <div className="content-block review-block">
