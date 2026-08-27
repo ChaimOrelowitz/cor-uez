@@ -10,20 +10,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build admin mobile layer
-        run: python .github/scripts/build_admin_mobile_layer.py
-      - name: Verify frontend
+      - name: Build visual signup grid and visible visit counter
+        run: python .github/scripts/visual_signup_grid_and_visit_counter.py
+      - name: Verify frontend and backend
         run: |
+          node --check backend/routes/uez.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/AdminPage.jsx src/workflow.css
+          git add backend/routes/uez.js src/App.jsx src/SignupLayoutPage.jsx src/AdminVisitCounter.jsx src/analytics.css src/styles.css src/workflow.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Build functional admin mobile layer"
+            git commit -m "Make signup layout visual and surface visit counter"
             git push
           fi
