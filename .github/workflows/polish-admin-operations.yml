@@ -10,22 +10,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Add PBS login-only action and clean Address back button
-        run: python .github/scripts/add_pbs_login_action_and_cleanup.py
-      - name: Verify extension and frontend
+      - name: Right-align Address Continue action
+        run: python .github/scripts/right_align_address_continue.py
+      - name: Verify frontend
         run: |
-          node --check brc-helper-extension/background.js
-          node --check brc-helper-extension/content.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add src/App.jsx src/AdminPage.jsx brc-helper-extension/background.js brc-helper-extension/content.js brc-helper-extension/manifest.json
+          git add src/App.jsx src/styles.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Add PBS login-only action"
+            git commit -m "Right-align address Continue action"
             git push
           fi
