@@ -10,21 +10,24 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build visual signup grid and visible visit counter
-        run: python .github/scripts/visual_signup_grid_and_visit_counter.py
-      - name: Verify frontend and backend
+      - name: Fix bad tax clearance and manual document upload
+        run: python .github/scripts/fix_bad_tax_clearance_and_manual_upload.py
+      - name: Verify frontend, backend, and extension
         run: |
           node --check backend/routes/uez.js
+          node --check backend/services/uezEmail.js
+          node --check brc-helper-extension/content.js
+          node --check brc-helper-extension/background.js
           npm install --ignore-scripts
           npm run build
       - name: Commit changes
         run: |
           git config user.name "COR UEZ Bot"
           git config user.email "chaim@corsolutions.io"
-          git add backend/routes/uez.js src/App.jsx src/SignupLayoutPage.jsx src/AdminVisitCounter.jsx src/analytics.css src/styles.css src/workflow.css
+          git add backend/routes/uez.js backend/services/uezEmail.js brc-helper-extension/content.js brc-helper-extension/background.js brc-helper-extension/manifest.json src/AdminPage.jsx src/workflow.css
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Make signup layout visual and surface visit counter"
+            git commit -m "Handle bad tax clearance and manual uploads"
             git push
           fi
