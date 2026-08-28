@@ -427,11 +427,14 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     }
 
     if (documentType === 'uez_approval_email') {
+      // The file arriving is a fact; whether it's actually a valid approval email
+      // is a verdict the software can't read from a PDF. uez_application_submitted/
+      // uez_application_status only move on explicit review (documents/:id/review),
+      // not on upload alone — otherwise "applied" could mean nothing more than
+      // "some file got uploaded."
       const now = new Date().toISOString();
       const { error: appError } = await supabase.from('uez_applications').update({
         pbs_status: 'uez_approval_uploaded',
-        uez_application_submitted: true,
-        uez_application_status: 'applied',
         uez_approval_review_status: 'not_reviewed',
         updated_at: now
       }).eq('id', application.id);
@@ -890,11 +893,9 @@ router.post('/admin/applications/:id/documents/:documentId/review', requireUezAd
       req.user.id,
       true
     );
-    if (document.document_type === 'formation' && decision === 'rejected') {
-      await safeSendApplicationEmail(updated, 'formation_rejected', {
-        dedupeKey: `formation_rejected:${application.id}:${document.id}`
-      });
-    }
+    // No auto-email on rejection — rejecting a document is already a deliberate
+    // admin decision, but the wording of "please send a new one" is a judgment
+    // call. Sent explicitly via the "Send replacement request email" button.
 
     res.json({ application: updated, document, decision });
   } catch (err) {
@@ -1345,6 +1346,36 @@ router.post('/admin/applications/:id/brc-not-found', requireUezAdmin, async (req
     );
 
     res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// The Lakewood grant portal's only "it worked" signal today is a text match on
+// the confirmation page — no submission ID, nothing independently verifiable
+// (unlike the LDC application, which gets a real JotForm submission ID + a
+// signed PDF fetched via that ID). So instead of the extension marking the
+// grant submitted outright, it reports a detection here, and an admin has to
+// explicitly confirm via the existing /status endpoint below before anything
+// (status, email) actually changes.
+router.post('/admin/applications/:id/grant-submission/detected', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('id')
+      .eq('id', req.params.id)
+      .single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    await addStatusEvent(
+      application.id,
+      'grant_submission_detected',
+      'Possible grant submission detected',
+      'The COR extension saw what looks like a successful Lakewood submission page, but there was no submission ID available to confirm it automatically. Review and confirm.',
+      req.user.id,
+      false
+    );
+
+    res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

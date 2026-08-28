@@ -307,16 +307,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message?.type === 'COR_LAKEWOOD_SUBMITTED') {
       if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };
-      await api(job, `/api/uez/admin/applications/${job.applicationId}/status`, {
+      // Text-match detection only — no submission ID to confirm it the way the LDC
+      // flow can. Report the detection; an admin has to explicitly confirm before
+      // the application is actually marked submitted (see backend/routes/uez.js).
+      await api(job, `/api/uez/admin/applications/${job.applicationId}/grant-submission/detected`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'grant_submitted',
-          label: 'Grant application submitted',
-          message: 'The Lakewood UEZ Technology Grant application was submitted successfully.'
-        })
+        headers: { 'Content-Type': 'application/json' }
       });
-      await notify(job, 'complete');
+      await notify(job, 'complete', { ambiguous: true });
       if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
       await setJob(null);
       return { ok: true };

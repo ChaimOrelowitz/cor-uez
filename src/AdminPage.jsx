@@ -228,6 +228,16 @@ function attentionItems(detail) {
   return items;
 }
 
+function grantSubmissionLikelyDetected(detail) {
+  if (!detail) return false;
+  if (detail.application.status === 'applied' || detail.application.status === 'grant_submitted') return false;
+  const events = detail.statusEvents || [];
+  const lastDetected = [...events].reverse().find((e) => e.status === 'grant_submission_detected');
+  if (!lastDetected) return false;
+  const lastConfirmed = [...events].reverse().find((e) => e.status === 'grant_submitted');
+  return !lastConfirmed || new Date(lastDetected.created_at) > new Date(lastConfirmed.created_at);
+}
+
 function applicationDraftFrom(app) {
   return {
     contactEmail: app.contact_email || '',
@@ -588,7 +598,7 @@ export default function AdminPage() {
         }
         if (message.jobId !== requestId || message.type !== 'COR_UEZ_STATUS') return;
         if (statusMessages[message.status]) setMessage(statusMessages[message.status]);
-        if (message.status === 'complete') finish(null, { status: 'complete', taxIssue: Boolean(message.taxIssue) });
+        if (message.status === 'complete') finish(null, { status: 'complete', taxIssue: Boolean(message.taxIssue), ambiguous: Boolean(message.ambiguous) });
         if (message.status === 'not_found') finish(null, { status: 'not_found' });
         if (message.status === 'error') finish(new Error(message.error || 'The document retrieval did not finish.'));
       };
@@ -753,7 +763,29 @@ export default function AdminPage() {
       });
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The Lakewood grant workflow did not finish.');
       await refreshList(detail.application.id);
-      setMessage('Lakewood UEZ Technology Grant submitted successfully.');
+      setMessage(outcome.ambiguous
+        ? 'COR saw what looks like a successful Lakewood submission, but there was no submission ID to confirm it automatically. Review the confirmation page, then click "Confirm grant submitted" below.'
+        : 'Lakewood UEZ Technology Grant submitted successfully.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmGrantSubmitted() {
+    const applicationId = detail?.application?.id;
+    if (!applicationId) return;
+    setBusy(true);
+    setMessage('Confirming grant submission…');
+    try {
+      await updateAdminApplicationStatus(applicationId, {
+        status: 'grant_submitted',
+        label: 'Grant application submitted',
+        message: 'Chaim confirmed the Lakewood UEZ Technology Grant application was submitted.'
+      });
+      await refreshList(applicationId);
+      setMessage('Grant submission confirmed.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -963,6 +995,21 @@ export default function AdminPage() {
     setMessage('Sending BRC problem email…');
     try {
       const result = await sendAdminApplicationEmail(applicationId, 'brc_not_found');
+      setMessage(result?.sent ? `Email sent to ${detail.application.contact_email}.` : (result?.error || 'Email could not be sent.'));
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendFormationRejectedEmail() {
+    const applicationId = detail?.application?.id;
+    if (!applicationId) return;
+    setBusy(true);
+    setMessage('Sending replacement certificate request…');
+    try {
+      const result = await sendAdminApplicationEmail(applicationId, 'formation_rejected');
       setMessage(result?.sent ? `Email sent to ${detail.application.contact_email}.` : (result?.error || 'Email could not be sent.'));
     } catch (err) {
       setMessage(err.message);
@@ -1236,7 +1283,10 @@ export default function AdminPage() {
                     const formation = docFor(detail, 'formation');
                     const sole = detail.application.is_sole_proprietorship;
                     const review = detail.application.formation_review_status || 'not_reviewed';
-                    return <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : formation ? 'review-pending' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : formation ? '!' : '○'}</b><span>Certificate of Formation</span></button><small>{sole && !formation ? 'Not required (sole prop)' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
+                    return <>
+                      <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : formation ? 'review-pending' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : formation ? '!' : '○'}</b><span>Certificate of Formation</span></button><small>{sole && !formation ? 'Not required (sole prop)' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>
+                      {review === 'rejected' && <button type="button" className="tiny-confirm" onClick={sendFormationRejectedEmail} disabled={busy}>Send replacement request email</button>}
+                    </>;
                   })()}
                   {(() => {
                     const approval = docFor(detail, 'uez_approval_email');
@@ -1279,6 +1329,10 @@ export default function AdminPage() {
                   <button className={`ops-action ${docFor(detail, 'ldc_application') ? 'success-action' : 'primary'}`} onClick={runLdcJotform} disabled={busy}><span>FILL OUT</span><strong>LDC APP</strong></button>
                   <button className={`ops-action ${detail.application.status === 'applied' ? 'success-action' : packetReady(detail) ? 'ready-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>SUBMIT</span><strong>GRANT APP</strong></button>
                 </div>
+                {grantSubmissionLikelyDetected(detail) && <div className="grant-confirm-banner">
+                  <span>COR saw what looks like a successful Lakewood submission, but couldn't confirm it automatically (no submission ID on that flow).</span>
+                  <button className="warning-button" onClick={confirmGrantSubmitted} disabled={busy}>Confirm grant submitted</button>
+                </div>}
               </div>
             </div>
           </section>
