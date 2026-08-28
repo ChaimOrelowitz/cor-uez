@@ -372,11 +372,18 @@ export default function AdminPage() {
     return () => { active = false; };
   }, []);
 
+  // No blind interval here on purpose — every mutation already calls refreshList()
+  // itself with the exact result of what just happened, so a timer re-fetching
+  // everything every few seconds was only ever fighting whatever you were doing
+  // (typing a note, editing a field) and making the page feel unstable. The one
+  // case a timer doesn't cover — something changed outside this tab (another
+  // admin, an applicant upload, an extension callback landing late) — is handled
+  // by refreshing once when you come back to the tab, not by polling while you're on it.
   useEffect(() => {
     if (!session || profile?.role !== 'admin') return undefined;
     let active = true;
     const refresh = async () => {
-      if (!active || document.visibilityState !== 'visible' || busy || editMode || myNjEditMode || previewDoc) return;
+      if (!active || document.visibilityState !== 'visible' || busy || editMode || myNjEditMode || previewDoc || noteEditingId) return;
       try {
         const rows = await getAdminApplications();
         if (!active) return;
@@ -387,10 +394,9 @@ export default function AdminPage() {
         }
       } catch (_) {}
     };
-    const timer = window.setInterval(refresh, 4000);
     window.addEventListener('focus', refresh);
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); };
-  }, [session, profile?.role, selectedId, busy, editMode, myNjEditMode, previewDoc]);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
+  }, [session, profile?.role, selectedId, busy, editMode, myNjEditMode, previewDoc, noteEditingId]);
 
   async function bootstrap() {
     setBusy(true);
