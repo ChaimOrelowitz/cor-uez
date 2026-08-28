@@ -23,6 +23,7 @@ import {
   updateAdminProcessFlags,
   saveAdminPayment,
   reviewAdminDocument,
+  sendAdminApplicationEmail,
   updateAdminCaseNote,
   uploadApplicationDocument,
   whoAmI
@@ -955,6 +956,21 @@ export default function AdminPage() {
     }
   }
 
+  async function sendBrcProblemEmail() {
+    const applicationId = detail?.application?.id;
+    if (!applicationId) return;
+    setBusy(true);
+    setMessage('Sending BRC problem email…');
+    try {
+      const result = await sendAdminApplicationEmail(applicationId, 'brc_not_found');
+      setMessage(result?.sent ? `Email sent to ${detail.application.contact_email}.` : (result?.error || 'Email could not be sent.'));
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setProcessFlag(key, value) {
     setBusy(true);
     setMessage('Saving process status…');
@@ -1378,6 +1394,7 @@ export default function AdminPage() {
               <div className="admin-action-row">
                 <button className="success-button" onClick={saveBrcFound} disabled={busy}>✓ BRC found</button>
                 <button className="warning-button" onClick={saveBrcNotFound} disabled={busy}>No BRC found</button>
+                {detail.application.brc_status === 'not_found' && <button className="secondary" onClick={sendBrcProblemEmail} disabled={busy}>Send BRC problem email</button>}
               </div>
 
             </section></details>

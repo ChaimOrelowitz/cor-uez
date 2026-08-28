@@ -1304,7 +1304,10 @@ router.post('/admin/applications/:id/brc-found', requireUezAdmin, async (req, re
       true
     );
 
-    await ensureMyNjCredentials(data, req.user.id);
+    // Recording that the BRC was found is a fact and stays automatic. Creating
+    // MyNJ/PBS credentials is a separate, consequential action (it generates and
+    // stores a real login) — it's an explicit admin action via
+    // POST /admin/applications/:id/credentials/mynj, not a side effect of this.
 
     res.json(data);
   } catch (err) {
@@ -1328,7 +1331,9 @@ router.post('/admin/applications/:id/brc-not-found', requireUezAdmin, async (req
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
-    await safeSendApplicationEmail(data, 'brc_not_found', { dedupeKey: `brc_not_found:${application.id}` });
+    // No auto-email here — recording "not found" is a fact, but telling the
+    // applicant is a judgment/wording call. Sent explicitly via the "Send BRC
+    // problem email" button, which uses this same brc_not_found template.
 
     await addStatusEvent(
       application.id,
