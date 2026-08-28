@@ -163,6 +163,7 @@ router.get('/signup-layout', async (_req, res) => {
 
 router.use(requireUezAuth);
 
+router.use('/brc-live2', require('./uezBrcLive2'));
 
 router.put('/admin/signup-layout', requireUezAdmin, async (req, res) => {
   try {
