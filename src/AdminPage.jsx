@@ -36,11 +36,6 @@ import {
   documentLabel,
   filterAndSortApplications,
   formationSatisfied,
-  formatDob,
-  formatDobInput,
-  formatPhoneInput,
-  formatSsn,
-  formatSsnInput,
   formatTimestamp,
   grantSubmissionLikelyDetected,
   nameControl,
@@ -48,7 +43,6 @@ import {
   ownerDraftFrom,
   packetReady,
   paymentStatusLabel,
-  programLabel,
   queueCounts,
   readyDocumentCount,
   statusLabel
@@ -56,10 +50,12 @@ import {
 import ActivityPanel from './admin/ActivityPanel';
 import AdminSidebar from './admin/AdminSidebar';
 import BrcDetailsCard from './admin/BrcDetailsCard';
+import BusinessDetailsCard from './admin/BusinessDetailsCard';
 import DocumentsPanel from './admin/DocumentsPanel';
 import EmailComposer from './admin/EmailComposer';
 import MyNjPbsCard from './admin/MyNjPbsCard';
 import NotesPanel from './admin/NotesPanel';
+import OwnersCard from './admin/OwnersCard';
 import PaymentCard from './admin/PaymentCard';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
@@ -1144,43 +1140,12 @@ export default function AdminPage() {
           <div className="admin-details-heading"><span>DETAILS</span><small>Reference information and manual overrides</small></div>
 
           <div className="admin-card-grid">
-            <details className="admin-accordion"><summary><strong>Business details</strong><span>{detail.application.ein || 'No EIN'}</span></summary><section className="admin-card admin-business-card admin-secondary-card">
-              <div className="admin-card-head"><h3>Business</h3><span>{programLabel(detail.application.program_code)}</span></div>
-              {editMode ? <div className="admin-edit-grid">
-                <div><label>Business name <span className="required-star">*</span></label><input value={applicationDraft.businessName} onChange={(e) => updateApplicationDraft('businessName', e.target.value)} /></div>
-                <div><label>Registered business name</label><input value={applicationDraft.registeredBusinessName} onChange={(e) => updateApplicationDraft('registeredBusinessName', e.target.value)} /></div>
-                <div><label>Contact email <span className="required-star">*</span></label><input type="email" value={applicationDraft.contactEmail} onChange={(e) => updateApplicationDraft('contactEmail', e.target.value)} /></div>
-                <div><label>Contact phone</label><input inputMode="tel" value={applicationDraft.contactPhone} onChange={(e) => updateApplicationDraft('contactPhone', formatPhoneInput(e.target.value))} /></div>
-                <div><label>EIN <span className="required-star">*</span></label><input inputMode="numeric" value={applicationDraft.ein} onChange={(e) => updateApplicationDraft('ein', e.target.value.replace(/\D/g, '').slice(0, 9))} /></div>
-                <div><label>Year founded</label><input type="number" value={applicationDraft.yearFounded} onChange={(e) => updateApplicationDraft('yearFounded', e.target.value)} /></div>
-                <div><label>Full-time employees</label><input type="number" min="0" value={applicationDraft.fullTimeEmployees} onChange={(e) => updateApplicationDraft('fullTimeEmployees', e.target.value)} /></div>
-                <div><label>Part-time employees</label><input type="number" min="0" value={applicationDraft.partTimeEmployees} onChange={(e) => updateApplicationDraft('partTimeEmployees', e.target.value)} /></div>
-                <div><label>Does the business have a DBA? <span className="required-star">*</span></label><select value={applicationDraft.hasDba} onChange={(e) => updateApplicationDraft('hasDba', e.target.value)}><option value="">Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div>
-                {applicationDraft.hasDba === 'yes' && <div><label>DBA name <span className="required-star">*</span></label><input value={applicationDraft.dbaName} onChange={(e) => updateApplicationDraft('dbaName', e.target.value)} /></div>}
-                <div><label>Grant amount requested</label><input type="number" min="0" step="0.01" value={applicationDraft.grantAmountRequested} onChange={(e) => updateApplicationDraft('grantAmountRequested', e.target.value)} /></div>
-                <div className="admin-edit-wide"><label>Address <span className="required-star">*</span></label><input value={applicationDraft.addressLine1} onChange={(e) => updateApplicationDraft('addressLine1', e.target.value)} /></div>
-                <div className="admin-edit-wide"><label>Address line 2</label><input value={applicationDraft.addressLine2} onChange={(e) => updateApplicationDraft('addressLine2', e.target.value)} /></div>
-                <div><label>City</label><input value={applicationDraft.city} onChange={(e) => updateApplicationDraft('city', e.target.value)} /></div>
-                <div><label>State</label><input maxLength="2" value={applicationDraft.state} onChange={(e) => updateApplicationDraft('state', e.target.value.toUpperCase())} /></div>
-                <div><label>ZIP</label><input value={applicationDraft.zip} onChange={(e) => updateApplicationDraft('zip', e.target.value)} /></div>
-                <label className="admin-checkbox"><input type="checkbox" checked={applicationDraft.isSoleProprietorship} onChange={(e) => updateApplicationDraft('isSoleProprietorship', e.target.checked)} /> Sole proprietorship</label>
-                <div className="admin-edit-wide"><label>Business description</label><textarea rows="4" value={applicationDraft.businessDescription} onChange={(e) => updateApplicationDraft('businessDescription', e.target.value)} /></div>
-              </div> : <dl className="data-grid">
-                <div><dt>Business name</dt><dd>{detail.application.business_name_input}</dd></div>
-                <div><dt>Registered name</dt><dd>{detail.application.registered_business_name || '—'}</dd></div>
-                <div><dt>Contact email</dt><dd>{detail.application.contact_email || '—'}</dd></div>
-                <div><dt>Contact phone</dt><dd>{detail.application.contact_phone || '—'}</dd></div>
-                <div><dt>EIN</dt><dd>{detail.application.ein || '—'}</dd></div>
-                <div><dt>Address</dt><dd>{[detail.application.address_line1, detail.application.address_line2, detail.application.city, detail.application.state, detail.application.zip].filter(Boolean).join(', ') || '—'}</dd></div>
-                <div><dt>UEZ</dt><dd>{detail.application.zone_name || '—'}</dd></div>
-                <div><dt>Founded</dt><dd>{detail.application.year_founded || '—'}</dd></div>
-                <div><dt>Employees</dt><dd>{detail.application.full_time_employees ?? 0} FT · {detail.application.part_time_employees ?? 0} PT</dd></div>
-                <div><dt>Business type</dt><dd>{detail.application.is_sole_proprietorship ? 'Sole proprietorship' : 'Entity'}</dd></div>
-                <div><dt>DBA</dt><dd>{detail.application.has_dba == null ? '—' : detail.application.has_dba ? (detail.application.dba_name || 'Yes') : 'No'}</dd></div>
-                <div><dt>Grant amount</dt><dd>{detail.application.grant_amount_requested == null ? '—' : `$${Number(detail.application.grant_amount_requested).toLocaleString()}`}</dd></div>
-                <div className="data-wide"><dt>Description</dt><dd>{detail.application.business_description || '—'}</dd></div>
-              </dl>}
-            </section></details>
+            <BusinessDetailsCard
+              application={detail.application}
+              editMode={editMode}
+              draft={applicationDraft}
+              onChangeField={updateApplicationDraft}
+            />
 
             <PaymentCard payments={detail.payments} draft={paymentDraft} busy={busy} onDraftChange={setPaymentDraft} onConfirm={confirmPayment} />
 
@@ -1216,49 +1181,14 @@ export default function AdminPage() {
               onCreateMyNjCredentials={createMyNjCredentials}
             />
 
-            <details className="admin-accordion"><summary><strong>Owners</strong><span>{`${detail.owners.length} owner${detail.owners.length === 1 ? '' : 's'}`}</span></summary><section className="admin-card admin-wide admin-owners-card admin-secondary-card">
-              <div className="admin-card-head"><h3>Owners</h3><span>{editMode ? ownerDrafts.length : detail.owners.length}</span></div>
-              {editMode ? <>
-                <div className="owner-admin-list owner-edit-list">
-                  {ownerDrafts.map((owner, index) => <div className="owner-admin-card" key={`owner-edit-${index}`}>
-                    <div className="owner-admin-title">
-                      <strong>Owner {index + 1}</strong>
-                      <button className="owner-remove-button" type="button" onClick={() => removeOwner(index)}>Remove owner</button>
-                    </div>
-                    <div className="admin-edit-grid owner-edit-grid">
-                      <div><label>Title (Mr., Mrs., etc.) <span className="required-star">*</span></label><select value={owner.title || ''} onChange={(e) => updateOwnerDraft(index, 'title', e.target.value)}><option value="">Select title</option><option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Ms.">Ms.</option><option value="Dr.">Dr.</option><option value="Rabbi">Rabbi</option>{owner.title && !['Mr.','Mrs.','Ms.','Dr.','Rabbi'].includes(owner.title) && <option value={owner.title}>{owner.title}</option>}</select></div>
-                      <div><label>First name <span className="required-star">*</span></label><input value={owner.firstName} onChange={(e) => updateOwnerDraft(index, 'firstName', e.target.value)} /></div>
-                      <div><label>Last name <span className="required-star">*</span></label><input value={owner.lastName} onChange={(e) => updateOwnerDraft(index, 'lastName', e.target.value)} /></div>
-                      <div><label>Email <span className="required-star">*</span></label><input type="email" value={owner.email} onChange={(e) => updateOwnerDraft(index, 'email', e.target.value)} /></div>
-                      <div><label>Phone <span className="required-star">*</span></label><input inputMode="tel" value={owner.phone} onChange={(e) => updateOwnerDraft(index, 'phone', formatPhoneInput(e.target.value))} /></div>
-                      <div><label>Date of birth (MM/DD/YYYY) <span className="required-star">*</span></label><input inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={(e) => updateOwnerDraft(index, 'dob', formatDobInput(e.target.value))} /></div>
-                      <div><label>SSN <span className="required-star">*</span></label><input inputMode="numeric" placeholder="###-##-####" value={owner.ssn} onChange={(e) => updateOwnerDraft(index, 'ssn', formatSsnInput(e.target.value))} /></div>
-                      <div><label>Ownership percentage <span className="required-star">*</span></label><input type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={(e) => updateOwnerDraft(index, 'ownershipPercent', e.target.value)} /></div>
-                      <div><label>Position / title</label><input value={owner.positionTitle} onChange={(e) => updateOwnerDraft(index, 'positionTitle', e.target.value)} placeholder={ownerDrafts.length === 1 ? 'Owner' : 'Partner'} /></div>
-                      <div><label>Address <span className="required-star">*</span></label><input value={owner.addressLine1} onChange={(e) => updateOwnerDraft(index, 'addressLine1', e.target.value)} /></div>
-                      <div><label>Address line 2</label><input value={owner.addressLine2} onChange={(e) => updateOwnerDraft(index, 'addressLine2', e.target.value)} /></div>
-                      <div><label>City <span className="required-star">*</span></label><input value={owner.city} onChange={(e) => updateOwnerDraft(index, 'city', e.target.value)} /></div>
-                      <div><label>State <span className="required-star">*</span></label><input maxLength="2" value={owner.state} onChange={(e) => updateOwnerDraft(index, 'state', e.target.value.toUpperCase())} /></div>
-                      <div><label>ZIP <span className="required-star">*</span></label><input value={owner.zip} onChange={(e) => updateOwnerDraft(index, 'zip', e.target.value)} /></div>
-                    </div>
-                  </div>)}
-                </div>
-                <button className="secondary admin-add-owner" type="button" onClick={addOwner}>+ Add owner</button>
-              </> : <div className="owner-admin-list">
-                {detail.owners.map((owner) => <div className="owner-admin-card" key={owner.id}>
-                  <div className="owner-admin-title"><strong>{owner.firstName} {owner.lastName}</strong><span>{owner.ownershipPercent}%</span></div>
-                  <dl className="data-grid compact-data">
-                    <div><dt>Title</dt><dd>{owner.title || '—'}</dd></div>
-                    <div><dt>Email</dt><dd>{owner.email || '—'}</dd></div>
-                    <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>
-                    <div><dt>Position / title</dt><dd>{owner.positionTitle || (detail.owners.length === 1 ? 'Owner' : 'Partner')}</dd></div>
-                    <div><dt>DOB</dt><dd>{formatDob(owner.dob) || '—'}</dd></div>
-                    <div><dt>SSN</dt><dd>{formatSsn(owner.ssn)}</dd></div>
-                    <div className="data-wide"><dt>Address</dt><dd>{[owner.addressLine1, owner.addressLine2, owner.city, owner.state, owner.zip].filter(Boolean).join(', ') || '—'}</dd></div>
-                  </dl>
-                </div>)}
-              </div>}
-            </section></details>
+            <OwnersCard
+              owners={detail.owners}
+              editMode={editMode}
+              ownerDrafts={ownerDrafts}
+              onChangeOwnerField={updateOwnerDraft}
+              onAddOwner={addOwner}
+              onRemoveOwner={removeOwner}
+            />
 
             <DocumentsPanel documents={detail.documents} busy={busy} onOpen={openDoc} onDelete={handleDeleteDoc} />
           </div>
