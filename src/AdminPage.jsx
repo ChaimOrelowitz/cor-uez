@@ -1,12 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  getLiveBrc2Session,
-  liveBrc2DocumentUrl,
-  liveBrc2ScreenshotUrl,
-  saveLiveBrc2Session,
-  sendLiveBrc2Input,
-  startLiveBrc2Session
-} from './brcLive2Api';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   addAdminCaseNote,
   createAdminMyNjCredentials,
@@ -353,15 +345,6 @@ export default function AdminPage() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const [pbsModalOpen, setPbsModalOpen] = useState(false);
-  const [brc2ModalOpen, setBrc2ModalOpen] = useState(false);
-  const [brc2Session, setBrc2Session] = useState(null);
-  const [brc2Status, setBrc2Status] = useState(null);
-  const [brc2Result, setBrc2Result] = useState(null);
-  const [brc2Error, setBrc2Error] = useState('');
-  const [brc2Starting, setBrc2Starting] = useState(false);
-  const [brc2Saving, setBrc2Saving] = useState(false);
-  const [brc2ScreenTick, setBrc2ScreenTick] = useState(Date.now());
-  const brc2ImageRef = useRef(null);
   const [manualDocType, setManualDocType] = useState('supporting');
   const [manualDocFile, setManualDocFile] = useState(null);
   const [manualDocUploading, setManualDocUploading] = useState(false);
@@ -416,33 +399,6 @@ export default function AdminPage() {
     window.addEventListener('focus', refresh);
     return () => { active = false; window.removeEventListener('focus', refresh); };
   }, [session, profile?.role, selectedId, busy, editMode, myNjEditMode, previewDoc, noteEditingId]);
-
-  // Scoped polling for the live BRC 2 modal only — not the blind whole-page
-  // interval that was removed elsewhere. This watches one interactive
-  // Playwright session while its modal is open, same as BrcLiveTestPage.jsx.
-  useEffect(() => {
-    if (!brc2Session?.id || !brc2Session?.token) return undefined;
-    let cancelled = false;
-
-    async function refresh() {
-      try {
-        const data = await getLiveBrc2Session(brc2Session.id, brc2Session.token);
-        if (cancelled) return;
-        setBrc2Status(data.status);
-        setBrc2Result(data);
-        if (!['found', 'not_found', 'error'].includes(data.status)) setBrc2ScreenTick(Date.now());
-      } catch (err) {
-        if (!cancelled) setBrc2Error(err.message);
-      }
-    }
-
-    refresh();
-    const timer = setInterval(refresh, 700);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [brc2Session?.id, brc2Session?.token]);
 
   async function bootstrap() {
     setBusy(true);
@@ -686,77 +642,6 @@ export default function AdminPage() {
       setMessage(err.message);
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function openBrc2Modal() {
-    setBrc2ModalOpen(true);
-    setBrc2Starting(true);
-    setBrc2Error('');
-    setBrc2Result(null);
-    setBrc2Session(null);
-    setBrc2Status('opening');
-    try {
-      const next = await startLiveBrc2Session(detail.application.id);
-      setBrc2Session(next);
-      setBrc2Status(next.status);
-      setBrc2ScreenTick(Date.now());
-    } catch (err) {
-      setBrc2Error(err.message);
-      setBrc2Status(null);
-    } finally {
-      setBrc2Starting(false);
-    }
-  }
-
-  function closeBrc2Modal() {
-    setBrc2ModalOpen(false);
-    setBrc2Session(null);
-    setBrc2Status(null);
-    setBrc2Result(null);
-    setBrc2Error('');
-    setBrc2Saving(false);
-  }
-
-  async function clickBrc2Browser(event) {
-    const brc2Terminal = ['found', 'not_found', 'error'].includes(brc2Status);
-    if (!brc2Session || brc2Terminal || !brc2ImageRef.current) return;
-    const rect = brc2ImageRef.current.getBoundingClientRect();
-    const viewport = brc2Session.viewport || { width: 1100, height: 850 };
-    const x = ((event.clientX - rect.left) / rect.width) * viewport.width;
-    const y = ((event.clientY - rect.top) / rect.height) * viewport.height;
-    try {
-      await sendLiveBrc2Input(brc2Session.id, brc2Session.token, { type: 'click', x, y });
-      setBrc2ScreenTick(Date.now());
-    } catch (err) {
-      setBrc2Error(err.message);
-    }
-  }
-
-  async function scrollBrc2Browser(deltaY) {
-    const brc2Terminal = ['found', 'not_found', 'error'].includes(brc2Status);
-    if (!brc2Session || brc2Terminal) return;
-    try {
-      await sendLiveBrc2Input(brc2Session.id, brc2Session.token, { type: 'wheel', deltaY });
-      setBrc2ScreenTick(Date.now());
-    } catch (err) {
-      setBrc2Error(err.message);
-    }
-  }
-
-  async function saveBrc2() {
-    if (!brc2Session) return;
-    setBrc2Saving(true);
-    setBrc2Error('');
-    try {
-      await saveLiveBrc2Session(brc2Session.id, brc2Session.token);
-      await refreshList(detail.application.id);
-      setMessage('BRC confirmed. The PDF and certificate details were added directly to this applicant’s UEZ file.');
-      closeBrc2Modal();
-    } catch (err) {
-      setBrc2Error(err.message);
-    } finally {
-      setBrc2Saving(false);
     }
   }
 
@@ -1456,7 +1341,6 @@ export default function AdminPage() {
                 <div className="mobile-desktop-workflow-note">Desktop automation · These workflow buttons use the COR Chrome extension.</div>
                 <div className="ops-action-grid clean-action-grid">
                   <button className={`ops-action ${docFor(detail, 'brc') ? 'success-action' : 'primary'}`} onClick={runBrcLookup} disabled={busy}><span>FETCH</span><strong>BRC</strong></button>
-                  <button className="ops-action primary" onClick={openBrc2Modal} disabled={busy || brc2ModalOpen}><span>FETCH</span><strong>BRC 2</strong></button>
                   <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
                   <button className="ops-action primary" onClick={runPbsLogin} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
                   <button className={`ops-action ${docFor(detail, 'tax_clearance') ? 'success-action' : 'primary'}`} onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>FETCH</span><strong>TAX CLEARANCE</strong></button>
@@ -1698,57 +1582,6 @@ export default function AdminPage() {
             <div className="document-modal-head"><div><strong>NJ Premier Business Services</strong><small>Create / manage the applicant's PBS account</small></div><button onClick={() => setPbsModalOpen(false)} aria-label="Close PBS">×</button></div>
             <div className="document-modal-body pbs-modal-body"><iframe src={NJ_PBS_URL} title="NJ Premier Business Services" /></div>
             <div className="document-modal-footer"><div><a href={NJ_PBS_URL} target="_blank" rel="noreferrer">Open PBS in new tab</a><small className="pbs-frame-note">If New Jersey blocks the embedded page, use this link.</small></div><button className="secondary" onClick={() => setPbsModalOpen(false)}>Close</button></div>
-          </div>
-        </div>}
-        {brc2ModalOpen && <div className="document-modal-backdrop brc2-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !brc2Saving) closeBrc2Modal(); }}>
-          <div className="document-modal brc2-modal" role="dialog" aria-modal="true" aria-label="New Jersey BRC Lookup">
-            <div className="document-modal-head"><div><strong>New Jersey BRC Lookup</strong><small>COR runs this in its own browser — solve any verification step right here</small></div><button onClick={closeBrc2Modal} aria-label="Close BRC lookup" disabled={brc2Saving}>×</button></div>
-            <div className="document-modal-body brc2-modal-body">
-              {brc2Starting && <div className="document-modal-loading">Starting NJ browser…</div>}
-
-              {brc2Session && !['found', 'not_found', 'error'].includes(brc2Status) && <div className="live-browser-shell">
-                <div className="live-browser-head">
-                  <div>
-                    <strong>{brc2Status === 'challenge' ? 'New Jersey needs human verification' : 'Checking with New Jersey…'}</strong>
-                    <p>{brc2Status === 'challenge' ? 'Click directly on the image below — your clicks control the same browser COR is monitoring.' : 'COR filled and submitted the lookup. If NJ asks for verification, it will appear below.'}</p>
-                  </div>
-                  <span className="live-dot">LIVE</span>
-                </div>
-                <div className="live-browser-stage">
-                  <img
-                    ref={brc2ImageRef}
-                    src={liveBrc2ScreenshotUrl(brc2Session.id, brc2Session.token, brc2ScreenTick)}
-                    alt="Live New Jersey BRC browser"
-                    className="live-browser-image"
-                    onClick={clickBrc2Browser}
-                    draggable="false"
-                  />
-                </div>
-                <div className="live-browser-controls">
-                  <button type="button" className="secondary" onClick={() => scrollBrc2Browser(-500)}>Scroll up</button>
-                  <button type="button" className="secondary" onClick={() => scrollBrc2Browser(500)}>Scroll down</button>
-                </div>
-              </div>}
-
-              {brc2Status === 'found' && brc2Result?.result && <div className="brc-test-result found">
-                <strong>BRC confirmed</strong>
-                {brc2Result.result.taxpayerName && <p><b>Official business name:</b> {brc2Result.result.taxpayerName}</p>}
-                {brc2Result.result.tradeName && <p><b>Trade name:</b> {brc2Result.result.tradeName}</p>}
-                {brc2Result.result.address && <p><b>Address:</b> {brc2Result.result.address}</p>}
-                {brc2Result.result.certificateNumber && <p><b>Certificate #:</b> {brc2Result.result.certificateNumber}</p>}
-                {brc2Result.result.effectiveDate && <p><b>Effective date:</b> {brc2Result.result.effectiveDate}</p>}
-                {brc2Result.result.issuanceDate && <p><b>Issued:</b> {brc2Result.result.issuanceDate}</p>}
-                {brc2Result.hasDocument && <a className="secondary brc-document-link" href={liveBrc2DocumentUrl(brc2Session.id, brc2Session.token)} target="_blank" rel="noreferrer">Open captured BRC</a>}
-              </div>}
-
-              {brc2Status === 'not_found' && <div className="brc-test-result not_found"><strong>No BRC match found</strong><p>NJ did not return a Business Registration Certificate for these lookup values.</p></div>}
-              {brc2Status === 'error' && <div className="validation-error">{brc2Result?.error || 'The NJ browser session failed.'}</div>}
-              {brc2Error && <div className="validation-error">{brc2Error}</div>}
-            </div>
-            <div className="document-modal-footer">
-              <div />
-              {brc2Status === 'found' ? <button className="success-button" onClick={saveBrc2} disabled={brc2Saving}>{brc2Saving ? 'Saving…' : 'Save BRC'}</button> : <button className="secondary" onClick={closeBrc2Modal} disabled={brc2Saving}>Close</button>}
-            </div>
           </div>
         </div>}
         {previewDoc && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closePreview(); }}>

@@ -10,7 +10,6 @@ const { safeSendApplicationEmail } = require('../services/uezEmail');
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
 router.use('/brc-live', require('./uezBrcLive'));
-router.use('/brc-live2', require('./uezBrcLive2'));
 router.use('/email', require('./uezEmail'));
 
 const upload = multer({
@@ -163,6 +162,7 @@ router.get('/signup-layout', async (_req, res) => {
 });
 
 router.use(requireUezAuth);
+
 
 router.put('/admin/signup-layout', requireUezAdmin, async (req, res) => {
   try {

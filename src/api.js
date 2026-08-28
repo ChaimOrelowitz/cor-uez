@@ -9,7 +9,7 @@ async function sessionToken() {
   return session.access_token;
 }
 
-export async function request(path, options = {}) {
+async function request(path, options = {}) {
   const token = await sessionToken();
   const headers = {
     Authorization: `Bearer ${token}`,
