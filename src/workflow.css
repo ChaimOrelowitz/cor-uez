@@ -65,6 +65,22 @@
 .timeline-item p { margin: 4px 0; color: #697087; line-height: 1.45; }
 .timeline-item small { color: #9a9faf; }
 
+.case-workbench-grid { margin-top: 18px; }
+.case-note-composer { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.case-note-composer textarea { resize: vertical; min-height: 44px; border-radius: 10px; border: 1px solid #e4e7f0; padding: 10px 12px; font: inherit; }
+.case-note-composer button { align-self: flex-end; }
+.case-note-list { display: flex; flex-direction: column; gap: 14px; max-height: 420px; overflow-y: auto; }
+.case-note-item { border-top: 1px solid #eef0f5; padding-top: 12px; }
+.case-note-item:first-child { border-top: 0; padding-top: 0; }
+.case-note-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.case-note-head strong { font-size: 12px; color: #55596b; font-weight: 700; }
+.case-note-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.case-note-actions button { border: 0; background: transparent; color: #8b91a2; font-size: 11px; cursor: pointer; padding: 0; }
+.case-note-actions button:hover { color: #626bd7; }
+.case-note-item p { margin: 6px 0 0; color: #2b3145; line-height: 1.5; white-space: pre-wrap; }
+.case-note-edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+.case-note-item textarea { width: 100%; resize: vertical; min-height: 44px; border-radius: 10px; border: 1px solid #e4e7f0; padding: 10px 12px; font: inherit; margin-top: 6px; }
+
 .admin-shell { min-height: 100vh; background: #f6f7fb; color: #17203a; }
 .admin-topbar {
   height: 68px; display: flex; justify-content: space-between; align-items: center;

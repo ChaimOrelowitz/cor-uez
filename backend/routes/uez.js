@@ -1123,17 +1123,19 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
-    const [ownersResult, docsResult, eventsResult, paymentsResult] = await Promise.all([
+    const [ownersResult, docsResult, eventsResult, paymentsResult, caseNotesResult] = await Promise.all([
       supabase.from('uez_owners').select('*').eq('application_id', application.id).order('owner_order'),
       supabase.from('uez_documents').select('id, document_type, filename, source, status, metadata, created_at').eq('application_id', application.id).order('created_at'),
       supabase.from('uez_status_events').select('*').eq('application_id', application.id).order('created_at'),
-      supabase.from('uez_payments').select('id, amount, payment_date, payment_method, reference, notes, status, refund_amount, refunded_at, created_at').eq('application_id', application.id).order('created_at')
+      supabase.from('uez_payments').select('id, amount, payment_date, payment_method, reference, notes, status, refund_amount, refunded_at, created_at').eq('application_id', application.id).order('created_at'),
+      supabase.from('uez_case_notes').select('*').eq('application_id', application.id).order('created_at', { ascending: false })
     ]);
 
     if (ownersResult.error) throw ownersResult.error;
     if (docsResult.error) throw docsResult.error;
     if (eventsResult.error) throw eventsResult.error;
     if (paymentsResult.error) throw paymentsResult.error;
+    if (caseNotesResult.error) throw caseNotesResult.error;
 
     const owners = (ownersResult.data || []).map((owner) => ({
       id: owner.id,
@@ -1160,7 +1162,8 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       owners,
       documents: docsResult.data || [],
       statusEvents: eventsResult.data || [],
-      payments: paymentsResult.data || []
+      payments: paymentsResult.data || [],
+      notes: await attachAuthorNames(caseNotesResult.data || [])
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1378,6 +1381,94 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
     }
 
     res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// --- Case notes: a fast, journal-style, admin-only notes area -----------------
+// Deliberately separate from uez_status_events/Activity — notes are things Chaim
+// wrote on purpose, Activity is what the system/platform did. Notes are never
+// cross-logged into Activity, to keep the Activity trail from getting noisy.
+
+async function attachAuthorNames(notes) {
+  const list = notes || [];
+  const authorIds = [...new Set(list.map((note) => note.author_id).filter(Boolean))];
+  if (!authorIds.length) return list.map((note) => ({ ...note, author_name: null }));
+  const { data: profiles } = await supabase.from('profiles')
+    .select('id, first_name, last_name, email')
+    .in('id', authorIds);
+  const byId = new Map((profiles || []).map((profile) => [profile.id, profile]));
+  return list.map((note) => {
+    const profile = byId.get(note.author_id);
+    const name = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() : '';
+    return { ...note, author_name: name || profile?.email || null };
+  });
+}
+
+router.get('/admin/applications/:id/notes', requireUezAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('uez_case_notes')
+      .select('*')
+      .eq('application_id', req.params.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(await attachAuthorNames(data));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/admin/applications/:id/notes', requireUezAdmin, async (req, res) => {
+  try {
+    const body = String(req.body?.body || '').trim();
+    if (!body) return res.status(400).json({ error: 'Note cannot be empty.' });
+
+    const { data, error } = await supabase.from('uez_case_notes').insert({
+      application_id: req.params.id,
+      author_id: req.user.id,
+      body
+    }).select('*').single();
+    if (error) {
+      if (/foreign key|violates/i.test(error.message || '')) return res.status(404).json({ error: 'Application not found' });
+      throw error;
+    }
+    const [withAuthor] = await attachAuthorNames([data]);
+    res.status(201).json(withAuthor);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.patch('/admin/applications/:id/notes/:noteId', requireUezAdmin, async (req, res) => {
+  try {
+    const body = String(req.body?.body || '').trim();
+    if (!body) return res.status(400).json({ error: 'Note cannot be empty.' });
+
+    const { data, error } = await supabase.from('uez_case_notes')
+      .update({ body, updated_at: new Date().toISOString() })
+      .eq('id', req.params.noteId)
+      .eq('application_id', req.params.id)
+      .select('*')
+      .single();
+    if (error || !data) return res.status(404).json({ error: 'Note not found' });
+    const [withAuthor] = await attachAuthorNames([data]);
+    res.json(withAuthor);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.delete('/admin/applications/:id/notes/:noteId', requireUezAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('uez_case_notes')
+      .delete()
+      .eq('id', req.params.noteId)
+      .eq('application_id', req.params.id)
+      .select('id')
+      .single();
+    if (error || !data) return res.status(404).json({ error: 'Note not found' });
+    res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

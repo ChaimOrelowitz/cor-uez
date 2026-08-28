@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  addAdminCaseNote,
   createAdminMyNjCredentials,
+  deleteAdminCaseNote,
   deleteDocument,
   getAdminApplication,
   getAdminApplications,
@@ -21,6 +23,7 @@ import {
   updateAdminProcessFlags,
   saveAdminPayment,
   reviewAdminDocument,
+  updateAdminCaseNote,
   uploadApplicationDocument,
   whoAmI
 } from './api';
@@ -89,6 +92,13 @@ function formatDob(value) {
   const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) return `${iso[2]}/${iso[3]}/${iso[1]}`;
   return text;
+}
+
+function formatTimestamp(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
 }
 
 function formatDobInput(value) {
@@ -327,6 +337,10 @@ export default function AdminPage() {
   const [manualDocFile, setManualDocFile] = useState(null);
   const [manualDocUploading, setManualDocUploading] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteEditingId, setNoteEditingId] = useState(null);
+  const [noteEditDraft, setNoteEditDraft] = useState('');
   const [dragStatusKey, setDragStatusKey] = useState(null);
   const [statusOrder, setStatusOrder] = useState(() => {
     try {
@@ -965,6 +979,70 @@ export default function AdminPage() {
     finally { setBusy(false); }
   }
 
+  async function addCaseNote() {
+    const applicationId = detail?.application?.id;
+    const body = noteDraft.trim();
+    if (!applicationId || !body) return;
+    setNoteBusy(true);
+    try {
+      const note = await addAdminCaseNote(applicationId, body);
+      setDetail((prev) => (prev && prev.application.id === applicationId)
+        ? { ...prev, notes: [note, ...(prev.notes || [])] }
+        : prev);
+      setNoteDraft('');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  function startEditingNote(note) {
+    setNoteEditingId(note.id);
+    setNoteEditDraft(note.body);
+  }
+
+  function cancelEditingNote() {
+    setNoteEditingId(null);
+    setNoteEditDraft('');
+  }
+
+  async function saveCaseNoteEdit(noteId) {
+    const applicationId = detail?.application?.id;
+    const body = noteEditDraft.trim();
+    if (!applicationId || !body) return;
+    setNoteBusy(true);
+    try {
+      const note = await updateAdminCaseNote(applicationId, noteId, body);
+      setDetail((prev) => (prev && prev.application.id === applicationId)
+        ? { ...prev, notes: (prev.notes || []).map((n) => (n.id === noteId ? note : n)) }
+        : prev);
+      setNoteEditingId(null);
+      setNoteEditDraft('');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  async function removeCaseNote(noteId) {
+    const applicationId = detail?.application?.id;
+    if (!applicationId) return;
+    if (!window.confirm('Delete this note? This cannot be undone.')) return;
+    setNoteBusy(true);
+    try {
+      await deleteAdminCaseNote(applicationId, noteId);
+      setDetail((prev) => (prev && prev.application.id === applicationId)
+        ? { ...prev, notes: (prev.notes || []).filter((n) => n.id !== noteId) }
+        : prev);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
   async function markReadyForLdc() {
     setBusy(true);
     setMessage('');
@@ -1188,6 +1266,57 @@ export default function AdminPage() {
               </div>
             </div>
           </section>
+
+          <div className="admin-card-grid case-workbench-grid">
+            <section className="admin-card admin-notes-card">
+              <div className="admin-card-head"><h3>Notes</h3></div>
+              <div className="case-note-composer">
+                <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} placeholder="Add a note…" rows={2} disabled={noteBusy} />
+                <button className="primary" onClick={addCaseNote} disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? 'Saving…' : 'Add Note'}</button>
+              </div>
+              <div className="case-note-list">
+                {(detail.notes || []).map((note) => (
+                  <div key={note.id} className="case-note-item">
+                    {noteEditingId === note.id ? <>
+                      <textarea value={noteEditDraft} onChange={(e) => setNoteEditDraft(e.target.value)} rows={2} disabled={noteBusy} />
+                      <div className="case-note-edit-actions">
+                        <button className="primary" onClick={() => saveCaseNoteEdit(note.id)} disabled={noteBusy || !noteEditDraft.trim()}>Save</button>
+                        <button className="secondary" onClick={cancelEditingNote} disabled={noteBusy}>Cancel</button>
+                      </div>
+                    </> : <>
+                      <div className="case-note-head">
+                        <strong>{formatTimestamp(note.created_at)} — {note.author_name || 'COR'}</strong>
+                        <div className="case-note-actions">
+                          <button type="button" onClick={() => startEditingNote(note)} disabled={noteBusy}>Edit</button>
+                          <button type="button" onClick={() => removeCaseNote(note.id)} disabled={noteBusy}>Delete</button>
+                        </div>
+                      </div>
+                      <p>{note.body}</p>
+                      {note.updated_at && <small className="muted">Edited {formatTimestamp(note.updated_at)}</small>}
+                    </>}
+                  </div>
+                ))}
+                {(!detail.notes || detail.notes.length === 0) && <p className="muted">No notes yet.</p>}
+              </div>
+            </section>
+
+            <section className="admin-card admin-activity-card">
+              <div className="admin-card-head"><h3>Activity</h3></div>
+              <div className="timeline">
+                {[...(detail.statusEvents || [])].reverse().map((event) => (
+                  <div className="timeline-item" key={event.id}>
+                    <span className="timeline-dot"></span>
+                    <div>
+                      <strong>{event.label || event.status}</strong>
+                      {event.message && <p>{event.message}</p>}
+                      <small>{formatTimestamp(event.created_at)}{event.visible_to_applicant === false ? ' · Internal' : ''}</small>
+                    </div>
+                  </div>
+                ))}
+                {(!detail.statusEvents || detail.statusEvents.length === 0) && <p className="muted">No activity yet.</p>}
+              </div>
+            </section>
+          </div>
 
           <div className="admin-details-heading"><span>DETAILS</span><small>Reference information and manual overrides</small></div>
 

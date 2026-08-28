@@ -277,3 +277,27 @@ export function sendAdminApplicationEmail(applicationId, templateKey, extra = {}
     body: JSON.stringify({ extra })
   });
 }
+
+export function getAdminCaseNotes(applicationId) {
+  return request(`/api/uez/admin/applications/${applicationId}/notes`);
+}
+
+export function addAdminCaseNote(applicationId, body) {
+  return request(`/api/uez/admin/applications/${applicationId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ body })
+  });
+}
+
+export function updateAdminCaseNote(applicationId, noteId, body) {
+  return request(`/api/uez/admin/applications/${applicationId}/notes/${noteId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ body })
+  });
+}
+
+export function deleteAdminCaseNote(applicationId, noteId) {
+  return request(`/api/uez/admin/applications/${applicationId}/notes/${noteId}`, {
+    method: 'DELETE'
+  });
+}
