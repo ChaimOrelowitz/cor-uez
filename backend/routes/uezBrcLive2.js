@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { chromium } = require('playwright');
 const supabase = require('../db/supabase');
-const { requireUezAdmin } = require('../middleware/uezAuth');
+const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, parseBrcCertificateHtml } = require('../utils/uezBrc');
 
 // Standalone, admin-authenticated take on the live/interactive BRC browser
@@ -161,7 +161,7 @@ async function safeStatusEvent(applicationId, status, label, message, userId, vi
   }
 }
 
-router.post('/session', requireUezAdmin, async (req, res) => {
+router.post('/session', requireUezAuth, requireUezAdmin, async (req, res) => {
   let browser;
   try {
     await expireSessions();
@@ -283,7 +283,7 @@ router.get('/session/:id/document', (req, res) => {
   return res.status(404).send('BRC document not found.');
 });
 
-router.post('/session/:id/save', requireUezAdmin, async (req, res) => {
+router.post('/session/:id/save', requireUezAuth, requireUezAdmin, async (req, res) => {
   const session = authSession(req);
   if (!session) return res.status(404).json({ error: 'Live BRC session not found or expired.' });
   if (session.status !== 'found' || !session.documentPdf || !session.result) {
