@@ -30,11 +30,11 @@ import {
   whoAmI
 } from './api';
 import {
-  adminQueueInfo,
   applicationDraftFrom,
   attentionItems,
   docFor,
   documentLabel,
+  filterAndSortApplications,
   formationSatisfied,
   formatDob,
   formatDobInput,
@@ -49,10 +49,12 @@ import {
   packetReady,
   paymentStatusLabel,
   programLabel,
+  queueCounts,
   readyDocumentCount,
   statusLabel
 } from './admin/caseLogic';
 import ActivityPanel from './admin/ActivityPanel';
+import AdminSidebar from './admin/AdminSidebar';
 import BrcDetailsCard from './admin/BrcDetailsCard';
 import DocumentsPanel from './admin/DocumentsPanel';
 import EmailComposer from './admin/EmailComposer';
@@ -945,36 +947,18 @@ export default function AdminPage() {
     }
   }
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return applications
-      .filter((app) => {
-        const matchesSearch = !q || [app.business_name_input, app.registered_business_name, app.contact_email, app.ein]
-          .some((value) => String(value || '').toLowerCase().includes(q));
-        if (!matchesSearch) return false;
-        if (filter === 'all') return true;
-        return adminQueueInfo(app).bucket === filter;
-      })
-      .sort((a, b) => {
-        const qa = adminQueueInfo(a);
-        const qb = adminQueueInfo(b);
-        const bucketPriority = { needs: 0, ready: 1, waiting: 2, submitted: 3 };
-        const bucketDelta = (bucketPriority[qa.bucket] ?? 9) - (bucketPriority[qb.bucket] ?? 9);
-        if (bucketDelta) return bucketDelta;
-        if (qa.rank !== qb.rank) return qa.rank - qb.rank;
-        const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
-        const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
-        return aTime - bTime;
-      });
-  }, [applications, filter, search]);
+  const filtered = useMemo(
+    () => filterAndSortApplications(applications, filter, search),
+    [applications, filter, search]
+  );
 
-  const counts = useMemo(() => ({
-    needs: applications.filter((app) => adminQueueInfo(app).bucket === 'needs').length,
-    waiting: applications.filter((app) => adminQueueInfo(app).bucket === 'waiting').length,
-    ready: applications.filter((app) => adminQueueInfo(app).bucket === 'ready').length,
-    submitted: applications.filter((app) => adminQueueInfo(app).bucket === 'submitted').length,
-    all: applications.length
-  }), [applications]);
+  const counts = useMemo(() => queueCounts(applications), [applications]);
+
+  function selectApplication(id) {
+    setMobileDetailOpen(true);
+    openApplication(id);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
 
   const emailApplicantHref = detail ? `mailto:${encodeURIComponent(detail.application.contact_email || '')}?subject=${encodeURIComponent('Your New Jersey Business Registration Certificate is needed')}&body=${encodeURIComponent(
     `Hi,\n\nWe reviewed your COR UEZ application and could not locate a current New Jersey Business Registration Certificate (BRC).\n\nPlease complete New Jersey business/tax registration here:\n${NJ_REGISTRATION_URL}\n\nOnce your BRC is available, sign back into your COR account and upload it. We will continue your application from there.\n\nCOR Solutions`
@@ -1020,36 +1004,17 @@ export default function AdminPage() {
     </header>
 
     <main className={`admin-layout ${mobileDetailOpen ? 'mobile-detail-open' : 'mobile-list-open'}`}>
-      <aside className="admin-sidebar">
-        <div className="admin-sidebar-head">
-          <div><span>APPLICATIONS</span><strong>{applications.length}</strong></div>
-          <input placeholder="Search business, email, EIN" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <div className="admin-filter-row">
-          {[
-            ['needs', 'Needs Me', counts.needs],
-            ['waiting', 'Waiting', counts.waiting],
-            ['ready', 'Ready', counts.ready],
-            ['submitted', 'Submitted', counts.submitted],
-            ['all', 'All', counts.all]
-          ].map(([key, label, count]) => <button key={key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}<span>{count}</span></button>)}
-        </div>
-
-        <div className="application-list">
-          {filtered.map((app) => {
-            const queue = adminQueueInfo(app);
-            const showPayment = app.payment_status === 'client_reported';
-            return <button key={app.id} className={`application-list-item ops-list-item queue-${queue.bucket} ${selectedId === app.id ? 'active' : ''}`} onClick={() => { setMobileDetailOpen(true); openApplication(app.id); window.scrollTo({ top: 0, behavior: 'instant' }); }}>
-              <div className="ops-list-main queue-list-main">
-                <div className="queue-list-title"><strong>{app.business_name_input || 'Unnamed business'}</strong><span className="queue-stage">{queue.stage}</span></div>
-                <div className={`queue-next-action ${queue.tone}`}><i aria-hidden="true" />{queue.action}</div>
-                {showPayment && <div className="queue-payment-flag">Payment reported</div>}
-              </div>
-            </button>;
-          })}
-          {filtered.length === 0 && <div className="empty-list">No applications in this view.</div>}
-        </div>
-      </aside>
+      <AdminSidebar
+        applications={applications}
+        filtered={filtered}
+        counts={counts}
+        filter={filter}
+        search={search}
+        selectedId={selectedId}
+        onFilterChange={setFilter}
+        onSearchChange={setSearch}
+        onSelectApplication={selectApplication}
+      />
 
       <section className="admin-detail">
         {detail && <div className="mobile-detail-nav">

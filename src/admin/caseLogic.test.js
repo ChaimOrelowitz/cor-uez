@@ -3,6 +3,7 @@ import {
   adminQueueInfo,
   attentionItems,
   documentLabel,
+  filterAndSortApplications,
   formatDob,
   formatPhoneInput,
   formatSsnInput,
@@ -11,6 +12,7 @@ import {
   grantSubmissionLikelyDetected,
   packetReady,
   paymentStatusLabel,
+  queueCounts,
   readyDocumentCount,
   uezStatusLabel
 } from './caseLogic';
@@ -229,5 +231,48 @@ describe('grantSubmissionLikelyDetected', () => {
       statusEvents: [{ status: 'grant_submission_detected', created_at: '2026-08-27T10:00:00Z' }]
     };
     expect(grantSubmissionLikelyDetected(detail)).toBe(false);
+  });
+});
+
+describe('queueCounts', () => {
+  it('buckets applications independently of filter/search', () => {
+    const applications = [
+      { submitted_at: null }, // waiting: still completing signup
+      { status: 'grant_submitted', submitted_at: '2026-01-01' }, // submitted
+      { submitted_at: '2026-01-01', payment_status: 'client_reported' } // needs
+    ];
+    const counts = queueCounts(applications);
+    expect(counts).toEqual({ needs: 1, waiting: 1, ready: 0, submitted: 1, all: 3 });
+  });
+});
+
+describe('filterAndSortApplications', () => {
+  const applications = [
+    // waiting: submitted, BRC follow-up already in progress
+    { id: 'a', business_name_input: 'Alpha Bagels', ein: '111111111', submitted_at: '2026-01-01', brc_status: 'not_found', updated_at: '2026-01-03' },
+    // needs: client says they paid, outranks everything
+    { id: 'b', business_name_input: 'Beta Bakery', ein: '222222222', submitted_at: '2026-01-01', payment_status: 'client_reported', updated_at: '2026-01-02' },
+    // submitted: grant already sent
+    { id: 'c', business_name_input: 'Gamma Grocery', contact_email: 'owner@gamma.com', ein: '333333333', status: 'grant_submitted', submitted_at: '2026-01-01', updated_at: '2026-01-01' }
+  ];
+
+  it('search matches business name, email, or EIN, case-insensitively', () => {
+    expect(filterAndSortApplications(applications, 'all', 'bagels').map((a) => a.id)).toEqual(['a']);
+    expect(filterAndSortApplications(applications, 'all', 'nonexistent business').map((a) => a.id)).toEqual([]);
+    expect(filterAndSortApplications(applications, 'all', 'owner@gamma.com').map((a) => a.id)).toEqual(['c']);
+    expect(filterAndSortApplications(applications, 'all', '222222222').map((a) => a.id)).toEqual(['b']);
+  });
+
+  it('filter narrows to one bucket', () => {
+    expect(filterAndSortApplications(applications, 'needs', '').map((a) => a.id)).toEqual(['b']);
+    expect(filterAndSortApplications(applications, 'waiting', '').map((a) => a.id)).toEqual(['a']);
+    expect(filterAndSortApplications(applications, 'submitted', '').map((a) => a.id)).toEqual(['c']);
+  });
+
+  it('needs-my-action outranks waiting, which outranks submitted, regardless of recency', () => {
+    // "a" (waiting) has the most recent updated_at of the three, but bucket
+    // priority must still win over recency.
+    const ordered = filterAndSortApplications(applications, 'all', '').map((a) => a.id);
+    expect(ordered).toEqual(['b', 'a', 'c']);
   });
 });

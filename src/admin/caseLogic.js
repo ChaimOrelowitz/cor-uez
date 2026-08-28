@@ -264,3 +264,41 @@ export function ownerDraftFrom(owner = {}) {
     zip: owner.zip || ''
   };
 }
+
+// Sidebar search + filter + sort, extracted from AdminPage.jsx's useMemo so
+// the ordering rules (which bucket wins, then which rank within a bucket,
+// then oldest-first) are unit tested directly rather than only visible by
+// eyeballing the sidebar.
+export function filterAndSortApplications(applications, filter, search) {
+  const q = String(search || '').trim().toLowerCase();
+  return (applications || [])
+    .filter((app) => {
+      const matchesSearch = !q || [app.business_name_input, app.registered_business_name, app.contact_email, app.ein]
+        .some((value) => String(value || '').toLowerCase().includes(q));
+      if (!matchesSearch) return false;
+      if (filter === 'all') return true;
+      return adminQueueInfo(app).bucket === filter;
+    })
+    .sort((a, b) => {
+      const qa = adminQueueInfo(a);
+      const qb = adminQueueInfo(b);
+      const bucketPriority = { needs: 0, ready: 1, waiting: 2, submitted: 3 };
+      const bucketDelta = (bucketPriority[qa.bucket] ?? 9) - (bucketPriority[qb.bucket] ?? 9);
+      if (bucketDelta) return bucketDelta;
+      if (qa.rank !== qb.rank) return qa.rank - qb.rank;
+      const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+      const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+      return aTime - bTime;
+    });
+}
+
+export function queueCounts(applications) {
+  const list = applications || [];
+  return {
+    needs: list.filter((app) => adminQueueInfo(app).bucket === 'needs').length,
+    waiting: list.filter((app) => adminQueueInfo(app).bucket === 'waiting').length,
+    ready: list.filter((app) => adminQueueInfo(app).bucket === 'ready').length,
+    submitted: list.filter((app) => adminQueueInfo(app).bucket === 'submitted').length,
+    all: list.length
+  };
+}
