@@ -52,6 +52,9 @@ import {
   readyDocumentCount,
   statusLabel
 } from './admin/caseLogic';
+import ActivityPanel from './admin/ActivityPanel';
+import EmailComposer from './admin/EmailComposer';
+import NotesPanel from './admin/NotesPanel';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
@@ -1132,54 +1135,21 @@ export default function AdminPage() {
           </section>
 
           <div className="admin-card-grid case-workbench-grid">
-            <section className="admin-card admin-notes-card">
-              <div className="admin-card-head"><h3>Notes</h3></div>
-              <div className="case-note-composer">
-                <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} placeholder="Add a note…" rows={2} disabled={noteBusy} />
-                <button className="primary" onClick={addCaseNote} disabled={noteBusy || !noteDraft.trim()}>{noteBusy ? 'Saving…' : 'Add Note'}</button>
-              </div>
-              <div className="case-note-list">
-                {(detail.notes || []).map((note) => (
-                  <div key={note.id} className="case-note-item">
-                    {noteEditingId === note.id ? <>
-                      <textarea value={noteEditDraft} onChange={(e) => setNoteEditDraft(e.target.value)} rows={2} disabled={noteBusy} />
-                      <div className="case-note-edit-actions">
-                        <button className="primary" onClick={() => saveCaseNoteEdit(note.id)} disabled={noteBusy || !noteEditDraft.trim()}>Save</button>
-                        <button className="secondary" onClick={cancelEditingNote} disabled={noteBusy}>Cancel</button>
-                      </div>
-                    </> : <>
-                      <div className="case-note-head">
-                        <strong>{formatTimestamp(note.created_at)} — {note.author_name || 'COR'}</strong>
-                        <div className="case-note-actions">
-                          <button type="button" onClick={() => startEditingNote(note)} disabled={noteBusy}>Edit</button>
-                          <button type="button" onClick={() => removeCaseNote(note.id)} disabled={noteBusy}>Delete</button>
-                        </div>
-                      </div>
-                      <p>{note.body}</p>
-                      {note.updated_at && <small className="muted">Edited {formatTimestamp(note.updated_at)}</small>}
-                    </>}
-                  </div>
-                ))}
-                {(!detail.notes || detail.notes.length === 0) && <p className="muted">No notes yet.</p>}
-              </div>
-            </section>
-
-            <section className="admin-card admin-activity-card">
-              <div className="admin-card-head"><h3>Activity</h3></div>
-              <div className="timeline">
-                {[...(detail.statusEvents || [])].reverse().map((event) => (
-                  <div className="timeline-item" key={event.id}>
-                    <span className="timeline-dot"></span>
-                    <div>
-                      <strong>{event.label || event.status}</strong>
-                      {event.message && <p>{event.message}</p>}
-                      <small>{formatTimestamp(event.created_at)}{event.visible_to_applicant === false ? ' · Internal' : ''}</small>
-                    </div>
-                  </div>
-                ))}
-                {(!detail.statusEvents || detail.statusEvents.length === 0) && <p className="muted">No activity yet.</p>}
-              </div>
-            </section>
+            <NotesPanel
+              notes={detail.notes}
+              draft={noteDraft}
+              busy={noteBusy}
+              editingId={noteEditingId}
+              editDraft={noteEditDraft}
+              onDraftChange={setNoteDraft}
+              onAdd={addCaseNote}
+              onStartEdit={startEditingNote}
+              onCancelEdit={cancelEditingNote}
+              onEditDraftChange={setNoteEditDraft}
+              onSaveEdit={saveCaseNoteEdit}
+              onDelete={removeCaseNote}
+            />
+            <ActivityPanel events={detail.statusEvents} />
           </div>
 
           <div className="admin-details-heading"><span>DETAILS</span><small>Reference information and manual overrides</small></div>
@@ -1370,33 +1340,13 @@ export default function AdminPage() {
             </div>
           </div>
         </div>}
-        {emailComposer && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !emailComposer.sending) closeEmailComposer(); }}>
-          <div className="document-modal email-composer-modal" role="dialog" aria-modal="true" aria-label="Send email">
-            <div className="document-modal-head"><div><strong>Send email</strong><small>{emailComposer.templateKey}</small></div><button onClick={closeEmailComposer} aria-label="Close" disabled={emailComposer.sending}>×</button></div>
-            <div className="document-modal-body email-composer-body">
-              {emailComposer.loading ? <div className="document-modal-loading">Loading preview…</div> : emailComposer.error && !emailComposer.subject ? <p className="admin-message">{emailComposer.error}</p> : <>
-                {emailComposer.sentResult && <div className={`admin-message ${emailComposer.sentResult.sent ? '' : 'admin-message-error'}`}>
-                  {emailComposer.sentResult.sent
-                    ? `✅ Email sent to ${emailComposer.recipient} · ${formatTimestamp(emailComposer.sentResult.log?.sent_at) || 'just now'}`
-                    : `⚠️ Email was not sent${emailComposer.sentResult.error ? `: ${emailComposer.sentResult.error}` : '.'}`}
-                </div>}
-                {emailComposer.error && <p className="admin-message admin-message-error">{emailComposer.error}</p>}
-                <label>To</label><input value={emailComposer.recipient} disabled />
-                <label>Subject</label><input value={emailComposer.subject} onChange={(e) => setEmailComposer((prev) => ({ ...prev, subject: e.target.value }))} disabled={emailComposer.sending || Boolean(emailComposer.sentResult?.sent)} />
-                <label>Body</label><textarea rows={10} value={emailComposer.body} onChange={(e) => setEmailComposer((prev) => ({ ...prev, body: e.target.value }))} disabled={emailComposer.sending || Boolean(emailComposer.sentResult?.sent)} />
-                {emailComposer.attachments?.length > 0 && <div className="email-composer-attachments">
-                  <label>Attachments</label>
-                  {emailComposer.attachments.map((a) => <div key={a.filename} className="email-composer-attachment"><span>{a.filename}</span><small>{a.contentType} · {Math.round((a.size || 0) / 1024)} KB</small></div>)}
-                </div>}
-              </>}
-            </div>
-            <div className="document-modal-footer">
-              <div></div>
-              {!emailComposer.sentResult?.sent && <button className="primary" onClick={sendComposedEmail} disabled={emailComposer.loading || emailComposer.sending || !emailComposer.subject}>{emailComposer.sending ? 'Sending…' : 'Send'}</button>}
-              {emailComposer.sentResult?.sent && <button className="secondary" onClick={closeEmailComposer}>Done</button>}
-            </div>
-          </div>
-        </div>}
+        <EmailComposer
+          composer={emailComposer}
+          onChangeSubject={(value) => setEmailComposer((prev) => ({ ...prev, subject: value }))}
+          onChangeBody={(value) => setEmailComposer((prev) => ({ ...prev, body: value }))}
+          onSend={sendComposedEmail}
+          onClose={closeEmailComposer}
+        />
       </section>
     </main>
   </div>;
