@@ -53,6 +53,7 @@ import {
   statusLabel
 } from './admin/caseLogic';
 import ActivityPanel from './admin/ActivityPanel';
+import BrcDetailsCard from './admin/BrcDetailsCard';
 import DocumentsPanel from './admin/DocumentsPanel';
 import EmailComposer from './admin/EmailComposer';
 import NotesPanel from './admin/NotesPanel';
@@ -1197,22 +1198,15 @@ export default function AdminPage() {
 
             <PaymentCard payments={detail.payments} draft={paymentDraft} busy={busy} onDraftChange={setPaymentDraft} onConfirm={confirmPayment} />
 
-            <details className="admin-accordion"><summary><strong>BRC details</strong><span>{detail.application.brc_status === 'found' ? 'Found' : (detail.application.brc_status || 'Pending')}</span></summary><section className="admin-card brc-admin-card admin-secondary-card">
-              <div className="admin-card-head"><h3>BRC details</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
-
-              <div className="brc-result-form">
-                <label>Registered business name</label><input value={brcForm.registeredBusinessName} onChange={(e) => setBrcForm((old) => ({ ...old, registeredBusinessName: e.target.value }))} />
-                <label>DBA / trade name</label><input value={brcForm.tradeName} onChange={(e) => setBrcForm((old) => ({ ...old, tradeName: e.target.value }))} />
-                <label>Business address</label><input value={brcForm.address} onChange={(e) => setBrcForm((old) => ({ ...old, address: e.target.value }))} />
-              </div>
-
-              <div className="admin-action-row">
-                <button className="success-button" onClick={saveBrcFound} disabled={busy}>✓ BRC found</button>
-                <button className="warning-button" onClick={saveBrcNotFound} disabled={busy}>No BRC found</button>
-                {detail.application.brc_status === 'not_found' && <button className="secondary" onClick={sendBrcProblemEmail} disabled={busy}>Send BRC problem email</button>}
-              </div>
-
-            </section></details>
+            <BrcDetailsCard
+              application={detail.application}
+              brcForm={brcForm}
+              busy={busy}
+              onChangeBrcForm={setBrcForm}
+              onBrcFound={saveBrcFound}
+              onBrcNotFound={saveBrcNotFound}
+              onSendBrcProblemEmail={sendBrcProblemEmail}
+            />
 
             <details className="admin-accordion"><summary><strong>MyNJ / PBS</strong><span>{myNjCredentials ? 'Login ready' : 'Not created'}</span></summary><section className="admin-card mynj-card admin-account-card admin-secondary-card">
               <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{detail.application.pbs_status === 'account_created' || detail.application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span></div>
