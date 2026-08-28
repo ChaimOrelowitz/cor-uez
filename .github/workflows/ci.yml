@@ -1,0 +1,51 @@
+name: CI
+
+# This is a verification gate, not an automation pipeline — it never commits
+# or pushes anything, unlike the older one-off patch workflows in this
+# directory. It just tells you, on every push, whether the frontend builds,
+# the backend files parse, and the test suite passes.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run frontend test suite
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install --no-audit --no-fund --ignore-scripts
+
+      - name: Syntax-check backend route files
+        working-directory: backend
+        run: |
+          for f in $(find routes services utils middleware -name '*.js' 2>/dev/null); do
+            node --check "$f"
+          done
+
+      - name: Validate Chrome extension manifest
+        run: node -e "JSON.parse(require('fs').readFileSync('brc-helper-extension/manifest.json', 'utf8')); console.log('manifest.json OK')"
+
+      - name: Syntax-check Chrome extension scripts
+        run: |
+          for f in brc-helper-extension/*.js; do
+            node --check "$f"
+          done
