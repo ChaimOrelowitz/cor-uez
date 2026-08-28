@@ -56,6 +56,7 @@ import ActivityPanel from './admin/ActivityPanel';
 import BrcDetailsCard from './admin/BrcDetailsCard';
 import DocumentsPanel from './admin/DocumentsPanel';
 import EmailComposer from './admin/EmailComposer';
+import MyNjPbsCard from './admin/MyNjPbsCard';
 import NotesPanel from './admin/NotesPanel';
 import PaymentCard from './admin/PaymentCard';
 
@@ -750,6 +751,26 @@ export default function AdminPage() {
     }
   }
 
+  function changePbsAnswerDraft(value) {
+    setPbsAnswerDraft(value);
+    if (value === 'no') setPbsLoginDraft({ username: '', password: '' });
+  }
+
+  function startMyNjEdit() {
+    setMyNjDraft(myNjCredentials);
+    setMyNjEditMode(true);
+    setShowMyNjSecrets(true);
+  }
+
+  function cancelMyNjEdit() {
+    setMyNjDraft(myNjCredentials);
+    setMyNjEditMode(false);
+  }
+
+  function toggleShowMyNjSecrets() {
+    setShowMyNjSecrets((shown) => !shown);
+  }
+
   async function saveBrcFound() {
     setBusy(true);
     setMessage('');
@@ -1208,48 +1229,27 @@ export default function AdminPage() {
               onSendBrcProblemEmail={sendBrcProblemEmail}
             />
 
-            <details className="admin-accordion"><summary><strong>MyNJ / PBS</strong><span>{myNjCredentials ? 'Login ready' : 'Not created'}</span></summary><section className="admin-card mynj-card admin-account-card admin-secondary-card">
-              <div className="admin-card-head"><h3>MyNJ / PBS account</h3><span>{detail.application.pbs_status === 'account_created' || detail.application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span></div>
-              <div className="admin-pbs-answer-box">
-                <label>Does this business already have a PBS account?</label>
-                <select value={pbsAnswerDraft || (detail.application.has_existing_pbs_account == null ? '' : detail.application.has_existing_pbs_account ? 'yes' : 'no')} onChange={(e)=>{ setPbsAnswerDraft(e.target.value); if(e.target.value==='no') setPbsLoginDraft({username:'',password:''}); }}><option value="">Not answered</option><option value="yes">Yes — existing PBS account</option><option value="no">No — COR needs to create it</option></select>
-                {(pbsAnswerDraft || (detail.application.has_existing_pbs_account ? 'yes' : '')) === 'yes' && <div className="credential-edit-grid"><label>Existing MyNJ username<input value={pbsLoginDraft.username || myNjCredentials?.username || ''} onChange={(e)=>setPbsLoginDraft((old)=>({...old,username:e.target.value}))} /></label><label>Existing MyNJ password<input type="password" value={pbsLoginDraft.password || myNjCredentials?.password || ''} onChange={(e)=>setPbsLoginDraft((old)=>({...old,password:e.target.value}))} /></label></div>}
-                <button className="secondary admin-full-button" onClick={saveExistingPbsAnswer} disabled={busy}>Save PBS answer</button>
-              </div>
-              {myNjCredentials ? <>
-                {myNjEditMode ? <div className="credential-edit-grid">
-                  <label>MyNJ username <span className="required-star">*</span><input value={myNjDraft?.username || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, username: e.target.value }))} /></label>
-                  <label>MyNJ password <span className="required-star">*</span><input value={myNjDraft?.password || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, password: e.target.value }))} /></label>
-                  <label>Challenge question <span className="required-star">*</span><input value={myNjDraft?.challengeQuestion || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, challengeQuestion: e.target.value }))} /></label>
-                  <label>Challenge answer <span className="required-star">*</span><input value={myNjDraft?.challengeAnswer || ''} onChange={(e) => setMyNjDraft((old) => ({ ...old, challengeAnswer: e.target.value }))} /></label>
-                  <div className="admin-action-row">
-                    <button className="primary" onClick={saveMyNjCredentials} disabled={busy}>Save login information</button>
-                    <button className="secondary" onClick={() => { setMyNjDraft(myNjCredentials); setMyNjEditMode(false); }} disabled={busy}>Cancel</button>
-                  </div>
-                </div> : <>
-                  <div className="credential-grid">
-                    <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong><button onClick={() => copyCredential(myNjCredentials.username, 'Username')}>Copy</button></div>
-                    <div><span>MyNJ password</span><strong>{showMyNjSecrets ? myNjCredentials.password : '••••••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.password, 'Password')}>Copy</button></div>
-                    <div><span>Challenge question</span><strong>{myNjCredentials.challengeQuestion}</strong><button onClick={() => copyCredential(myNjCredentials.challengeQuestion, 'Challenge question')}>Copy</button></div>
-                    <div><span>Challenge answer</span><strong>{showMyNjSecrets ? myNjCredentials.challengeAnswer : '••••••••'}</strong><button onClick={() => copyCredential(myNjCredentials.challengeAnswer, 'Challenge answer')}>Copy</button></div>
-                  </div>
-                  <button className="secondary admin-full-button" onClick={() => setShowMyNjSecrets((shown) => !shown)}>{showMyNjSecrets ? 'Hide password and answer' : 'Reveal password and answer'}</button>
-                  <button className="secondary admin-full-button" onClick={() => { setMyNjDraft(myNjCredentials); setMyNjEditMode(true); setShowMyNjSecrets(true); }}>Edit login information</button>
-                </>}
-                <p className="admin-help">Stored encrypted in the UEZ application. The applicant sees the same MyNJ information in their portal.</p>
-                {detail.application.pbs_status !== 'account_created' && detail.application.pbs_status !== 'uez_approval_uploaded' && <button className="success-button admin-full-button" onClick={markPbsAccountCreated} disabled={busy}>✓ PBS account has been created</button>}
-                {(detail.application.pbs_status === 'account_created' || detail.application.status === 'waiting_for_uez_approval') && <p className="admin-help">Waiting for the applicant to upload the required UEZ approval email.</p>}
-                {detail.application.pbs_status === 'uez_approval_uploaded' && <p className="admin-help">The applicant uploaded the UEZ approval email. Open it in Documents below.</p>}
-              </> : <>
-                <p className="admin-help mynj-intro">This login is generated automatically as soon as the BRC is confirmed. If an earlier confirmation did not generate it, retry here.</p>
-                <button
-                  className="primary admin-full-button"
-                  onClick={createMyNjCredentials}
-                  disabled={busy || detail.application.brc_status !== 'found'}
-                >Generate missing MyNJ login</button>
-                {detail.application.brc_status !== 'found' && <p className="admin-help">The BRC must be confirmed first.</p>}
-              </>}
-            </section></details>
+            <MyNjPbsCard
+              application={detail.application}
+              myNjCredentials={myNjCredentials}
+              pbsAnswerDraft={pbsAnswerDraft}
+              pbsLoginDraft={pbsLoginDraft}
+              myNjEditMode={myNjEditMode}
+              myNjDraft={myNjDraft}
+              showMyNjSecrets={showMyNjSecrets}
+              busy={busy}
+              onChangePbsAnswer={changePbsAnswerDraft}
+              onChangePbsLoginDraft={setPbsLoginDraft}
+              onSavePbsAnswer={saveExistingPbsAnswer}
+              onChangeMyNjDraft={setMyNjDraft}
+              onSaveMyNjCredentials={saveMyNjCredentials}
+              onStartMyNjEdit={startMyNjEdit}
+              onCancelMyNjEdit={cancelMyNjEdit}
+              onToggleShowSecrets={toggleShowMyNjSecrets}
+              onCopyCredential={copyCredential}
+              onMarkPbsAccountCreated={markPbsAccountCreated}
+              onCreateMyNjCredentials={createMyNjCredentials}
+            />
 
             <details className="admin-accordion"><summary><strong>Owners</strong><span>{`${detail.owners.length} owner${detail.owners.length === 1 ? '' : 's'}`}</span></summary><section className="admin-card admin-wide admin-owners-card admin-secondary-card">
               <div className="admin-card-head"><h3>Owners</h3><span>{editMode ? ownerDrafts.length : detail.owners.length}</span></div>
