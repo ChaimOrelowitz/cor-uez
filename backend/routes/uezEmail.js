@@ -5,12 +5,27 @@ const { decryptCredential } = require('../services/uezMyNj');
 const {
   getTemplates,
   updateTemplate,
+  renderApplicationEmail,
   sendApplicationEmail
 } = require('../services/uezEmail');
 
 const router = express.Router();
 const DOCUMENT_BUCKET = 'uez-documents';
 router.use(requireUezAuth);
+
+// Internal-only ("every time an email is sent there is a log and timestamp") —
+// this is in addition to the uez_email_log row sendApplicationEmail already
+// writes; this is what makes the send show up in the admin Activity panel.
+async function addEmailActivity(applicationId, { label, message, userId }) {
+  await supabase.from('uez_status_events').insert({
+    application_id: applicationId,
+    status: 'admin_email_sent',
+    label,
+    message,
+    visible_to_applicant: false,
+    created_by: userId || null
+  });
+}
 
 router.get('/admin/templates', requireUezAdmin, async (_req, res) => {
   try {
@@ -71,27 +86,78 @@ async function latestTaxIssueAttachment(applicationId) {
   };
 }
 
+// Per-template auto-filled variables/attachments, shared by preview and send so
+// what you're shown is exactly what would go out.
+async function autoExtrasForTemplate(templateKey, applicationId, { strict } = {}) {
+  let extra = {};
+  if (templateKey === 'pbs_account_created') {
+    try {
+      extra = { ...extra, ...(await credentialVars(applicationId)) };
+    } catch (err) {
+      if (strict) throw err;
+      // Preview should still render with the credential placeholders blank rather
+      // than fail outright if credentials haven't been created yet.
+    }
+  }
+
+  const attachments = [];
+  if (templateKey === 'tax_issue') {
+    const screenshot = await latestTaxIssueAttachment(applicationId);
+    if (screenshot) attachments.push(screenshot);
+  }
+
+  return { extra, attachments };
+}
+
+// Render-only preview — shows exactly what "Send" would send, without sending it.
+router.get('/admin/applications/:id/preview/:key', requireUezAdmin, async (req, res) => {
+  try {
+    const application = await applicationForId(req.params.id);
+    if (!application) return res.status(404).json({ error: 'Application not found.' });
+
+    const { extra, attachments } = await autoExtrasForTemplate(req.params.key, application.id, { strict: false });
+    const rendered = await renderApplicationEmail(application, req.params.key, { extra });
+
+    res.json({
+      recipient: rendered.recipient,
+      subject: rendered.subject,
+      body: rendered.body,
+      attachments: attachments.map((item) => ({
+        filename: item.filename,
+        contentType: /\.(png|jpe?g|webp)$/i.test(item.filename) ? `image/${item.filename.split('.').pop().toLowerCase().replace('jpg', 'jpeg')}` : 'application/octet-stream',
+        size: Buffer.byteLength(item.content, 'base64')
+      }))
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/admin/applications/:id/send/:key', requireUezAdmin, async (req, res) => {
   try {
     const application = await applicationForId(req.params.id);
     if (!application) return res.status(404).json({ error: 'Application not found.' });
 
-    let extra = req.body?.extra && typeof req.body.extra === 'object' ? { ...req.body.extra } : {};
-    if (req.params.key === 'pbs_account_created') {
-      extra = { ...extra, ...(await credentialVars(application.id)) };
-    }
-
-    const attachments = [];
-    if (req.params.key === 'tax_issue') {
-      const screenshot = await latestTaxIssueAttachment(application.id);
-      if (screenshot) attachments.push(screenshot);
-    }
+    const bodyExtra = req.body?.extra && typeof req.body.extra === 'object' ? { ...req.body.extra } : {};
+    const { extra: autoExtra, attachments } = await autoExtrasForTemplate(req.params.key, application.id, { strict: true });
+    const extra = { ...autoExtra, ...bodyExtra };
 
     const result = await sendApplicationEmail(application, req.params.key, {
       mode: 'manual',
       extra,
-      attachments
+      attachments,
+      overrideSubject: typeof req.body?.subject === 'string' ? req.body.subject : undefined,
+      overrideBody: typeof req.body?.body === 'string' ? req.body.body : undefined
     });
+
+    await addEmailActivity(application.id, {
+      label: result.sent ? `Email sent: ${req.params.key}` : `Email not sent: ${req.params.key}`,
+      message: result.sent
+        ? `Sent to ${result.log?.recipient || application.contact_email}.`
+        : (result.error || (result.skipped ? `Skipped (${result.reason}).` : 'Send failed.')),
+      userId: req.user.id
+    }).catch(() => {});
+
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });

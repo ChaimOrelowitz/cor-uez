@@ -271,11 +271,16 @@ export function updateAdminEmailTemplate(templateKey, payload) {
   });
 }
 
-export function sendAdminApplicationEmail(applicationId, templateKey, extra = {}) {
+export function sendAdminApplicationEmail(applicationId, templateKey, options = {}) {
+  const { extra = {}, subject, body } = options;
   return request(`/api/uez/email/admin/applications/${applicationId}/send/${encodeURIComponent(templateKey)}`, {
     method: 'POST',
-    body: JSON.stringify({ extra })
+    body: JSON.stringify({ extra, subject, body })
   });
+}
+
+export function getAdminEmailPreview(applicationId, templateKey) {
+  return request(`/api/uez/email/admin/applications/${applicationId}/preview/${encodeURIComponent(templateKey)}`);
 }
 
 export function getAdminCaseNotes(applicationId) {

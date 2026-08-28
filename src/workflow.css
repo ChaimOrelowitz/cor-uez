@@ -130,6 +130,15 @@
 .admin-header-status span { display: inline-block; background: #eef0ff; color: #5f67d6; border-radius: 999px; padding: 8px 11px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .admin-header-status small { display: block; color: #9a9faf; margin-top: 7px; }
 .admin-message { padding: 12px 14px; border-radius: 12px; background: #f0f2ff; color: #5962c9; margin-bottom: 16px; font-size: 12px; }
+.admin-message-error { background: #fff1ee; color: #b15a4f; }
+.email-composer-modal { width: min(640px, 92vw); }
+.email-composer-body { display: flex; flex-direction: column; gap: 6px; padding: 18px; }
+.email-composer-body label { font-size: 11px; font-weight: 800; color: #7a8194; text-transform: uppercase; letter-spacing: .04em; margin-top: 8px; }
+.email-composer-body input, .email-composer-body textarea { width: 100%; border-radius: 10px; border: 1px solid #e4e7f0; padding: 10px 12px; font: inherit; resize: vertical; }
+.email-composer-body input:disabled, .email-composer-body textarea:disabled { background: #f7f8fb; color: #55596b; }
+.email-composer-attachments { margin-top: 10px; }
+.email-composer-attachment { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid #e4e7f0; border-radius: 8px; margin-top: 6px; font-size: 12px; }
+.email-composer-attachment small { color: #8b91a2; }
 .admin-edit-actions { display: flex; justify-content: flex-end; gap: 9px; margin: -4px 0 16px; }
 .admin-edit-actions button { width: auto; min-width: 130px; }
 .admin-delete-button, .owner-remove-button { border: 1px solid #efc6c1; background: #fff5f3; color: #aa493f; border-radius: 10px; padding: 9px 12px; font-weight: 800; }

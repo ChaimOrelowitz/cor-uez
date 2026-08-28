@@ -6,6 +6,7 @@ import {
   deleteDocument,
   getAdminApplication,
   getAdminApplications,
+  getAdminEmailPreview,
   getApplicantSession,
   getDocumentUrl,
   getMyNjCredentials,
@@ -352,6 +353,7 @@ export default function AdminPage() {
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteEditingId, setNoteEditingId] = useState(null);
   const [noteEditDraft, setNoteEditDraft] = useState('');
+  const [emailComposer, setEmailComposer] = useState(null);
   const [dragStatusKey, setDragStatusKey] = useState(null);
   const [statusOrder, setStatusOrder] = useState(() => {
     try {
@@ -994,33 +996,43 @@ export default function AdminPage() {
     }
   }
 
-  async function sendBrcProblemEmail() {
+  function sendBrcProblemEmail() {
+    openEmailComposer('brc_not_found');
+  }
+
+  function sendFormationRejectedEmail() {
+    openEmailComposer('formation_rejected');
+  }
+
+  async function openEmailComposer(templateKey) {
     const applicationId = detail?.application?.id;
     if (!applicationId) return;
-    setBusy(true);
-    setMessage('Sending BRC problem email…');
+    setEmailComposer({ templateKey, recipient: '', subject: '', body: '', attachments: [], loading: true, sending: false, error: '', sentResult: null });
     try {
-      const result = await sendAdminApplicationEmail(applicationId, 'brc_not_found');
-      setMessage(result?.sent ? `Email sent to ${detail.application.contact_email}.` : (result?.error || 'Email could not be sent.'));
+      const preview = await getAdminEmailPreview(applicationId, templateKey);
+      setEmailComposer((prev) => (prev && prev.templateKey === templateKey) ? { ...prev, ...preview, loading: false } : prev);
     } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
+      setEmailComposer((prev) => (prev && prev.templateKey === templateKey) ? { ...prev, loading: false, error: err.message } : prev);
     }
   }
 
-  async function sendFormationRejectedEmail() {
+  function closeEmailComposer() {
+    setEmailComposer(null);
+  }
+
+  async function sendComposedEmail() {
     const applicationId = detail?.application?.id;
-    if (!applicationId) return;
-    setBusy(true);
-    setMessage('Sending replacement certificate request…');
+    if (!applicationId || !emailComposer) return;
+    setEmailComposer((prev) => (prev ? { ...prev, sending: true, error: '' } : prev));
     try {
-      const result = await sendAdminApplicationEmail(applicationId, 'formation_rejected');
-      setMessage(result?.sent ? `Email sent to ${detail.application.contact_email}.` : (result?.error || 'Email could not be sent.'));
+      const result = await sendAdminApplicationEmail(applicationId, emailComposer.templateKey, {
+        subject: emailComposer.subject,
+        body: emailComposer.body
+      });
+      setEmailComposer((prev) => (prev ? { ...prev, sending: false, sentResult: result } : prev));
+      if (result?.sent) await refreshList(applicationId);
     } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
+      setEmailComposer((prev) => (prev ? { ...prev, sending: false, error: err.message } : prev));
     }
   }
 
@@ -1579,6 +1591,33 @@ export default function AdminPage() {
             <div className="document-modal-footer">
               <div>{previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer">Open in new tab</a>}</div>
               {(previewDoc.document_type === 'formation' || previewDoc.document_type === 'uez_approval_email') && <div className="document-review-actions"><button className="warning-button" onClick={() => reviewPreviewDoc('rejected')} disabled={busy}>Wrong document</button><button className="success-button" onClick={() => reviewPreviewDoc('approved')} disabled={busy}>✓ Approve</button></div>}
+            </div>
+          </div>
+        </div>}
+        {emailComposer && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !emailComposer.sending) closeEmailComposer(); }}>
+          <div className="document-modal email-composer-modal" role="dialog" aria-modal="true" aria-label="Send email">
+            <div className="document-modal-head"><div><strong>Send email</strong><small>{emailComposer.templateKey}</small></div><button onClick={closeEmailComposer} aria-label="Close" disabled={emailComposer.sending}>×</button></div>
+            <div className="document-modal-body email-composer-body">
+              {emailComposer.loading ? <div className="document-modal-loading">Loading preview…</div> : emailComposer.error && !emailComposer.subject ? <p className="admin-message">{emailComposer.error}</p> : <>
+                {emailComposer.sentResult && <div className={`admin-message ${emailComposer.sentResult.sent ? '' : 'admin-message-error'}`}>
+                  {emailComposer.sentResult.sent
+                    ? `✅ Email sent to ${emailComposer.recipient} · ${formatTimestamp(emailComposer.sentResult.log?.sent_at) || 'just now'}`
+                    : `⚠️ Email was not sent${emailComposer.sentResult.error ? `: ${emailComposer.sentResult.error}` : '.'}`}
+                </div>}
+                {emailComposer.error && <p className="admin-message admin-message-error">{emailComposer.error}</p>}
+                <label>To</label><input value={emailComposer.recipient} disabled />
+                <label>Subject</label><input value={emailComposer.subject} onChange={(e) => setEmailComposer((prev) => ({ ...prev, subject: e.target.value }))} disabled={emailComposer.sending || Boolean(emailComposer.sentResult?.sent)} />
+                <label>Body</label><textarea rows={10} value={emailComposer.body} onChange={(e) => setEmailComposer((prev) => ({ ...prev, body: e.target.value }))} disabled={emailComposer.sending || Boolean(emailComposer.sentResult?.sent)} />
+                {emailComposer.attachments?.length > 0 && <div className="email-composer-attachments">
+                  <label>Attachments</label>
+                  {emailComposer.attachments.map((a) => <div key={a.filename} className="email-composer-attachment"><span>{a.filename}</span><small>{a.contentType} · {Math.round((a.size || 0) / 1024)} KB</small></div>)}
+                </div>}
+              </>}
+            </div>
+            <div className="document-modal-footer">
+              <div></div>
+              {!emailComposer.sentResult?.sent && <button className="primary" onClick={sendComposedEmail} disabled={emailComposer.loading || emailComposer.sending || !emailComposer.subject}>{emailComposer.sending ? 'Sending…' : 'Send'}</button>}
+              {emailComposer.sentResult?.sent && <button className="secondary" onClick={closeEmailComposer}>Done</button>}
             </div>
           </div>
         </div>}

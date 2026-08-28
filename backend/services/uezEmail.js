@@ -79,14 +79,27 @@ async function findDedupe(dedupeKey) {
   return data || null;
 }
 
-async function sendApplicationEmail(application, templateKey, options = {}) {
-  const mode = options.mode === 'manual' ? 'manual' : 'automatic';
+// Render-only — never writes to uez_email_log, never calls Resend. This is what
+// backs the "here's the actual email that will be sent" preview: a preview call
+// physically cannot also send, because it never reaches the code path that does.
+async function renderApplicationEmail(application, templateKey, options = {}) {
   const recipient = String(options.recipient || application.contact_email || '').trim().toLowerCase();
   if (!recipient) throw new Error('The application has no recipient email address.');
 
   const { data: template, error: templateError } = await supabase.from('uez_email_templates')
     .select('*').eq('template_key', templateKey).single();
   if (templateError || !template) throw templateError || new Error(`Email template ${templateKey} was not found.`);
+
+  const vars = await buildContext(application, options.extra || {});
+  const subject = typeof options.overrideSubject === 'string' ? options.overrideSubject : renderTemplate(template.subject, vars);
+  const body = typeof options.overrideBody === 'string' ? options.overrideBody : renderTemplate(template.body, vars);
+
+  return { template, recipient, subject, body };
+}
+
+async function sendApplicationEmail(application, templateKey, options = {}) {
+  const mode = options.mode === 'manual' ? 'manual' : 'automatic';
+  const { template, recipient, subject, body } = await renderApplicationEmail(application, templateKey, options);
   if (!template.enabled && mode === 'automatic') return { sent: false, skipped: true, reason: 'template_disabled' };
 
   const dedupeKey = options.dedupeKey || null;
@@ -94,10 +107,6 @@ async function sendApplicationEmail(application, templateKey, options = {}) {
   if (existing && ['pending', 'sent'].includes(existing.status)) {
     return { sent: existing.status === 'sent', skipped: true, reason: 'duplicate', log: existing };
   }
-
-  const vars = await buildContext(application, options.extra || {});
-  const subject = renderTemplate(template.subject, vars);
-  const body = renderTemplate(template.body, vars);
 
   if (!process.env.RESEND_API_KEY) {
     console.warn(`UEZ email ${templateKey} not sent: RESEND_API_KEY is not configured.`);
@@ -178,6 +187,7 @@ async function safeSendApplicationEmail(application, templateKey, options = {}) 
 module.exports = {
   getTemplates,
   updateTemplate,
+  renderApplicationEmail,
   sendApplicationEmail,
   safeSendApplicationEmail
 };
