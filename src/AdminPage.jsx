@@ -53,8 +53,10 @@ import {
   statusLabel
 } from './admin/caseLogic';
 import ActivityPanel from './admin/ActivityPanel';
+import DocumentsPanel from './admin/DocumentsPanel';
 import EmailComposer from './admin/EmailComposer';
 import NotesPanel from './admin/NotesPanel';
+import PaymentCard from './admin/PaymentCard';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
@@ -1193,12 +1195,7 @@ export default function AdminPage() {
               </dl>}
             </section></details>
 
-            <details className="admin-accordion"><summary><strong>Payment details</strong><span>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span></summary><section className="admin-card payment-admin-card admin-secondary-card">
-              <div className="admin-card-head"><h3>Payment details</h3><span>{detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'PAID' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'CLIENT SAYS PAID' : 'NOT RECORDED'}</span></div>
-              {detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <div className="admin-alert">Client says payment was sent. Check your bank before confirming.</div>}
-              <div className="admin-edit-grid"><div><label>Amount</label><input type="number" value={paymentDraft.amount} onChange={(e) => setPaymentDraft((old) => ({...old, amount:e.target.value}))} /></div><div><label>Date</label><input type="date" value={paymentDraft.paymentDate} onChange={(e) => setPaymentDraft((old) => ({...old, paymentDate:e.target.value}))} /></div><div><label>Method</label><input value={paymentDraft.paymentMethod} onChange={(e) => setPaymentDraft((old) => ({...old, paymentMethod:e.target.value}))} /></div><div><label>Reference</label><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft((old) => ({...old, reference:e.target.value}))} /></div><div className="admin-edit-wide"><label>Notes</label><input value={paymentDraft.notes} onChange={(e) => setPaymentDraft((old) => ({...old, notes:e.target.value}))} /></div></div>
-              {detail.payments?.[detail.payments.length - 1]?.status !== 'paid' && <button className="success-button admin-full-button" onClick={confirmPayment} disabled={busy}>✓ Confirm payment received</button>}
-            </section></details>
+            <PaymentCard payments={detail.payments} draft={paymentDraft} busy={busy} onDraftChange={setPaymentDraft} onConfirm={confirmPayment} />
 
             <details className="admin-accordion"><summary><strong>BRC details</strong><span>{detail.application.brc_status === 'found' ? 'Found' : (detail.application.brc_status || 'Pending')}</span></summary><section className="admin-card brc-admin-card admin-secondary-card">
               <div className="admin-card-head"><h3>BRC details</h3><span className={`status-pill ${detail.application.brc_status === 'found' ? 'good' : detail.application.status === 'waiting_for_brc' ? 'warn' : ''}`}>{detail.application.brc_status || 'pending'}</span></div>
@@ -1304,23 +1301,7 @@ export default function AdminPage() {
               </div>}
             </section></details>
 
-            <details className="admin-accordion"><summary><strong>Documents</strong><span>{`${detail.documents.length} files`}</span></summary><section className="admin-card admin-documents-card admin-secondary-card">
-              <div className="admin-card-head"><h3>Documents</h3><span>{detail.documents.length}</span></div>
-              <div className="admin-document-list">
-                {detail.documents.map((doc) => (
-                  <div key={doc.id} className="admin-doc-row">
-                    <button type="button" className="admin-doc-open-btn" onClick={() => openDoc(doc)}>
-                      <span><strong>{documentLabel(doc.document_type)}</strong><small>{doc.filename}</small></span>
-                      <b>Open</b>
-                    </button>
-                    <button type="button" className="admin-doc-delete-btn" onClick={() => handleDeleteDoc(doc)} disabled={busy} title="Delete document">
-                      Delete
-                    </button>
-                  </div>
-                ))}
-                {detail.documents.length === 0 && <p className="muted">No documents uploaded.</p>}
-              </div>
-            </section></details>
+            <DocumentsPanel documents={detail.documents} busy={busy} onOpen={openDoc} onDelete={handleDeleteDoc} />
           </div>
         </>}
         {pbsModalOpen && <div className="document-modal-backdrop pbs-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPbsModalOpen(false); }}>
