@@ -405,3 +405,26 @@ export function grantSubmitGateReason(detail) {
   if (!packetReady(detail)) return 'All 5 required documents must be ready first.';
   return null;
 }
+
+// The precedence rule for a ProcessStepCard: an explicit uez_process_steps
+// row (Chaim's own verdict) always wins when one exists; otherwise fall back
+// to the read-only derived default. The card always knows which one it's
+// showing via `source`, so "set by Chaim on Aug 28" vs "(auto)" is never
+// ambiguous to whoever's looking at it.
+export function resolveProcessStep(stepKey, detail) {
+  const explicit = (detail?.processSteps || []).find((s) => s.step_key === stepKey);
+  if (explicit) {
+    return {
+      state: explicit.state,
+      waitingOn: explicit.waiting_on || null,
+      waitingSince: explicit.waiting_since || null,
+      waitingReason: explicit.waiting_reason || null,
+      manualNote: explicit.manual_note || null,
+      source: 'explicit',
+      updatedByName: explicit.updated_by_name || null,
+      updatedAt: explicit.updated_at || null
+    };
+  }
+  const derived = deriveDefaultProcessStep(stepKey, detail);
+  return { ...derived, waitingSince: null, waitingReason: null, manualNote: null, source: 'derived', updatedByName: null, updatedAt: null };
+}

@@ -26,6 +26,7 @@ import {
   reviewAdminDocument,
   sendAdminApplicationEmail,
   updateAdminCaseNote,
+  updateAdminProcessStep,
   uploadApplicationDocument,
   whoAmI
 } from './api';
@@ -46,6 +47,7 @@ import {
   paymentStatusLabel,
   queueCounts,
   readyDocumentCount,
+  resolveProcessStep,
   statusLabel
 } from './admin/caseLogic';
 import ActivityPanel from './admin/ActivityPanel';
@@ -58,6 +60,7 @@ import MyNjPbsCard from './admin/MyNjPbsCard';
 import NotesPanel from './admin/NotesPanel';
 import OwnersCard from './admin/OwnersCard';
 import PaymentCard from './admin/PaymentCard';
+import ProcessStepCard from './admin/ProcessStepCard';
 import RecommendedActionBanner from './admin/RecommendedActionBanner';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
@@ -863,6 +866,15 @@ export default function AdminPage() {
     finally { setBusy(false); }
   }
 
+  async function saveProcessStep(stepKey, patch) {
+    const applicationId = detail?.application?.id;
+    if (!applicationId) return;
+    const updated = await updateAdminProcessStep(applicationId, stepKey, patch);
+    setDetail((prev) => (prev && prev.application.id === applicationId)
+      ? { ...prev, processSteps: [...(prev.processSteps || []).filter((s) => s.step_key !== stepKey), updated] }
+      : prev);
+  }
+
   async function addCaseNote() {
     const applicationId = detail?.application?.id;
     const body = noteDraft.trim();
@@ -1122,6 +1134,32 @@ export default function AdminPage() {
               </div>
             </div>
           </section>
+
+          {/* New Process redesign — landing one card at a time alongside the
+              old grid above for a verification pass before removing the
+              matching old row. Payment first (simplest: single action). */}
+          <div className="process-step-grid">
+            <ProcessStepCard
+              stepKey="payment"
+              title="Payment"
+              busy={busy}
+              operational={resolveProcessStep('payment', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const latest = detail.payments?.[detail.payments.length - 1];
+                return <>
+                  <strong>{paymentStatusLabel(latest?.status)}</strong>
+                  {latest?.amount != null && <small>${Number(latest.amount).toLocaleString()}{latest.payment_method ? ` · ${latest.payment_method}` : ''}</small>}
+                </>;
+              })()}
+              actions={[{
+                label: 'Confirm payment received',
+                hint: 'Marks the payment as received once you’ve verified it in your bank.',
+                onClick: confirmPayment,
+                disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
+              }]}
+            />
+          </div>
 
           <div className="admin-card-grid case-workbench-grid">
             <NotesPanel

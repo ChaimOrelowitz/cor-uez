@@ -743,4 +743,24 @@
 
 .recommended-action-banner.tone-quiet strong { color: #55596b; }
 
+/* Process step cards — the redesigned per-step surface, replacing the old
+   dense Status/Actions grid one step at a time. */
+.process-step-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin: 10px 0; }
+.process-step-card { border: 1px solid #dfe5ec; border-radius: 14px; background: #fff; box-shadow: 0 4px 14px rgba(30, 45, 65, .05); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.process-step-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.process-step-head h4 { margin: 0; font-size: 14px; font-weight: 800; color: #263448; }
+.process-step-facts { font-size: 13px; color: #3a4257; line-height: 1.5; }
+.process-step-facts small { display: block; color: #8b91a2; font-size: 11px; margin-top: 2px; }
+.process-step-operational { border-top: 1px solid #edf0f5; padding-top: 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.process-step-byline { color: #7a8194; font-size: 11px; }
+.process-step-byline.muted { color: #a0a5b3; font-style: italic; }
+.process-step-edit { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+.process-step-edit select, .process-step-edit input, .process-step-edit textarea { width: 100%; border-radius: 8px; border: 1px solid #e4e7f0; padding: 7px 9px; font: inherit; font-size: 12px; }
+.process-step-edit-actions { display: flex; gap: 8px; }
+.process-step-actions { display: flex; flex-direction: column; gap: 8px; }
+.process-step-action { display: flex; flex-direction: column; gap: 2px; }
+.process-step-action .ops-action { width: 100%; text-align: center; }
+.process-step-action-hint { color: #8b91a2; font-size: 10.5px; }
+.process-step-action-disabled { color: #a2473e; font-size: 10.5px; font-weight: 700; }
+
 .pbs-account-question .pbs-check-link{display:inline-block;margin-top:10px;font-weight:700}.pbs-existing-login-grid{margin-top:14px}.admin-pbs-answer-box{border:1px solid #d9dee8;border-radius:14px;padding:14px;margin-bottom:14px;background:#f8fafc}.admin-pbs-answer-box>label{display:block;font-weight:800;margin-bottom:7px}.admin-pbs-answer-box>select{width:100%;margin-bottom:10px}

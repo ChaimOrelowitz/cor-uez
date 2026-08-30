@@ -18,6 +18,7 @@ import {
   pbsAccountGateReason,
   queueCounts,
   readyDocumentCount,
+  resolveProcessStep,
   uezStatusLabel
 } from './caseLogic';
 
@@ -355,5 +356,33 @@ describe('grantSubmitGateReason', () => {
   it('explains why grant submission is blocked, or clears once ready', () => {
     expect(grantSubmitGateReason({ application: { status: 'applied' } })).toMatch(/already submitted/i);
     expect(grantSubmitGateReason({ application: { status: 'in_progress' }, documents: [] })).toMatch(/5 required documents/i);
+  });
+});
+
+describe('resolveProcessStep', () => {
+  it('falls back to the derived default when no explicit row exists', () => {
+    const detail = { application: { pbs_account_created: true }, processSteps: [] };
+    const resolved = resolveProcessStep('pbs_mynj', detail);
+    expect(resolved).toMatchObject({ state: 'complete', source: 'derived', updatedByName: null });
+  });
+
+  it('an explicit row always wins over the derived default, even to the same value', () => {
+    const detail = {
+      application: { pbs_account_created: true }, // would derive to 'complete'
+      processSteps: [{ step_key: 'pbs_mynj', state: 'waiting', waiting_on: 'accountant', waiting_since: '2026-08-20', waiting_reason: 'Confirming EIN', manual_note: null, updated_by_name: 'Chaim', updated_at: '2026-08-28T12:00:00Z' }]
+    };
+    const resolved = resolveProcessStep('pbs_mynj', detail);
+    expect(resolved).toEqual({
+      state: 'waiting', waitingOn: 'accountant', waitingSince: '2026-08-20', waitingReason: 'Confirming EIN',
+      manualNote: null, source: 'explicit', updatedByName: 'Chaim', updatedAt: '2026-08-28T12:00:00Z'
+    });
+  });
+
+  it('only looks at the row matching this stepKey, not any other step', () => {
+    const detail = {
+      application: {},
+      processSteps: [{ step_key: 'brc', state: 'complete', updated_by_name: 'Chaim', updated_at: '2026-08-28T12:00:00Z' }]
+    };
+    expect(resolveProcessStep('payment', detail).source).toBe('derived');
   });
 });
