@@ -255,7 +255,8 @@
 .admin-shell .admin-card-head h3 {
   font-size: var(--admin-font-size-h2);
   text-align: left;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 56px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -266,7 +267,8 @@
 .admin-shell .admin-accordion > summary { gap: 8px; }
 .admin-shell .admin-accordion > summary strong {
   text-align: left;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 56px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -285,7 +287,8 @@
   font-size: var(--admin-font-size-h3);
   color: var(--admin-text);
   text-align: left;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 56px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
