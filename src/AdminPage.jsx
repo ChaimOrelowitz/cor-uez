@@ -1035,34 +1035,15 @@ export default function AdminPage() {
 
           <RecommendedActionBanner queue={adminQueueInfo(detail.application)} />
 
-          <section className="ops-cockpit">
-            {attentionItems(detail).length > 0 && <div className="ops-attention-strip">
-              <strong>Needs attention</strong>
-              <div>{attentionItems(detail).map((item) => <span key={item}>{item}</span>)}</div>
-            </div>}
-
-            {/* All 8 steps now live as ProcessStepCards below — the old
-                status/documents/actions cockpit grid is gone. Manual upload
-                is the one piece that isn't part of the per-step model
-                (it's a fallback/records tool, not a status), so it stays. */}
-            <div className="ops-panel manual-upload-panel">
-              <div className="admin-manual-upload">
-                <div className="admin-manual-upload-head"><strong>Manual document upload</strong><small>Fallback / records</small></div>
-                <select value={manualDocType} onChange={(e) => setManualDocType(e.target.value)}>
-                  <option value="formation">Certificate of Formation</option>
-                  <option value="brc">Business Registration Certificate</option>
-                  <option value="uez_pending_certification">UEZ Pending Certification Application</option>
-                  <option value="uez_approval_email">UEZ Approval Email</option>
-                  <option value="tax_clearance">Tax Clearance Letter</option>
-                  <option value="tax_clearance_issue">Tax Clearance Issue Screenshot</option>
-                  <option value="ldc_application">Signed LDC Application</option>
-                  <option value="supporting">Other / Supporting Document</option>
-                </select>
-                <input type="file" accept=".pdf,.eml,image/*" onChange={(e) => setManualDocFile(e.target.files?.[0] || null)} />
-                <button className="secondary" onClick={uploadManualAdminDocument} disabled={manualDocUploading || !manualDocFile}>{manualDocUploading ? 'Uploading…' : 'Upload document'}</button>
-              </div>
-            </div>
-          </section>
+          {/* attentionItems and adminQueueInfo's top tier share one
+              definition (URGENT_REVIEW_ITEMS in caseLogic.js) so this strip
+              and the banner above it can't drift out of sync with each
+              other — the strip shows every open urgent item, the banner
+              above picks the single highest-priority one. */}
+          {attentionItems(detail).length > 0 && <div className="ops-attention-strip">
+            <strong>Needs attention</strong>
+            <div>{attentionItems(detail).map((item) => <span key={item}>{item}</span>)}</div>
+          </div>}
 
           {/* The 8-card process redesign - one card per step, each an
               operational verdict (not_started/in_progress/waiting/complete/
@@ -1138,7 +1119,14 @@ export default function AdminPage() {
                   <div className="process-step-inline-select">
                     <label>PBS account created</label>
                     <div className="tiny-toggle">
-                      <button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button>
+                      {/* "Yes" goes through markPbsAccountCreated (not the generic
+                          setProcessFlag) so it's the one path that also fires the
+                          applicant's "PBS account created" email — MyNjPbsCard's
+                          old duplicate button used to call this same handler
+                          through a second UI, the process card is now the only
+                          place that does. Safe to click repeatedly: the backend
+                          dedupes the email by application id. */}
+                      <button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={markPbsAccountCreated} disabled={busy}>Yes</button>
                       <button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button>
                     </div>
                   </div>
@@ -1320,6 +1308,11 @@ export default function AdminPage() {
 
           <div className="admin-details-heading"><span>DETAILS</span><small>Reference information and manual overrides</small></div>
 
+          {/* Deliberate order (no CSS `order` involved — pure DOM order, same
+              approach as the process-step-grid above): identity first
+              (Business, Owners), then the manual-override cards in the same
+              sequence as the process steps they support (BRC, PBS/MyNJ,
+              Payment), Documents last as the full reference list. */}
           <div className="admin-card-grid">
             <BusinessDetailsCard
               application={detail.application}
@@ -1328,7 +1321,14 @@ export default function AdminPage() {
               onChangeField={updateApplicationDraft}
             />
 
-            <PaymentCard payments={detail.payments} draft={paymentDraft} busy={busy} onDraftChange={setPaymentDraft} onConfirm={confirmPayment} />
+            <OwnersCard
+              owners={detail.owners}
+              editMode={editMode}
+              ownerDrafts={ownerDrafts}
+              onChangeOwnerField={updateOwnerDraft}
+              onAddOwner={addOwner}
+              onRemoveOwner={removeOwner}
+            />
 
             <BrcDetailsCard
               application={detail.application}
@@ -1337,7 +1337,6 @@ export default function AdminPage() {
               onChangeBrcForm={setBrcForm}
               onBrcFound={saveBrcFound}
               onBrcNotFound={saveBrcNotFound}
-              onSendBrcProblemEmail={sendBrcProblemEmail}
             />
 
             <MyNjPbsCard
@@ -1358,20 +1357,23 @@ export default function AdminPage() {
               onCancelMyNjEdit={cancelMyNjEdit}
               onToggleShowSecrets={toggleShowMyNjSecrets}
               onCopyCredential={copyCredential}
-              onMarkPbsAccountCreated={markPbsAccountCreated}
               onCreateMyNjCredentials={createMyNjCredentials}
             />
 
-            <OwnersCard
-              owners={detail.owners}
-              editMode={editMode}
-              ownerDrafts={ownerDrafts}
-              onChangeOwnerField={updateOwnerDraft}
-              onAddOwner={addOwner}
-              onRemoveOwner={removeOwner}
-            />
+            <PaymentCard payments={detail.payments} draft={paymentDraft} busy={busy} onDraftChange={setPaymentDraft} onConfirm={confirmPayment} />
 
-            <DocumentsPanel documents={detail.documents} busy={busy} onOpen={openDoc} onDelete={handleDeleteDoc} />
+            <DocumentsPanel
+              documents={detail.documents}
+              busy={busy}
+              onOpen={openDoc}
+              onDelete={handleDeleteDoc}
+              manualDocType={manualDocType}
+              onChangeManualDocType={setManualDocType}
+              manualDocFile={manualDocFile}
+              onChangeManualDocFile={setManualDocFile}
+              manualDocUploading={manualDocUploading}
+              onUploadManualDoc={uploadManualAdminDocument}
+            />
           </div>
         </>}
         {pbsModalOpen && <div className="document-modal-backdrop pbs-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPbsModalOpen(false); }}>

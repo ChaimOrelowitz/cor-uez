@@ -124,7 +124,11 @@ describe('formationSatisfied / packetReady / readyDocumentCount', () => {
 describe('attentionItems', () => {
   it('surfaces client-reported payment, BRC self-report, and tax recheck requests', () => {
     const detail = {
-      application: { brc_status: 'client_created', tax_clearance_recheck_requested_at: '2026-08-01' },
+      // payment_status mirrors the latest payments row - the backend always
+      // sends both in sync (uez.js derives payment_status server-side from
+      // the same latestPayments lookup), so attentionItems reads the
+      // application-level field like adminQueueInfo does, not the array.
+      application: { brc_status: 'client_created', tax_clearance_recheck_requested_at: '2026-08-01', payment_status: 'client_reported' },
       documents: [],
       payments: [{ status: 'client_reported' }]
     };
@@ -137,6 +141,15 @@ describe('attentionItems', () => {
   it('returns nothing for a clean, fully-reviewed case', () => {
     const detail = { application: {}, documents: [], payments: [] };
     expect(attentionItems(detail)).toEqual([]);
+  });
+
+  it('flags a rejected formation document even though it is not in the urgent-review picker', () => {
+    const detail = {
+      application: { document_types: ['formation'], formation_review_status: 'rejected' },
+      documents: [],
+      payments: []
+    };
+    expect(attentionItems(detail)).toEqual(['Certificate of Formation marked wrong']);
   });
 });
 

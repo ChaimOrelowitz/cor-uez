@@ -23,7 +23,6 @@ export default function MyNjPbsCard({
   onCancelMyNjEdit,
   onToggleShowSecrets,
   onCopyCredential,
-  onMarkPbsAccountCreated,
   onCreateMyNjCredentials
 }) {
   return (
@@ -71,7 +70,10 @@ export default function MyNjPbsCard({
             <button className="secondary admin-full-button" onClick={onStartMyNjEdit}>Edit login information</button>
           </>}
           <p className="admin-help">Stored encrypted in the UEZ application. The applicant sees the same MyNJ information in their portal.</p>
-          {application.pbs_status !== 'account_created' && application.pbs_status !== 'uez_approval_uploaded' && <button className="success-button admin-full-button" onClick={onMarkPbsAccountCreated} disabled={busy}>✓ PBS account has been created</button>}
+          {/* Marking the PBS account created lives on the PBS/MyNJ process
+              card above (the "Yes" toggle) — one action surface instead of
+              two, since this one used to skip the applicant notification
+              email that the process card's path always sends. */}
           {(application.pbs_status === 'account_created' || application.status === 'waiting_for_uez_approval') && <p className="admin-help">Waiting for the applicant to upload the required UEZ approval email.</p>}
           {application.pbs_status === 'uez_approval_uploaded' && <p className="admin-help">The applicant uploaded the UEZ approval email. Open it in Documents below.</p>}
         </> : <>

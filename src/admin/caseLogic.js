@@ -108,6 +108,44 @@ export function adminStageLabel(app) {
   return 'APPLICANT SIGNUP';
 }
 
+// Shared by adminQueueInfo's urgent-review tier (first match wins, feeds the
+// Recommended-action banner) and attentionItems (every match, feeds the
+// "Needs attention" strip) — one definition instead of two hand-maintained
+// lists that used to drift: same five conditions, sometimes different
+// wording, no guarantee they'd ever agree on what's actually urgent.
+const URGENT_REVIEW_ITEMS = [
+  {
+    test: (app) => Boolean(app.tax_clearance_recheck_requested_at),
+    action: 'Recheck Tax Clearance',
+    attention: 'Client says the tax-clearance issue is resolved — recheck Tax Clearance',
+    rank: 0, stepKey: 'tax_clearance'
+  },
+  {
+    test: (app) => app.payment_status === 'client_reported',
+    action: 'Confirm payment',
+    attention: 'Client says payment was sent',
+    rank: 1, stepKey: 'payment'
+  },
+  {
+    test: (app) => app.brc_status === 'client_created',
+    action: 'Recheck BRC',
+    attention: 'Client says BRC was created — recheck BRC',
+    rank: 2, stepKey: 'brc'
+  },
+  {
+    test: (app, types, formationReview) => types.has('formation') && formationReview === 'not_reviewed',
+    action: 'Review Formation',
+    attention: 'Review Certificate of Formation',
+    rank: 3, stepKey: 'formation'
+  },
+  {
+    test: (app, types, _formationReview, approvalReview) => types.has('uez_approval_email') && approvalReview === 'not_reviewed',
+    action: 'Review UEZ approval',
+    attention: 'Review UEZ approval email',
+    rank: 4, stepKey: 'uez_enrollment'
+  }
+];
+
 // Tax Clearance and UEZ Enrollment are worked in parallel in real life — an
 // issue on one doesn't mean COR waits before pushing on the other. So each is
 // evaluated independently here instead of one hiding the other behind an
@@ -165,11 +203,11 @@ export function adminQueueInfo(app) {
   const stage = adminStageLabel(app);
 
   // Immediate human-review items always win.
-  if (app.tax_clearance_recheck_requested_at) return { bucket: 'needs', action: 'Recheck Tax Clearance', tone: 'danger', stage, rank: 0, stepKey: 'tax_clearance' };
-  if (app.payment_status === 'client_reported') return { bucket: 'needs', action: 'Confirm payment', tone: 'danger', stage, rank: 1, stepKey: 'payment' };
-  if (app.brc_status === 'client_created') return { bucket: 'needs', action: 'Recheck BRC', tone: 'danger', stage, rank: 2, stepKey: 'brc' };
-  if (types.has('formation') && formationReview === 'not_reviewed') return { bucket: 'needs', action: 'Review Formation', tone: 'danger', stage, rank: 3, stepKey: 'formation' };
-  if (types.has('uez_approval_email') && approvalReview === 'not_reviewed') return { bucket: 'needs', action: 'Review UEZ approval', tone: 'danger', stage, rank: 4, stepKey: 'uez_enrollment' };
+  for (const item of URGENT_REVIEW_ITEMS) {
+    if (item.test(app, types, formationReview, approvalReview)) {
+      return { bucket: 'needs', action: item.action, tone: 'danger', stage, rank: item.rank, stepKey: item.stepKey };
+    }
+  }
 
   if (submittedGrant) return { bucket: 'submitted', action: 'Grant submitted', tone: 'submitted', stage, rank: 0, stepKey: 'grant_submission' };
   if (!app.submitted_at) return { bucket: 'waiting', action: 'Applicant still completing signup', tone: 'quiet', stage, rank: 80, stepKey: null };
@@ -235,16 +273,18 @@ export function readyDocumentCount(detail) {
 
 export function attentionItems(detail) {
   if (!detail) return [];
-  const items = [];
-  const payment = detail.payments?.[detail.payments.length - 1];
-  const formation = docFor(detail, 'formation');
-  const approval = docFor(detail, 'uez_approval_email');
-  if (payment?.status === 'client_reported') items.push('Client says payment was sent');
-  if (detail.application.brc_status === 'client_created') items.push('Client says BRC was created — recheck BRC');
-  if (detail.application.tax_clearance_recheck_requested_at) items.push('Client says the tax-clearance issue is resolved — recheck Tax Clearance');
-  if (formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
-  if (formation && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
-  if (approval && (detail.application.uez_approval_review_status || 'not_reviewed') === 'not_reviewed') items.push('Review UEZ approval email');
+  const app = detail.application;
+  const types = new Set(app.document_types || []);
+  const formationReview = app.formation_review_status || 'not_reviewed';
+  const approvalReview = app.uez_approval_review_status || 'not_reviewed';
+  const items = URGENT_REVIEW_ITEMS
+    .filter((item) => item.test(app, types, formationReview, approvalReview))
+    .map((item) => item.attention);
+  // Formation-rejected isn't in the urgent-review picker above (it already
+  // surfaces as its own 'waiting' state further down adminQueueInfo's
+  // waterfall, and on the Formation process card itself) but it's still
+  // worth flagging here alongside the others.
+  if (types.has('formation') && formationReview === 'rejected') items.push('Certificate of Formation marked wrong');
   return items;
 }
 

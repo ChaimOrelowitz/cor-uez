@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function BrcDetailsCard({ application, brcForm, busy, onChangeBrcForm, onBrcFound, onBrcNotFound, onSendBrcProblemEmail }) {
+export default function BrcDetailsCard({ application, brcForm, busy, onChangeBrcForm, onBrcFound, onBrcNotFound }) {
   return (
     <details className="admin-accordion">
       <summary><strong>BRC details</strong><span>{application.brc_status === 'found' ? 'Found' : (application.brc_status || 'Pending')}</span></summary>
@@ -19,10 +19,11 @@ export default function BrcDetailsCard({ application, brcForm, busy, onChangeBrc
           <input value={brcForm.address} onChange={(e) => onChangeBrcForm((old) => ({ ...old, address: e.target.value }))} />
         </div>
 
+        {/* Sending the BRC problem email lives on the BRC process card above
+            now — one action surface instead of two identical buttons. */}
         <div className="admin-action-row">
           <button className="success-button" onClick={onBrcFound} disabled={busy}>✓ BRC found</button>
           <button className="warning-button" onClick={onBrcNotFound} disabled={busy}>No BRC found</button>
-          {application.brc_status === 'not_found' && <button className="secondary" onClick={onSendBrcProblemEmail} disabled={busy}>Send BRC problem email</button>}
         </div>
       </section>
     </details>
