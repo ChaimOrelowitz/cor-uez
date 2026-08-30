@@ -1064,11 +1064,11 @@ export default function AdminPage() {
               <div className="ops-panel status-panel">
                 <div className="ops-panel-head"><h3>Status</h3></div>
                 <div className="compact-status-grid status-sort-list">
-                  {statusOrder.map((key) => {
+                  {/* 'payment' removed from this list — replaced by the Payment ProcessStepCard below */}
+                  {statusOrder.filter((key) => key !== 'payment').map((key) => {
                     const row = key === 'pbs' ? <><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></>
                       : key === 'uez' ? <><span>UEZ</span><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></>
-                      : key === 'tax' ? <><span>Tax clearance{detail.application.tax_clearance_recheck_requested_at ? <small className="tax-recheck-note">Client says resolved</small> : null}</span><div className="tiny-toggle tax-tristate"><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'no' ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'no')} disabled={busy}>No</button><button className={(detail.application.tax_clearance_status || 'no') === 'issue' ? 'active-warn' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'issue')} disabled={busy}>Issue</button><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'good' ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'good')} disabled={busy}>Good</button></div></>
-                      : <><span>Payment</span><div className="status-payment-value"><strong className={detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'text-good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'text-warn' : ''}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</strong>{detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' && <button className="tiny-confirm" onClick={confirmPayment} disabled={busy}>Confirm</button>}</div></>;
+                      : <><span>Tax clearance{detail.application.tax_clearance_recheck_requested_at ? <small className="tax-recheck-note">Client says resolved</small> : null}</span><div className="tiny-toggle tax-tristate"><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'no' ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'no')} disabled={busy}>No</button><button className={(detail.application.tax_clearance_status || 'no') === 'issue' ? 'active-warn' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'issue')} disabled={busy}>Issue</button><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'good' ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'good')} disabled={busy}>Good</button></div></>;
                     return <div key={key} className="compact-status-item sortable-status-row" draggable onDragStart={() => setDragStatusKey(key)} onDragOver={(e) => e.preventDefault()} onDrop={() => dropStatus(key)}><i className="drag-handle" title="Drag to reorder">⋮⋮</i>{row}</div>;
                   })}
                 </div>
@@ -1091,10 +1091,10 @@ export default function AdminPage() {
                     const review = detail.application.uez_approval_review_status || 'not_reviewed';
                     return <div className={`ops-doc-row reviewable-doc ${review === 'approved' ? 'ready' : review === 'rejected' ? 'bad' : approval ? 'review-pending' : ''}`}><button className="ops-doc-name" onClick={() => approval && previewDocument(approval)} disabled={!approval}><b>{review === 'approved' ? '✓' : approval ? '!' : '○'}</b><span>UEZ Approval Email</span></button><small>{!approval ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
                   })()}
+                  {/* 'ldc_application' removed — replaced by the LDC Application ProcessStepCard below */}
                   {[
                     ['brc', 'BRC'],
-                    ['tax_clearance', 'Tax Clearance'],
-                    ['ldc_application', 'Signed LDC Application']
+                    ['tax_clearance', 'Tax Clearance']
                   ].map(([type, label]) => {
                     const doc = docFor(detail, type);
                     return <div key={type} className={`ops-doc-row ${doc ? 'ready' : ''}`}><button className="ops-doc-name" onClick={() => doc && previewDocument(doc)} disabled={!doc}><b>{doc ? '✓' : '○'}</b><span>{label}</span></button><small>{doc ? 'Received' : 'Missing'}</small></div>;
@@ -1124,7 +1124,7 @@ export default function AdminPage() {
                   <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
                   <button className="ops-action primary" onClick={runPbsLogin} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
                   <button className={`ops-action ${docFor(detail, 'tax_clearance') ? 'success-action' : 'primary'}`} onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>FETCH</span><strong>TAX CLEARANCE</strong></button>
-                  <button className={`ops-action ${docFor(detail, 'ldc_application') ? 'success-action' : 'primary'}`} onClick={runLdcJotform} disabled={busy}><span>FILL OUT</span><strong>LDC APP</strong></button>
+                  {/* 'FILL OUT LDC APP' removed — replaced by the LDC Application ProcessStepCard below */}
                   <button className={`ops-action ${detail.application.status === 'applied' ? 'success-action' : packetReady(detail) ? 'ready-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>SUBMIT</span><strong>GRANT APP</strong></button>
                 </div>
                 {grantSubmissionLikelyDetected(detail) && <div className="grant-confirm-banner">
@@ -1157,6 +1157,26 @@ export default function AdminPage() {
                 hint: 'Marks the payment as received once you’ve verified it in your bank.',
                 onClick: confirmPayment,
                 disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
+              }]}
+            />
+
+            <ProcessStepCard
+              stepKey="ldc_application"
+              title="LDC Application"
+              busy={busy}
+              operational={resolveProcessStep('ldc_application', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const doc = docFor(detail, 'ldc_application');
+                return doc
+                  ? <button type="button" className="text-button" onClick={() => previewDocument(doc)}>✓ Signed application on file — {doc.filename}</button>
+                  : <strong>Not yet filled out</strong>;
+              })()}
+              actions={[{
+                label: 'Fill out LDC application',
+                hint: 'Fills and signs the Lakewood LDC incentive application via the COR Chrome extension.',
+                onClick: runLdcJotform,
+                disabled: busy
               }]}
             />
           </div>
