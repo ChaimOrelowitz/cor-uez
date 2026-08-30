@@ -1083,7 +1083,7 @@ export default function AdminPage() {
           <div className="process-step-grid">
             <ProcessStepCard
               stepKey="formation"
-              title="Formation"
+              title="Certificate of Formation"
               busy={busy}
               operational={resolveProcessStep('formation', detail)}
               onSaveOperational={saveProcessStep}
