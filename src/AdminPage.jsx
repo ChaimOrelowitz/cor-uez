@@ -39,11 +39,13 @@ import {
   filterAndSortApplications,
   formatTimestamp,
   grantSubmissionLikelyDetected,
+  grantSubmitGateReason,
   nameControl,
   njTaxId,
   ownerDraftFrom,
   packetReady,
   paymentStatusLabel,
+  pbsAccountGateReason,
   queueCounts,
   readyDocumentCount,
   resolveProcessStep,
@@ -1100,13 +1102,8 @@ export default function AdminPage() {
                   {/* 'FETCH BRC' removed — replaced by the BRC ProcessStepCard below */}
                   <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
                   <button className="ops-action primary" onClick={runPbsLogin} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
-                  {/* 'FETCH TAX CLEARANCE' and 'FILL OUT LDC APP' removed — replaced by their ProcessStepCards below */}
-                  <button className={`ops-action ${detail.application.status === 'applied' ? 'success-action' : packetReady(detail) ? 'ready-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>SUBMIT</span><strong>GRANT APP</strong></button>
+                  {/* 'FETCH TAX CLEARANCE', 'FILL OUT LDC APP', and 'SUBMIT GRANT APP' removed — replaced by their ProcessStepCards below */}
                 </div>
-                {grantSubmissionLikelyDetected(detail) && <div className="grant-confirm-banner">
-                  <span>COR saw what looks like a successful Lakewood submission, but couldn't confirm it automatically (no submission ID on that flow).</span>
-                  <button className="warning-button" onClick={confirmGrantSubmitted} disabled={busy}>Confirm grant submitted</button>
-                </div>}
               </div>
             </div>
           </section>
@@ -1271,6 +1268,34 @@ export default function AdminPage() {
                 onClick: runTaxClearance,
                 disabled: busy || !myNjCredentials
               }]}
+            />
+
+            <ProcessStepCard
+              stepKey="grant_submission"
+              title="Grant Submission"
+              busy={busy}
+              operational={resolveProcessStep('grant_submission', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                if (detail.application.status === 'applied' || detail.application.status === 'grant_submitted') return <strong>✓ Submitted</strong>;
+                if (grantSubmissionLikelyDetected(detail)) return <strong>Looks submitted — needs confirmation</strong>;
+                if (packetReady(detail)) return <strong>Packet ready — not yet submitted</strong>;
+                return <strong>Waiting on required documents</strong>;
+              })()}
+              actions={[
+                {
+                  label: 'Submit Grant App',
+                  hint: grantSubmitGateReason(detail) || 'Submits the Lakewood UEZ Technology Grant application via the COR Chrome extension.',
+                  onClick: runLakewoodGrantPortal,
+                  disabled: busy || Boolean(grantSubmitGateReason(detail))
+                },
+                ...(grantSubmissionLikelyDetected(detail) ? [{
+                  label: 'Confirm grant submitted',
+                  hint: 'COR saw what looks like a successful Lakewood submission, but couldn’t confirm it automatically (no submission ID on that flow).',
+                  onClick: confirmGrantSubmitted,
+                  disabled: busy
+                }] : [])
+              ]}
             />
           </div>
 
