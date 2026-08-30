@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const uezRoutes = require('./routes/uez');
-const uezBrcLiveRoutes = require('./routes/uezBrcLive');
 const uezAnalyticsRoutes = require('./routes/uezAnalytics');
 
 const app = express();
@@ -34,7 +33,6 @@ app.get('/health', (_req, res) => res.json({
   build: 'chrome-extension-v2'
 }));
 app.use('/api/uez/analytics', uezAnalyticsRoutes);
-app.use('/api/uez/brc/live', uezBrcLiveRoutes);
 app.use('/api/uez', uezRoutes);
 
 const port = process.env.PORT || 4000;

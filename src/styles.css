@@ -88,14 +88,6 @@ textarea { min-height: 94px; resize: vertical; }
 .validation-error { margin-left: 0; margin-right: 0; color: #a14646; background: #fff2f2; border: 1px solid #f1d2d2; }
 .form-message { color: #5f667d; background: #f5f6fb; border: 1px solid #e4e7f0; }
 
-.brc-test-wrap { max-width: 760px; }
-.brc-test-result { margin-top: 24px; padding: 18px; border-radius: 16px; border: 1px solid #e3e6f0; background: #fafbff; }
-.brc-test-result.found { background: #eff9f3; border-color: #cfe8d8; }
-.brc-test-result.not_found { background: #fff9ef; border-color: #eddfbf; }
-.brc-test-result.manual_verification_required { background: #f6f4ff; border-color: #ded8f2; }
-.brc-test-result strong { font-size: 18px; }
-.brc-test-result p { margin: 9px 0 0; color: #616980; line-height: 1.5; }
-
 @media (max-width: 760px) {
   .topbar { padding: 0 18px; }
   .brand-subtitle { display: none; }

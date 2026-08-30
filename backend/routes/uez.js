@@ -9,7 +9,6 @@ const { safeSendApplicationEmail } = require('../services/uezEmail');
 
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
-router.use('/brc-live', require('./uezBrcLive'));
 router.use('/email', require('./uezEmail'));
 
 const upload = multer({
