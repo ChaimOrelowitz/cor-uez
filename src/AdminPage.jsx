@@ -37,7 +37,6 @@ import {
   docFor,
   documentLabel,
   filterAndSortApplications,
-  formationSatisfied,
   formatTimestamp,
   grantSubmissionLikelyDetected,
   nameControl,
@@ -1064,10 +1063,9 @@ export default function AdminPage() {
               <div className="ops-panel status-panel">
                 <div className="ops-panel-head"><h3>Status</h3></div>
                 <div className="compact-status-grid status-sort-list">
-                  {/* 'payment' removed from this list — replaced by the Payment ProcessStepCard below */}
-                  {statusOrder.filter((key) => key !== 'payment').map((key) => {
+                  {/* 'payment' and 'uez' removed from this list — replaced by their ProcessStepCards below */}
+                  {statusOrder.filter((key) => key !== 'payment' && key !== 'uez').map((key) => {
                     const row = key === 'pbs' ? <><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></>
-                      : key === 'uez' ? <><span>UEZ</span><select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}><option value="not_started">Not Started</option><option value="applied">Applied</option><option value="approved">Approved</option></select></>
                       : <><span>Tax clearance{detail.application.tax_clearance_recheck_requested_at ? <small className="tax-recheck-note">Client says resolved</small> : null}</span><div className="tiny-toggle tax-tristate"><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'no' ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'no')} disabled={busy}>No</button><button className={(detail.application.tax_clearance_status || 'no') === 'issue' ? 'active-warn' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'issue')} disabled={busy}>Issue</button><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'good' ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'good')} disabled={busy}>Good</button></div></>;
                     return <div key={key} className="compact-status-item sortable-status-row" draggable onDragStart={() => setDragStatusKey(key)} onDragOver={(e) => e.preventDefault()} onDrop={() => dropStatus(key)}><i className="drag-handle" title="Drag to reorder">⋮⋮</i>{row}</div>;
                   })}
@@ -1077,20 +1075,7 @@ export default function AdminPage() {
               <div className="ops-panel documents-panel">
                 <div className="ops-panel-head"><h3>Documents</h3><span>{readyDocumentCount(detail)}/5 ready</span></div>
                 <div className="ops-doc-list">
-                  {(() => {
-                    const formation = docFor(detail, 'formation');
-                    const sole = detail.application.is_sole_proprietorship;
-                    const review = detail.application.formation_review_status || 'not_reviewed';
-                    return <>
-                      <div className={`ops-doc-row reviewable-doc ${formationSatisfied(detail) ? 'ready' : review === 'rejected' ? 'bad' : formation ? 'review-pending' : ''}`}><button className="ops-doc-name" onClick={() => formation && previewDocument(formation)} disabled={!formation}><b>{formationSatisfied(detail) ? '✓' : formation ? '!' : '○'}</b><span>Certificate of Formation</span></button><small>{sole && !formation ? 'Not required (sole prop)' : !formation ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>
-                      {review === 'rejected' && <button type="button" className="tiny-confirm" onClick={sendFormationRejectedEmail} disabled={busy}>Send replacement request email</button>}
-                    </>;
-                  })()}
-                  {(() => {
-                    const approval = docFor(detail, 'uez_approval_email');
-                    const review = detail.application.uez_approval_review_status || 'not_reviewed';
-                    return <div className={`ops-doc-row reviewable-doc ${review === 'approved' ? 'ready' : review === 'rejected' ? 'bad' : approval ? 'review-pending' : ''}`}><button className="ops-doc-name" onClick={() => approval && previewDocument(approval)} disabled={!approval}><b>{review === 'approved' ? '✓' : approval ? '!' : '○'}</b><span>UEZ Approval Email</span></button><small>{!approval ? 'Missing' : review === 'approved' ? 'Approved' : review === 'rejected' ? 'Wrong document' : 'Review'}</small></div>;
-                  })()}
+                  {/* Formation and UEZ Approval Email removed — replaced by their ProcessStepCards below */}
                   {/* 'ldc_application' removed — replaced by the LDC Application ProcessStepCard below */}
                   {[
                     ['brc', 'BRC'],
@@ -1178,6 +1163,58 @@ export default function AdminPage() {
                 onClick: runLdcJotform,
                 disabled: busy
               }]}
+            />
+
+            <ProcessStepCard
+              stepKey="formation"
+              title="Formation"
+              busy={busy}
+              operational={resolveProcessStep('formation', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const formation = docFor(detail, 'formation');
+                const sole = detail.application.is_sole_proprietorship;
+                const review = detail.application.formation_review_status || 'not_reviewed';
+                if (sole && !formation) return <strong>Not required (sole proprietorship)</strong>;
+                if (!formation) return <strong>Missing</strong>;
+                return <button type="button" className="text-button" onClick={() => previewDocument(formation)}>
+                  {review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'} — {formation.filename}
+                </button>;
+              })()}
+              actions={detail.application.formation_review_status === 'rejected' ? [{
+                label: 'Send replacement request email',
+                hint: 'Shows you the exact email before it goes out.',
+                onClick: sendFormationRejectedEmail,
+                disabled: busy
+              }] : []}
+            />
+
+            <ProcessStepCard
+              stepKey="uez_enrollment"
+              title="UEZ Enrollment"
+              busy={busy}
+              operational={resolveProcessStep('uez_enrollment', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const approval = docFor(detail, 'uez_approval_email');
+                const review = detail.application.uez_approval_review_status || 'not_reviewed';
+                return <>
+                  <div className="process-step-inline-select">
+                    <label>UEZ status</label>
+                    <select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}>
+                      <option value="not_started">Not Started</option>
+                      <option value="applied">Applied</option>
+                      <option value="approved">Approved</option>
+                    </select>
+                  </div>
+                  {approval
+                    ? <button type="button" className="text-button" onClick={() => previewDocument(approval)}>
+                        {review === 'approved' ? '✓ Approval email approved' : review === 'rejected' ? '⚠ Approval email marked wrong' : '! Approval email needs review'} — {approval.filename}
+                      </button>
+                    : <small>No UEZ approval email yet</small>}
+                </>;
+              })()}
+              actions={[]}
             />
           </div>
 
