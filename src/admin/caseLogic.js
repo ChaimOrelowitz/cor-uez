@@ -10,10 +10,10 @@
 
 export const REQUIRED_GRANT_DOCUMENTS = [
   ['formation', 'Certificate of Formation'],
-  ['tax_clearance', 'Tax Clearance Letter'],
-  ['ldc_application', 'Signed LDC Application'],
   ['brc', 'Business Registration Certificate'],
-  ['uez_approval_email', 'UEZ Approval Email']
+  ['tax_clearance', 'Tax Clearance Letter'],
+  ['uez_approval_email', 'UEZ Approval Email'],
+  ['ldc_application', 'Signed LDC Application']
 ];
 
 export function statusLabel(status) {
