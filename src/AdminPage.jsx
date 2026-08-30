@@ -23,6 +23,7 @@ import {
   updateAdminApplicationStatus,
   updateAdminProcessFlags,
   saveAdminPayment,
+  requestAdminPayment,
   reviewAdminDocument,
   sendAdminApplicationEmail,
   updateAdminCaseNote,
@@ -875,6 +876,22 @@ export default function AdminPage() {
     finally { setBusy(false); }
   }
 
+  // Payment is penultimate now - the client sees no payment ask in their
+  // portal at all until this fires (payment_requested_at gates the whole
+  // payment card client-side, plus the server strips every other status/
+  // credential detail from their view until it's actually paid). Safe to
+  // click again later: it just re-sends the request and re-stamps the
+  // timestamp, the email itself is deduped by application id.
+  async function requestPayment() {
+    setBusy(true); setMessage('Requesting payment…');
+    try {
+      await requestAdminPayment(detail.application.id);
+      await refreshList(detail.application.id);
+      setMessage('Payment requested — the client can now see the payment ask in their portal.');
+    } catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
+  }
+
   async function saveProcessStep(stepKey, patch) {
     const applicationId = detail?.application?.id;
     if (!applicationId) return;
@@ -1302,12 +1319,19 @@ export default function AdminPage() {
               onSaveOperational={saveProcessStep}
               factsContent={(() => {
                 const latest = detail.payments?.[detail.payments.length - 1];
+                const requestedAt = detail.application.payment_requested_at;
                 return <>
                   <strong>{paymentStatusLabel(latest?.status)}</strong>
                   {latest?.amount != null && <small>${Number(latest.amount).toLocaleString()}{latest.payment_method ? ` · ${latest.payment_method}` : ''}</small>}
+                  <small>{requestedAt ? `Requested ${formatTimestamp(requestedAt)}` : 'Not yet requested — client sees no payment ask yet'}</small>
                 </>;
               })()}
               actions={[
+                {
+                  label: detail.application.payment_requested_at ? 'Re-request Payment' : 'Request Payment',
+                  onClick: requestPayment,
+                  disabled: busy
+                },
                 {
                   label: 'Confirm payment received',
                   onClick: confirmPayment,

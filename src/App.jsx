@@ -107,6 +107,18 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const approvalStageReached = app.pbs_status === 'account_created' || app.pbs_status === 'existing_account_reported' || app.pbs_status === 'uez_approval_uploaded' || app.status === 'waiting_for_uez_approval' || Boolean(approval);
   const taxIssueOpen = (app.tax_clearance_status || 'no') === 'issue';
   const taxRecheckRequested = Boolean(app.tax_clearance_recheck_requested_at);
+  // Payment is the penultimate step now, requested only once COR has done
+  // everything else - until it's actually paid, the client gets no status/
+  // progress detail (no BRC/tax/UEZ commentary, no MyNJ credentials, no
+  // Updates timeline), only the bare "please upload X" prompts this portal
+  // still needs to keep asking for what it needs from them. The backend
+  // already strips statusEvents/credentials server-side for this same
+  // reason (a client with dev tools open shouldn't see it just because the
+  // UI doesn't render it) - these two flags mirror that same boundary here.
+  const paid = latestPayment?.status === 'paid';
+  const paymentRequested = Boolean(app.payment_requested_at);
+  const actionNeeded = (formationRequired && !formation) || (formationRequired && formationReview === 'rejected')
+    || needsBrc || taxIssueOpen || (approvalStageReached && !approval) || approvalReview === 'rejected';
 
 
   useEffect(() => {
@@ -216,12 +228,14 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
           <div className="portal-status-row">
             <div>
               <span className="step-count">CURRENT STATUS</span>
-              <h2>{statusLabel(app.status)}</h2>
+              <h2>{paid ? statusLabel(app.status) : 'Application received'}</h2>
             </div>
-            <span className={`status-pill ${brcConfirmed ? 'good' : needsBrc ? 'warn' : ''}`}>{statusLabel(app.status)}</span>
+            {paid && <span className={`status-pill ${brcConfirmed ? 'good' : needsBrc ? 'warn' : ''}`}>{statusLabel(app.status)}</span>}
           </div>
 
           <div className="portal-section-head"><h3>What you need to do</h3></div>
+
+          {!paid && !actionNeeded && <p className="muted">Nothing needed from you right now — we'll be in touch by email if anything comes up.</p>}
 
           {formationRequired && !formation && <div className="action-panel warn-panel">
             <h3>Upload your Certificate of Formation <span className="required-star">*</span></h3>
@@ -232,12 +246,12 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
             </label>
           </div>}
 
-          {formationRequired && formation && formationReview === 'not_reviewed' && <div className="action-panel">
+          {paid && formationRequired && formation && formationReview === 'not_reviewed' && <div className="action-panel">
             <h3>Certificate of Formation uploaded</h3>
             <p>Under review.</p>
           </div>}
 
-          {formationRequired && formation && formationReview === 'approved' && <div className="action-panel good-panel">
+          {paid && formationRequired && formation && formationReview === 'approved' && <div className="action-panel good-panel">
             <h3>✓ Certificate of Formation accepted</h3>
           </div>}
 
@@ -277,12 +291,12 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
             </label>
           </div>}
 
-          {approval && approvalReview === 'not_reviewed' && <div className="action-panel">
+          {paid && approval && approvalReview === 'not_reviewed' && <div className="action-panel">
             <h3>UEZ approval email uploaded</h3>
             <p>Under review.</p>
           </div>}
 
-          {approval && approvalReview === 'approved' && <div className="action-panel good-panel">
+          {paid && approval && approvalReview === 'approved' && <div className="action-panel good-panel">
             <h3>✓ UEZ approval email accepted</h3>
           </div>}
 
@@ -298,14 +312,14 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
           {message && <div className="form-message portal-message">{message}</div>}
         </section>
 
-        <section className="wizard-card portal-card">
+        {paymentRequested && <section className="wizard-card portal-card">
           <div className="portal-section-head"><h3>Payment</h3><span>$500</span></div>
           {latestPayment?.status === 'paid' ? <div className="action-panel good-panel"><h3>✓ Payment received</h3></div>
             : latestPayment?.status === 'client_reported' ? <div className="action-panel"><h3>Payment reported</h3><p>You told COR the payment was sent. We are verifying it.</p></div>
             : <><p className="muted">After you send the $500 payment, click below.</p><button className="primary admin-full-button" onClick={reportPaymentSent} disabled={paymentBusy}>{paymentBusy ? 'Saving…' : 'I sent my payment'}</button></>}
-        </section>
+        </section>}
 
-        {myNjCredentials && <section className="wizard-card portal-card portal-wide mynj-card">
+        {paid && myNjCredentials && <section className="wizard-card portal-card portal-wide mynj-card">
           <div className="portal-section-head"><h3>MyNJ / PBS account information</h3><span>✓</span></div>
           <div className="credential-grid applicant-credential-grid">
             <div><span>MyNJ username</span><strong>{myNjCredentials.username}</strong></div>
@@ -317,7 +331,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
           <p className="muted credential-note">Keep this login information private. You may need it to access New Jersey services related to your application.</p>
         </section>}
 
-        <section className="wizard-card portal-card portal-wide">
+        {paid && <section className="wizard-card portal-card portal-wide">
           <div className="portal-section-head"><h3>Updates</h3></div>
           <div className="timeline">
             {[...bundle.statusEvents].reverse().map((event) => <div className="timeline-item" key={event.id}>
@@ -325,7 +339,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
               <div><strong>{event.label || statusLabel(event.status)}</strong><small>{new Date(event.created_at).toLocaleString()}</small></div>
             </div>)}
           </div>
-        </section>
+        </section>}
       </div>
     </main>
   </div>;

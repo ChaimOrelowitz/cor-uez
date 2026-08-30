@@ -253,6 +253,10 @@ export function saveAdminPayment(applicationId, payload) {
   });
 }
 
+export function requestAdminPayment(applicationId) {
+  return request(`/api/uez/admin/applications/${applicationId}/request-payment`, { method: 'POST' });
+}
+
 export function reviewAdminDocument(applicationId, documentId, decision) {
   return request(`/api/uez/admin/applications/${applicationId}/documents/${documentId}/review`, {
     method: 'POST',

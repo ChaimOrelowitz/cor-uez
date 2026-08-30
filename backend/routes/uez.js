@@ -5,7 +5,7 @@ const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
-const { safeSendApplicationEmail } = require('../services/uezEmail');
+const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
 
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
@@ -121,12 +121,27 @@ async function getApplicationBundle(application, user) {
   if (eventsResult.error) throw eventsResult.error;
   if (paymentsResult.error) throw paymentsResult.error;
 
+  const payments = paymentsResult.data || [];
+  const isAdmin = user.role === 'admin';
+  // Payment is now the penultimate step, requested only when an admin is
+  // ready - the client gets none of the narrative "here's how far along you
+  // are" detail until it's actually paid, only the bare "please upload X"
+  // prompts the App.jsx portal still needs to keep asking for what it needs.
+  // Stripped server-side, not just hidden in the UI, since a client with dev
+  // tools open could otherwise still read this off the network response.
+  const paid = payments[payments.length - 1]?.status === 'paid';
+  const statusEvents = isAdmin
+    ? (eventsResult.data || [])
+    : paid
+      ? (eventsResult.data || []).filter((event) => event.visible_to_applicant)
+      : [];
+
   return {
     application,
     owners: ownersResult.data || [],
     documents: docsResult.data || [],
-    statusEvents: (eventsResult.data || []).filter((event) => user.role === 'admin' || event.visible_to_applicant),
-    payments: paymentsResult.data || []
+    statusEvents,
+    payments
   };
 }
 
@@ -718,6 +733,21 @@ router.get('/applications/:id/credentials/mynj', async (req, res) => {
     const application = await getOwnedApplication(req.params.id, req.user);
     if (!application) return res.status(404).json({ error: 'Application not found' });
 
+    // Real login credentials to a state tax portal - never hand these to a
+    // non-admin caller until payment is actually confirmed, not just
+    // requested. Report "doesn't exist" rather than a 403 so the client's
+    // MyNJ card just quietly doesn't render, same as before any credentials
+    // were ever generated.
+    if (req.user.role !== 'admin') {
+      const { data: latestPayment, error: paymentError } = await supabase.from('uez_payments')
+        .select('status').eq('application_id', application.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (paymentError) throw paymentError;
+      if (latestPayment?.status !== 'paid') {
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ exists: false, credentials: null });
+      }
+    }
+
     const { data, error } = await supabase.from('uez_credentials')
       .select('*')
       .eq('application_id', application.id)
@@ -1014,6 +1044,40 @@ router.post('/applications/:id/tax-clearance-resolved', async (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// Payment is now the penultimate step, admin-triggered - the client sees no
+// payment ask at all until this fires. Separate from the PUT below, which
+// records an actual payment (client_reported/paid); this only asks for one.
+router.post('/admin/applications/:id/request-payment', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications').select('*').eq('id', req.params.id).single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase.from('uez_applications')
+      .update({ payment_requested_at: now })
+      .eq('id', application.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+
+    await addStatusEvent(application.id, 'payment_requested', 'Payment requested', 'COR requested the $500 service fee.', req.user.id, true);
+
+    await ensureTemplateExists('payment_requested', {
+      display_name: 'Payment requested',
+      description: 'Sent when an admin asks the client to pay the $500 service fee.',
+      sort_order: 90,
+      subject: 'Your $500 payment is due — COR UEZ Application',
+      body: 'Hi {{first_name}},\n\nWe have finished everything needed to move forward with {{business_name}}\'s UEZ enrollment and Lakewood UEZ Technology Grant application - the last step before we submit is collecting the $500 service fee.\n\nPlease send $500 via Zelle to 216-315-9824.\n\nOnce you have sent it, log in to your account and click "I sent my payment":\n{{account_url}}\n\nThank you,\nCOR Solutions'
+    });
+
+    const emailResult = await safeSendApplicationEmail(data, 'payment_requested', {
+      dedupeKey: `payment_requested:${application.id}`
+    });
+
+    res.json({ application: data, email: emailResult });
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 router.put('/admin/applications/:id/payment', requireUezAdmin, async (req, res) => {

@@ -184,10 +184,32 @@ async function safeSendApplicationEmail(application, templateKey, options = {}) 
   }
 }
 
+// There's no "add a new template" UI (Email Settings only edits existing rows,
+// see EmailSettingsPage.jsx), and this app has no seed/migration for template
+// *content* (only schema lives in backend/db/migrations). So a brand-new
+// template key needs to self-provision the first time anything tries to send
+// it, with sensible defaults - after that it's a normal row, editable via
+// Email Settings like every other template.
+async function ensureTemplateExists(templateKey, defaults) {
+  const { data: existing, error: checkError } = await supabase.from('uez_email_templates')
+    .select('template_key').eq('template_key', templateKey).maybeSingle();
+  if (checkError) throw checkError;
+  if (existing) return;
+  const { error: insertError } = await supabase.from('uez_email_templates').insert({
+    template_key: templateKey,
+    enabled: true,
+    ...defaults
+  });
+  // A concurrent request may have inserted it between our check and insert -
+  // the row exists either way, which is all that matters here.
+  if (insertError && !/duplicate|unique/i.test(insertError.message || '')) throw insertError;
+}
+
 module.exports = {
   getTemplates,
   updateTemplate,
   renderApplicationEmail,
   sendApplicationEmail,
-  safeSendApplicationEmail
+  safeSendApplicationEmail,
+  ensureTemplateExists
 };
