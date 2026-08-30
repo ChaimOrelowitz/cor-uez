@@ -1063,10 +1063,9 @@ export default function AdminPage() {
               <div className="ops-panel status-panel">
                 <div className="ops-panel-head"><h3>Status</h3></div>
                 <div className="compact-status-grid status-sort-list">
-                  {/* 'payment' and 'uez' removed from this list — replaced by their ProcessStepCards below */}
-                  {statusOrder.filter((key) => key !== 'payment' && key !== 'uez').map((key) => {
-                    const row = key === 'pbs' ? <><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></>
-                      : <><span>Tax clearance{detail.application.tax_clearance_recheck_requested_at ? <small className="tax-recheck-note">Client says resolved</small> : null}</span><div className="tiny-toggle tax-tristate"><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'no' ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'no')} disabled={busy}>No</button><button className={(detail.application.tax_clearance_status || 'no') === 'issue' ? 'active-warn' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'issue')} disabled={busy}>Issue</button><button className={(detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no')) === 'good' ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'good')} disabled={busy}>Good</button></div></>;
+                  {/* 'payment', 'uez', and 'tax' removed from this list — replaced by their ProcessStepCards below. Only 'pbs' left (last step still on the old grid). */}
+                  {statusOrder.filter((key) => key === 'pbs').map((key) => {
+                    const row = <><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></>;
                     return <div key={key} className="compact-status-item sortable-status-row" draggable onDragStart={() => setDragStatusKey(key)} onDragOver={(e) => e.preventDefault()} onDrop={() => dropStatus(key)}><i className="drag-handle" title="Drag to reorder">⋮⋮</i>{row}</div>;
                   })}
                 </div>
@@ -1075,14 +1074,8 @@ export default function AdminPage() {
               <div className="ops-panel documents-panel">
                 <div className="ops-panel-head"><h3>Documents</h3><span>{readyDocumentCount(detail)}/5 ready</span></div>
                 <div className="ops-doc-list">
-                  {/* Formation, UEZ Approval Email, and BRC removed — replaced by their ProcessStepCards below */}
+                  {/* Formation, UEZ Approval Email, BRC, and Tax Clearance removed — replaced by their ProcessStepCards below */}
                   {/* 'ldc_application' removed — replaced by the LDC Application ProcessStepCard below */}
-                  {[
-                    ['tax_clearance', 'Tax Clearance']
-                  ].map(([type, label]) => {
-                    const doc = docFor(detail, type);
-                    return <div key={type} className={`ops-doc-row ${doc ? 'ready' : ''}`}><button className="ops-doc-name" onClick={() => doc && previewDocument(doc)} disabled={!doc}><b>{doc ? '✓' : '○'}</b><span>{label}</span></button><small>{doc ? 'Received' : 'Missing'}</small></div>;
-                  })}
                 </div>
                 <div className="admin-manual-upload">
                   <div className="admin-manual-upload-head"><strong>Manual document upload</strong><small>Fallback / records</small></div>
@@ -1107,8 +1100,7 @@ export default function AdminPage() {
                   {/* 'FETCH BRC' removed — replaced by the BRC ProcessStepCard below */}
                   <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
                   <button className="ops-action primary" onClick={runPbsLogin} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
-                  <button className={`ops-action ${docFor(detail, 'tax_clearance') ? 'success-action' : 'primary'}`} onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>FETCH</span><strong>TAX CLEARANCE</strong></button>
-                  {/* 'FILL OUT LDC APP' removed — replaced by the LDC Application ProcessStepCard below */}
+                  {/* 'FETCH TAX CLEARANCE' and 'FILL OUT LDC APP' removed — replaced by their ProcessStepCards below */}
                   <button className={`ops-action ${detail.application.status === 'applied' ? 'success-action' : packetReady(detail) ? 'ready-action' : ''}`} onClick={runLakewoodGrantPortal} disabled={busy || !packetReady(detail) || detail.application.status === 'applied'}><span>SUBMIT</span><strong>GRANT APP</strong></button>
                 </div>
                 {grantSubmissionLikelyDetected(detail) && <div className="grant-confirm-banner">
@@ -1244,6 +1236,41 @@ export default function AdminPage() {
                   disabled: busy
                 }] : [])
               ]}
+            />
+
+            <ProcessStepCard
+              stepKey="tax_clearance"
+              title="Tax Clearance"
+              busy={busy}
+              operational={resolveProcessStep('tax_clearance', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const doc = docFor(detail, 'tax_clearance');
+                const issueDoc = docFor(detail, 'tax_clearance_issue');
+                const status = detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no');
+                return <>
+                  <div className="process-step-inline-select">
+                    <label>Tax clearance</label>
+                    <div className="tiny-toggle tax-tristate">
+                      <button className={status === 'no' ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'no')} disabled={busy}>No</button>
+                      <button className={status === 'issue' ? 'active-warn' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'issue')} disabled={busy}>Issue</button>
+                      <button className={status === 'good' ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'good')} disabled={busy}>Good</button>
+                    </div>
+                  </div>
+                  {detail.application.tax_clearance_recheck_requested_at && <small className="tax-recheck-note">Client says resolved</small>}
+                  {doc
+                    ? <button type="button" className="text-button" onClick={() => previewDocument(doc)}>✓ Tax clearance letter on file — {doc.filename}</button>
+                    : issueDoc
+                      ? <button type="button" className="text-button" onClick={() => previewDocument(issueDoc)}>⚠ Issue screenshot on file — {issueDoc.filename}</button>
+                      : <small>No tax clearance document yet</small>}
+                </>;
+              })()}
+              actions={[{
+                label: 'Fetch Tax Clearance',
+                hint: 'Runs the automated NJ tax-clearance request via the COR Chrome extension. On success, the letter is saved directly to this applicant’s UEZ file.',
+                onClick: runTaxClearance,
+                disabled: busy || !myNjCredentials
+              }]}
             />
           </div>
 
