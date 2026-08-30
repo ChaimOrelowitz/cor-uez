@@ -119,13 +119,22 @@
 }
 .admin-shell label { color: var(--admin-text-muted); font-size: var(--admin-font-size-small); margin: 10px 0 4px; }
 
+/* Fixed width, never sized to its own text — every pill on every card is the
+   same box, sitting the same distance from the card's right edge, whether
+   its label is "OK" or "HANDLED MANUALLY". Longer labels ellipsis inside the
+   box rather than stretching it. */
 .admin-shell .status-pill {
+  box-sizing: border-box;
+  width: 112px;
   border-radius: var(--admin-radius-pill);
   padding: 2px 7px;
   font-size: var(--admin-font-size-micro);
   background: var(--admin-surface-sunken);
   color: var(--admin-text-muted);
+  text-align: left;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   flex-shrink: 0;
 }
 .admin-shell .status-pill.good { background: var(--admin-good-bg); color: var(--admin-good-text); }
