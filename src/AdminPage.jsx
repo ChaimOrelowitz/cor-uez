@@ -1132,16 +1132,25 @@ export default function AdminPage() {
               factsContent={(() => {
                 const brc = docFor(detail, 'brc');
                 const status = detail.application.brc_status;
-                return <div className="doc-preview-row">
-                  <DocThumbnail doc={brc} applicationId={detail.application.id} onClick={() => brc && previewDocument(brc)} />
-                  {brc
-                    ? <small>✓ BRC on file — {brc.filename}</small>
-                    : status === 'not_found'
-                      ? <small>NJ did not find a matching BRC</small>
-                      : status && status !== 'pending'
-                        ? <small>{status.replace(/_/g, ' ')}</small>
-                        : <small>Not yet fetched</small>}
-                </div>;
+                const lastSent = lastEmailSent(detail, 'brc_not_found');
+                return <>
+                  <div className="doc-preview-row">
+                    <DocThumbnail doc={brc} applicationId={detail.application.id} onClick={() => brc && previewDocument(brc)} />
+                    {brc
+                      ? <small>✓ BRC on file — {brc.filename}</small>
+                      : status === 'not_found'
+                        ? <small>NJ did not find a matching BRC</small>
+                        : status && status !== 'pending'
+                          ? <small>{status.replace(/_/g, ' ')}</small>
+                          : <small>Not yet fetched</small>}
+                  </div>
+                  {lastSent && (
+                    <small className="email-sent-note">
+                      Email sent {formatTimestamp(lastSent.createdAt)}
+                      {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+                    </small>
+                  )}
+                </>;
               })()}
               actions={[
                 {
@@ -1150,7 +1159,7 @@ export default function AdminPage() {
                   disabled: busy
                 },
                 ...(detail.application.brc_status === 'not_found' ? [{
-                  label: 'Send BRC problem email',
+                  label: 'Send BRC Email',
                   onClick: sendBrcProblemEmail,
                   disabled: busy
                 }] : [])
@@ -1237,7 +1246,7 @@ export default function AdminPage() {
                       </div>
                     : <small>No tax clearance document yet</small>}
                   {lastSent && (
-                    <small className="tax-email-sent-note">
+                    <small className="email-sent-note">
                       Email sent {formatTimestamp(lastSent.createdAt)}
                       {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
                     </small>
