@@ -396,6 +396,18 @@ describe('filterAndSortApplications', () => {
     const ordered = filterAndSortApplications(applications, 'all', '').map((a) => a.id);
     expect(ordered).toEqual(['b', 'a', 'c']);
   });
+
+  it('within the same bucket, ties break on created_at, not updated_at', () => {
+    // Two same-bucket cases where "x" was touched most recently (bigger
+    // updated_at) but signed up after "y". If updated_at were still the
+    // tiebreaker, "x" would jump ahead of "y" just from being clicked on —
+    // the exact "order keeps jumping around" bug. created_at is stable.
+    const sameBucket = [
+      { id: 'x', business_name_input: 'X Co', submitted_at: '2026-01-01', created_at: '2026-01-05', updated_at: '2026-02-01', document_types: [] },
+      { id: 'y', business_name_input: 'Y Co', submitted_at: '2026-01-01', created_at: '2026-01-02', updated_at: '2026-01-03', document_types: [] }
+    ];
+    expect(filterAndSortApplications(sameBucket, 'all', '').map((a) => a.id)).toEqual(['y', 'x']);
+  });
 });
 
 describe('adminQueueInfo stepKey', () => {

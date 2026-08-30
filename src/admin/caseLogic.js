@@ -382,8 +382,13 @@ export function filterAndSortApplications(applications, filter, search) {
       const bucketDelta = (bucketPriority[qa.bucket] ?? 9) - (bucketPriority[qb.bucket] ?? 9);
       if (bucketDelta) return bucketDelta;
       if (qa.rank !== qb.rank) return qa.rank - qb.rank;
-      const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
-      const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+      // created_at, not updated_at: nearly every admin action on a case
+      // bumps updated_at, and this tiebreaker used to run on that value —
+      // so touching a case (a status click, an email send, anything)
+      // reshuffled its position in the list on the very next refetch.
+      // created_at never changes after signup, so ties now stay put.
+      const aTime = new Date(a.created_at || 0).getTime();
+      const bTime = new Date(b.created_at || 0).getTime();
       return aTime - bTime;
     });
 }
