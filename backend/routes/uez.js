@@ -1158,9 +1158,38 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       ssn: decryptText(owner.ssn_enc)
     }));
 
+    // adminStageLabel/adminQueueInfo/attentionItems (src/admin/caseLogic.js) all
+    // read application.document_types, .required_document_ready_count, and
+    // .payment_status - the list endpoint above computes these per row, but this
+    // single-application `application` is just the raw uez_applications row, so
+    // those fields were silently missing here. That's not cosmetic: with
+    // document_types undefined, every types.has(...) check in those functions is
+    // always false, so the Recommended-action banner and "Needs attention" strip
+    // on the case page itself (not the sidebar) treated every document as
+    // missing regardless of what's actually on file - e.g. recommending "Fetch
+    // BRC" after the BRC was already found and on the BRC card, or never
+    // surfacing "Confirm payment"/"Waiting for payment" at all. Compute the same
+    // fields the same way the list endpoint does so the case page agrees with
+    // what it's actually showing.
+    const docTypes = new Set((docsResult.data || []).map((doc) => doc.document_type));
+    const formationReady = application.is_sole_proprietorship
+      || (docTypes.has('formation') && application.formation_review_status === 'approved');
+    const requiredDocumentReadyCount = (formationReady ? 1 : 0)
+      + (docTypes.has('brc') ? 1 : 0)
+      + (docTypes.has('uez_approval_email') && application.uez_approval_review_status === 'approved' ? 1 : 0)
+      + (docTypes.has('tax_clearance') ? 1 : 0)
+      + (docTypes.has('ldc_application') ? 1 : 0);
+    const latestPayment = (paymentsResult.data || [])[(paymentsResult.data || []).length - 1];
+
     res.setHeader('Cache-Control', 'no-store');
     res.json({
-      application,
+      application: {
+        ...application,
+        document_types: [...docTypes],
+        required_document_ready_count: requiredDocumentReadyCount,
+        payment_status: latestPayment?.status || null,
+        payment_amount: latestPayment?.amount || null
+      },
       owners,
       documents: docsResult.data || [],
       statusEvents: eventsResult.data || [],
