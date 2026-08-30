@@ -667,9 +667,8 @@
 .process-step-facts small { display: block; color: #8b91a2; font-size: 11px; margin-top: 2px; }
 .process-step-operational { border-top: 1px solid #edf0f5; padding-top: 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .process-step-byline { color: #7a8194; font-size: 11px; }
-.process-step-actions { display: flex; flex-direction: column; gap: 8px; }
-.process-step-action { display: flex; flex-direction: column; gap: 2px; }
-.process-step-action .ops-action { width: 100%; text-align: center; }
+.process-step-actions { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.process-step-action .ops-action { width: auto; text-align: center; }
 .process-step-inline-select { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .process-step-inline-select label { font-size: 11px; color: #7a8194; font-weight: 700; }
 .process-step-inline-select select { padding: 4px 7px; font-size: 12px; border-radius: 7px; border: 1px solid #d8dee7; }
