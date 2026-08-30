@@ -306,3 +306,10 @@ export function deleteAdminCaseNote(applicationId, noteId) {
     method: 'DELETE'
   });
 }
+
+export function updateAdminProcessStep(applicationId, stepKey, payload) {
+  return request(`/api/uez/admin/applications/${applicationId}/process-steps/${encodeURIComponent(stepKey)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}

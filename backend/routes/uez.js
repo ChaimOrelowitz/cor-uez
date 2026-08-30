@@ -1124,12 +1124,13 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
-    const [ownersResult, docsResult, eventsResult, paymentsResult, caseNotesResult] = await Promise.all([
+    const [ownersResult, docsResult, eventsResult, paymentsResult, caseNotesResult, processStepsResult] = await Promise.all([
       supabase.from('uez_owners').select('*').eq('application_id', application.id).order('owner_order'),
       supabase.from('uez_documents').select('id, document_type, filename, source, status, metadata, created_at').eq('application_id', application.id).order('created_at'),
       supabase.from('uez_status_events').select('*').eq('application_id', application.id).order('created_at'),
       supabase.from('uez_payments').select('id, amount, payment_date, payment_method, reference, notes, status, refund_amount, refunded_at, created_at').eq('application_id', application.id).order('created_at'),
-      supabase.from('uez_case_notes').select('*').eq('application_id', application.id).order('created_at', { ascending: false })
+      supabase.from('uez_case_notes').select('*').eq('application_id', application.id).order('created_at', { ascending: false }),
+      supabase.from('uez_process_steps').select('*').eq('application_id', application.id)
     ]);
 
     if (ownersResult.error) throw ownersResult.error;
@@ -1137,6 +1138,7 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
     if (eventsResult.error) throw eventsResult.error;
     if (paymentsResult.error) throw paymentsResult.error;
     if (caseNotesResult.error) throw caseNotesResult.error;
+    if (processStepsResult.error) throw processStepsResult.error;
 
     const owners = (ownersResult.data || []).map((owner) => ({
       id: owner.id,
@@ -1164,7 +1166,8 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       documents: docsResult.data || [],
       statusEvents: eventsResult.data || [],
       payments: paymentsResult.data || [],
-      notes: await attachAuthorNames(caseNotesResult.data || [])
+      notes: await attachAuthorNames(caseNotesResult.data || []),
+      processSteps: await attachUserNames(processStepsResult.data || [], 'updated_by', 'updated_by_name')
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1427,19 +1430,26 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
 // wrote on purpose, Activity is what the system/platform did. Notes are never
 // cross-logged into Activity, to keep the Activity trail from getting noisy.
 
-async function attachAuthorNames(notes) {
-  const list = notes || [];
-  const authorIds = [...new Set(list.map((note) => note.author_id).filter(Boolean))];
-  if (!authorIds.length) return list.map((note) => ({ ...note, author_name: null }));
+// Generalized from the original notes-only "attachAuthorNames" so
+// uez_process_steps rows can resolve `updated_by` -> `updated_by_name` the
+// same way notes resolve `author_id` -> `author_name`, without a near-duplicate.
+async function attachUserNames(rows, idKey, nameKey) {
+  const list = rows || [];
+  const userIds = [...new Set(list.map((row) => row[idKey]).filter(Boolean))];
+  if (!userIds.length) return list.map((row) => ({ ...row, [nameKey]: null }));
   const { data: profiles } = await supabase.from('profiles')
     .select('id, first_name, last_name, email')
-    .in('id', authorIds);
+    .in('id', userIds);
   const byId = new Map((profiles || []).map((profile) => [profile.id, profile]));
-  return list.map((note) => {
-    const profile = byId.get(note.author_id);
+  return list.map((row) => {
+    const profile = byId.get(row[idKey]);
     const name = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() : '';
-    return { ...note, author_name: name || profile?.email || null };
+    return { ...row, [nameKey]: name || profile?.email || null };
   });
+}
+
+async function attachAuthorNames(notes) {
+  return attachUserNames(notes, 'author_id', 'author_name');
 }
 
 router.get('/admin/applications/:id/notes', requireUezAdmin, async (req, res) => {
@@ -1505,6 +1515,77 @@ router.delete('/admin/applications/:id/notes/:noteId', requireUezAdmin, async (r
       .single();
     if (error || !data) return res.status(404).json({ error: 'Note not found' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// --- Process steps: Chaim's own operational verdict per workflow step ---------
+// Purely an overlay on top of the existing factual columns (brc_status,
+// tax_clearance_status, etc.) — never a replacement for them. No row here
+// means "derive a display default from the facts" (see caseLogic.js
+// deriveDefaultProcessStep on the frontend); this table only exists for the
+// cases where Chaim's own read of the case differs from what the facts alone
+// would suggest, or where he wants to record a reason/manual note.
+const PROCESS_STEP_KEYS = ['formation', 'brc', 'pbs_mynj', 'tax_clearance', 'uez_enrollment', 'ldc_application', 'grant_submission', 'payment'];
+const PROCESS_STEP_STATES = ['not_started', 'in_progress', 'waiting', 'complete', 'not_applicable', 'manual'];
+const WAITING_ON_VALUES = ['applicant', 'accountant', 'nj_state', 'document', 'cor_follow_up'];
+const PROCESS_STEP_LABELS = {
+  formation: 'Formation', brc: 'BRC', pbs_mynj: 'PBS / MyNJ', tax_clearance: 'Tax clearance',
+  uez_enrollment: 'UEZ enrollment', ldc_application: 'LDC application', grant_submission: 'Grant submission', payment: 'Payment'
+};
+
+router.put('/admin/applications/:id/process-steps/:stepKey', requireUezAdmin, async (req, res) => {
+  try {
+    const stepKey = req.params.stepKey;
+    if (!PROCESS_STEP_KEYS.includes(stepKey)) return res.status(404).json({ error: 'Unknown process step.' });
+
+    const body = req.body || {};
+    const state = String(body.state || '').trim();
+    if (!PROCESS_STEP_STATES.includes(state)) {
+      return res.status(400).json({ error: `State must be one of: ${PROCESS_STEP_STATES.join(', ')}.` });
+    }
+    if (body.waitingOn && !WAITING_ON_VALUES.includes(body.waitingOn)) {
+      return res.status(400).json({ error: `waitingOn must be one of: ${WAITING_ON_VALUES.join(', ')}.` });
+    }
+    if (body.waitingOn && state !== 'waiting') {
+      return res.status(400).json({ error: 'waitingOn can only be set when state is "waiting".' });
+    }
+
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('id').eq('id', req.params.id).single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const isWaiting = state === 'waiting';
+    const row = {
+      application_id: application.id,
+      step_key: stepKey,
+      state,
+      waiting_on: isWaiting ? (body.waitingOn || null) : null,
+      waiting_since: isWaiting ? (body.waitingSince || null) : null,
+      waiting_reason: isWaiting ? (body.waitingReason || null) : null,
+      manual_note: typeof body.manualNote === 'string' ? body.manualNote : null,
+      updated_by: req.user.id,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase.from('uez_process_steps')
+      .upsert(row, { onConflict: 'application_id,step_key' })
+      .select('*')
+      .single();
+    if (error) throw error;
+
+    await addStatusEvent(
+      application.id,
+      'process_step_updated',
+      `${PROCESS_STEP_LABELS[stepKey] || stepKey} marked ${state.replace('_', ' ')}`,
+      body.manualNote || body.waitingReason || null,
+      req.user.id,
+      false
+    );
+
+    const [withName] = await attachUserNames([data], 'updated_by', 'updated_by_name');
+    res.json(withName);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
