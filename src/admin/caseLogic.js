@@ -421,6 +421,24 @@ export const PROCESS_STEP_KEYS = [
 export const PROCESS_STEP_STATES = ['not_started', 'in_progress', 'waiting', 'complete', 'not_applicable', 'manual'];
 export const WAITING_ON_VALUES = ['applicant', 'accountant', 'nj_state', 'document', 'cor_follow_up'];
 
+// The exact title each step's ProcessStepCard renders — single source of
+// truth so the card and the at-a-glance status overview never drift.
+export const PROCESS_STEP_TITLES = {
+  formation: 'Certificate of Formation',
+  brc: 'BRC',
+  pbs_mynj: 'PBS / MyNJ',
+  tax_clearance: 'Tax Clearance',
+  uez_enrollment: 'UEZ Enrollment',
+  ldc_application: 'LDC Application',
+  payment: 'Payment',
+  grant_submission: 'Grant Submission'
+};
+
+export const PROCESS_STEP_STATE_LABELS = {
+  not_started: 'Not started', in_progress: 'In progress', waiting: 'Waiting',
+  complete: 'Complete', not_applicable: 'Not applicable', manual: 'Handled manually'
+};
+
 // Derives a sensible display default for one step from the existing Facts
 // columns/documents — used only when uez_process_steps has no explicit row
 // for (application, stepKey) yet. `detail` is the same {application, documents,

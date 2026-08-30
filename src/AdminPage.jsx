@@ -31,7 +31,6 @@ import {
   whoAmI
 } from './api';
 import {
-  adminQueueInfo,
   applicationDraftFrom,
   attentionItems,
   docFor,
@@ -47,6 +46,7 @@ import {
   packetReady,
   paymentStatusLabel,
   pbsAccountGateReason,
+  PROCESS_STEP_TITLES,
   queueCounts,
   readyDocumentCount,
   resolveProcessStep,
@@ -63,8 +63,8 @@ import MyNjPbsCard from './admin/MyNjPbsCard';
 import NotesPanel from './admin/NotesPanel';
 import OwnersCard from './admin/OwnersCard';
 import PaymentCard from './admin/PaymentCard';
+import ProcessStatusOverview from './admin/ProcessStatusOverview';
 import ProcessStepCard from './admin/ProcessStepCard';
-import RecommendedActionBanner from './admin/RecommendedActionBanner';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
@@ -1061,13 +1061,12 @@ export default function AdminPage() {
             <button className="admin-delete-button" onClick={deleteApplication} disabled={busy}>Delete application</button>
           </div>
 
-          <RecommendedActionBanner queue={adminQueueInfo(detail.application)} />
+          <ProcessStatusOverview detail={detail} />
 
-          {/* attentionItems and adminQueueInfo's top tier share one
-              definition (URGENT_REVIEW_ITEMS in caseLogic.js) so this strip
-              and the banner above it can't drift out of sync with each
-              other — the strip shows every open urgent item, the banner
-              above picks the single highest-priority one. */}
+          {/* attentionItems' checks are the same URGENT_REVIEW_ITEMS
+              definition (caseLogic.js) that used to also drive the
+              recommended-action banner before it was replaced above — this
+              strip shows every open urgent item that needs a human look. */}
           {attentionItems(detail).length > 0 && <div className="ops-attention-strip">
             <strong>Needs attention</strong>
             <div>{attentionItems(detail).map((item) => <span key={item}>{item}</span>)}</div>
@@ -1083,7 +1082,7 @@ export default function AdminPage() {
           <div className="process-step-grid">
             <ProcessStepCard
               stepKey="formation"
-              title="Certificate of Formation"
+              title={PROCESS_STEP_TITLES.formation}
               busy={busy}
               operational={resolveProcessStep('formation', detail)}
               onSaveOperational={saveProcessStep}
@@ -1109,7 +1108,7 @@ export default function AdminPage() {
 
             <ProcessStepCard
               stepKey="brc"
-              title="BRC"
+              title={PROCESS_STEP_TITLES.brc}
               busy={busy}
               operational={resolveProcessStep('brc', detail)}
               onSaveOperational={saveProcessStep}
@@ -1143,7 +1142,7 @@ export default function AdminPage() {
 
             <ProcessStepCard
               stepKey="pbs_mynj"
-              title="PBS / MyNJ"
+              title={PROCESS_STEP_TITLES.pbs_mynj}
               busy={busy}
               operational={resolveProcessStep('pbs_mynj', detail)}
               onSaveOperational={saveProcessStep}
@@ -1194,7 +1193,7 @@ export default function AdminPage() {
 
             <ProcessStepCard
               stepKey="tax_clearance"
-              title="Tax Clearance"
+              title={PROCESS_STEP_TITLES.tax_clearance}
               busy={busy}
               operational={resolveProcessStep('tax_clearance', detail)}
               onSaveOperational={saveProcessStep}
@@ -1244,7 +1243,7 @@ export default function AdminPage() {
 
             <ProcessStepCard
               stepKey="uez_enrollment"
-              title="UEZ Enrollment"
+              title={PROCESS_STEP_TITLES.uez_enrollment}
               busy={busy}
               operational={resolveProcessStep('uez_enrollment', detail)}
               onSaveOperational={saveProcessStep}
@@ -1277,7 +1276,7 @@ export default function AdminPage() {
 
             <ProcessStepCard
               stepKey="ldc_application"
-              title="LDC Application"
+              title={PROCESS_STEP_TITLES.ldc_application}
               busy={busy}
               operational={resolveProcessStep('ldc_application', detail)}
               onSaveOperational={saveProcessStep}
@@ -1297,7 +1296,7 @@ export default function AdminPage() {
 
             <ProcessStepCard
               stepKey="payment"
-              title="Payment"
+              title={PROCESS_STEP_TITLES.payment}
               busy={busy}
               operational={resolveProcessStep('payment', detail)}
               onSaveOperational={saveProcessStep}
@@ -1324,7 +1323,7 @@ export default function AdminPage() {
 
             <ProcessStepCard
               stepKey="grant_submission"
-              title="Grant Submission"
+              title={PROCESS_STEP_TITLES.grant_submission}
               busy={busy}
               operational={resolveProcessStep('grant_submission', detail)}
               onSaveOperational={saveProcessStep}

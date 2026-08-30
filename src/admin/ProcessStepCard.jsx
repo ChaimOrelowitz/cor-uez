@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PROCESS_STEP_STATES, formatTimestamp } from './caseLogic';
+import { PROCESS_STEP_STATES, PROCESS_STEP_STATE_LABELS as STATE_LABELS, formatTimestamp } from './caseLogic';
 
 // One component, driven by props, reused for all 8 steps — not 8 bespoke
 // components — so there's one place to keep the layout consistent and one
@@ -12,10 +12,6 @@ import { PROCESS_STEP_STATES, formatTimestamp } from './caseLogic';
 // card only ever writes a bare state change now. Any previously-saved
 // waitingOn/waitingReason still displays in the byline below (historical
 // data, read-only here), it just can't be set from this control anymore.
-const STATE_LABELS = {
-  not_started: 'Not started', in_progress: 'In progress', waiting: 'Waiting',
-  complete: 'Complete', not_applicable: 'Not applicable', manual: 'Handled manually'
-};
 const WAITING_ON_LABELS = {
   applicant: 'Waiting on applicant', accountant: 'Waiting on accountant',
   nj_state: 'Waiting on NJ State', document: 'Waiting on document', cor_follow_up: 'Waiting on me'

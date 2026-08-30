@@ -231,25 +231,8 @@
 .admin-shell .ops-attention-strip span { background: var(--admin-surface); border-color: var(--admin-warn-border); color: var(--admin-warn-text); }
 .admin-shell .attention-dot { background: var(--admin-warn-text); }
 
-.admin-shell .recommended-action-banner { border-radius: var(--admin-radius-md); box-shadow: var(--admin-shadow); border-color: var(--admin-border); }
-.admin-shell .recommended-action-label, .admin-shell .recommended-action-stage { color: var(--admin-text-faint); }
-.admin-shell .recommended-action-body strong { color: var(--admin-text); font-size: var(--admin-font-size-h2); }
-.admin-shell .recommended-action-banner > i { background: var(--admin-border-strong); }
-.admin-shell .recommended-action-banner.tone-danger { border-color: var(--admin-danger-border); background: var(--admin-danger-bg); }
-.admin-shell .recommended-action-banner.tone-danger > i { background: var(--admin-danger-text); }
-.admin-shell .recommended-action-banner.tone-danger strong { color: var(--admin-danger-text); }
-.admin-shell .recommended-action-banner.tone-warn { border-color: var(--admin-warn-border); background: var(--admin-warn-bg); }
-.admin-shell .recommended-action-banner.tone-warn > i { background: var(--admin-warn-text); }
-.admin-shell .recommended-action-banner.tone-warn strong { color: var(--admin-warn-text); }
-.admin-shell .recommended-action-banner.tone-ready,
-.admin-shell .recommended-action-banner.tone-submitted { border-color: var(--admin-good-border); background: var(--admin-good-bg); }
-.admin-shell .recommended-action-banner.tone-ready > i,
-.admin-shell .recommended-action-banner.tone-submitted > i { background: var(--admin-good-text); }
-.admin-shell .recommended-action-banner.tone-ready strong,
-.admin-shell .recommended-action-banner.tone-submitted strong { color: var(--admin-good-text); }
-.admin-shell .recommended-action-secondary.tone-danger { color: var(--admin-danger-text); }
-.admin-shell .recommended-action-secondary.tone-warn { color: var(--admin-warn-text); }
-.admin-shell .recommended-action-secondary.tone-quiet { color: var(--admin-text-faint); }
+.admin-shell .process-status-item { background: var(--admin-surface); border-color: var(--admin-border); border-radius: var(--admin-radius-md); }
+.admin-shell .process-status-title { color: var(--admin-text-muted); }
 
 /* ---- 5. Card/panel family (process cards, ops panels, admin cards) ------ */
 
