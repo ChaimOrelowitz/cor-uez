@@ -700,4 +700,47 @@
 .queue-next-action.submitted i { background: #56a66f; }
 .queue-submitted { background: #fbfdfb; }
 
+/* Recommended-action banner — same tone palette as the sidebar's queue-next-action,
+   just surfaced prominently on the case page instead of one row at a time in a list. */
+.recommended-action-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 14px;
+  padding: 13px 16px;
+  border: 1px solid #dfe5ec;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(30, 45, 65, .05);
+}
+.recommended-action-banner > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #aeb3c0;
+  flex: 0 0 auto;
+}
+.recommended-action-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.recommended-action-label { font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #9a9faf; }
+.recommended-action-body strong { font-size: 16px; font-weight: 800; color: #263448; }
+.recommended-action-stage { margin-left: auto; flex: 0 0 auto; font-size: 10px; font-weight: 900; letter-spacing: .045em; color: #9a9faf; white-space: nowrap; }
+
+.recommended-action-banner.tone-danger { border-color: #f0c9c4; background: #fff8f7; }
+.recommended-action-banner.tone-danger > i { background: #d45f54; }
+.recommended-action-banner.tone-danger strong { color: #a2473e; }
+
+.recommended-action-banner.tone-warn { border-color: #efd99f; background: #fffaf0; }
+.recommended-action-banner.tone-warn > i { background: #dba545; }
+.recommended-action-banner.tone-warn strong { color: #98691f; }
+
+.recommended-action-banner.tone-ready { border-color: #bfd3c3; background: #f6fbf7; }
+.recommended-action-banner.tone-ready > i { background: #3ba167; }
+.recommended-action-banner.tone-ready strong { color: #247e4d; }
+
+.recommended-action-banner.tone-submitted { border-color: #cfe4d6; background: #fbfdfb; }
+.recommended-action-banner.tone-submitted > i { background: #56a66f; }
+.recommended-action-banner.tone-submitted strong { color: #357a52; }
+
+.recommended-action-banner.tone-quiet strong { color: #55596b; }
+
 .pbs-account-question .pbs-check-link{display:inline-block;margin-top:10px;font-weight:700}.pbs-existing-login-grid{margin-top:14px}.admin-pbs-answer-box{border:1px solid #d9dee8;border-radius:14px;padding:14px;margin-bottom:14px;background:#f8fafc}.admin-pbs-answer-box>label{display:block;font-weight:800;margin-bottom:7px}.admin-pbs-answer-box>select{width:100%;margin-bottom:10px}

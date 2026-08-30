@@ -30,6 +30,7 @@ import {
   whoAmI
 } from './api';
 import {
+  adminQueueInfo,
   applicationDraftFrom,
   attentionItems,
   docFor,
@@ -57,6 +58,7 @@ import MyNjPbsCard from './admin/MyNjPbsCard';
 import NotesPanel from './admin/NotesPanel';
 import OwnersCard from './admin/OwnersCard';
 import PaymentCard from './admin/PaymentCard';
+import RecommendedActionBanner from './admin/RecommendedActionBanner';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
@@ -1037,6 +1039,8 @@ export default function AdminPage() {
             </> : <button className="secondary" onClick={startEditing} disabled={busy}>Edit application</button>}
             <button className="admin-delete-button" onClick={deleteApplication} disabled={busy}>Delete application</button>
           </div>
+
+          <RecommendedActionBanner queue={adminQueueInfo(detail.application)} />
 
           <section className="ops-cockpit">
             {attentionItems(detail).length > 0 && <div className="ops-attention-strip">
