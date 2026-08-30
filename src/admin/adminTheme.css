@@ -119,7 +119,15 @@
 }
 .admin-shell label { color: var(--admin-text-muted); font-size: var(--admin-font-size-small); margin: 10px 0 4px; }
 
-.admin-shell .status-pill { border-radius: var(--admin-radius-pill); padding: 4px 8px; font-size: var(--admin-font-size-small); background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-shell .status-pill {
+  border-radius: var(--admin-radius-pill);
+  padding: 2px 7px;
+  font-size: var(--admin-font-size-micro);
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .admin-shell .status-pill.good { background: var(--admin-good-bg); color: var(--admin-good-text); }
 .admin-shell .status-pill.warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
 
@@ -131,13 +139,13 @@
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
-  padding: 4px 20px 4px 8px;
+  padding: 2px 15px 2px 7px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .02em;
   background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: right 9px top 55%, right 5px top 55%;
-  background-size: 5px 5px, 5px 5px;
+  background-position: right 7px top 50%, right 3px top 50%;
+  background-size: 4px 4px, 4px 4px;
   background-repeat: no-repeat;
 }
 .admin-shell select.status-pill:hover:not(:disabled) { border-color: var(--admin-border-strong); }
@@ -244,12 +252,26 @@
   background: var(--admin-surface);
 }
 .admin-shell .admin-card-head { border-bottom-color: var(--admin-border); }
-.admin-shell .admin-card-head h3 { font-size: var(--admin-font-size-h2); text-align: left; }
+.admin-shell .admin-card-head h3 {
+  font-size: var(--admin-font-size-h2);
+  text-align: left;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .admin-shell .admin-card-head > span:not(.status-pill) { color: var(--admin-text-faint); }
 .admin-shell .admin-secondary-card { box-shadow: none; }
 .admin-shell .admin-accordion { border-color: var(--admin-border); border-radius: var(--admin-radius-md); }
-.admin-shell .admin-accordion > summary strong { text-align: left; }
-.admin-shell .admin-accordion > summary span { color: var(--admin-text-faint); }
+.admin-shell .admin-accordion > summary { gap: 8px; }
+.admin-shell .admin-accordion > summary strong {
+  text-align: left;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-shell .admin-accordion > summary span { color: var(--admin-text-faint); white-space: nowrap; flex-shrink: 0; }
 .admin-shell .admin-accordion > summary:after { color: var(--admin-text-faint); }
 
 .admin-shell .process-step-card, .admin-shell .ops-panel {
@@ -259,7 +281,15 @@
   padding: 10px;
   background: var(--admin-surface);
 }
-.admin-shell .process-step-head h4, .admin-shell .ops-panel-head h3 { font-size: var(--admin-font-size-h3); color: var(--admin-text); text-align: left; }
+.admin-shell .process-step-head h4, .admin-shell .ops-panel-head h3 {
+  font-size: var(--admin-font-size-h3);
+  color: var(--admin-text);
+  text-align: left;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .admin-shell .process-step-facts { color: var(--admin-text); }
 .admin-shell .process-step-facts small { color: var(--admin-text-faint); }
 .admin-shell .process-step-operational { border-top-color: var(--admin-border); }
