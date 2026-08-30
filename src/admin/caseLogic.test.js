@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  PROCESS_STEP_KEYS,
   adminQueueInfo,
   attentionItems,
+  deriveDefaultProcessStep,
   documentLabel,
   filterAndSortApplications,
   formatDob,
@@ -10,8 +12,10 @@ import {
   formatTimestamp,
   formationSatisfied,
   grantSubmissionLikelyDetected,
+  grantSubmitGateReason,
   packetReady,
   paymentStatusLabel,
+  pbsAccountGateReason,
   queueCounts,
   readyDocumentCount,
   uezStatusLabel
@@ -127,11 +131,6 @@ describe('attentionItems', () => {
     expect(items).toContain('Client says payment was sent');
     expect(items).toContain('Client says BRC was created — recheck BRC');
     expect(items).toContain('Client says the tax-clearance issue is resolved — recheck Tax Clearance');
-  });
-
-  it('flags an unreviewed tax clearance letter', () => {
-    const detail = { application: { tax_clearance_status: 'submitted_checking' }, documents: [], payments: [] };
-    expect(attentionItems(detail)).toContain('Review tax clearance letter');
   });
 
   it('returns nothing for a clean, fully-reviewed case', () => {
@@ -274,5 +273,87 @@ describe('filterAndSortApplications', () => {
     // priority must still win over recency.
     const ordered = filterAndSortApplications(applications, 'all', '').map((a) => a.id);
     expect(ordered).toEqual(['b', 'a', 'c']);
+  });
+});
+
+describe('adminQueueInfo stepKey', () => {
+  it('points the recommended-action banner at the right process card', () => {
+    expect(adminQueueInfo({ submitted_at: '2026-01-01', payment_status: 'client_reported' }).stepKey).toBe('payment');
+    expect(adminQueueInfo({ submitted_at: '2026-01-01', document_types: [] }).stepKey).toBe('brc');
+    expect(adminQueueInfo({ submitted_at: null }).stepKey).toBeNull();
+  });
+});
+
+describe('deriveDefaultProcessStep', () => {
+  it('formation: sole prop with no document is not_applicable, not a blocker', () => {
+    const detail = { application: { is_sole_proprietorship: true }, documents: [] };
+    expect(deriveDefaultProcessStep('formation', detail)).toEqual({ state: 'not_applicable', waitingOn: null });
+  });
+
+  it('formation: non-sole-prop with no document is not_started; rejected doc is waiting on the applicant', () => {
+    const noDoc = { application: { is_sole_proprietorship: false }, documents: [] };
+    expect(deriveDefaultProcessStep('formation', noDoc)).toEqual({ state: 'not_started', waitingOn: null });
+
+    const rejected = { application: { formation_review_status: 'rejected' }, documents: [{ document_type: 'formation' }] };
+    expect(deriveDefaultProcessStep('formation', rejected)).toEqual({ state: 'waiting', waitingOn: 'document' });
+  });
+
+  it('brc: found is complete, not_found waits on NJ state, mid-flight is in_progress', () => {
+    expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'found' } })).toEqual({ state: 'complete', waitingOn: null });
+    expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'not_found' } })).toEqual({ state: 'waiting', waitingOn: 'nj_state' });
+    expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'checking' } })).toEqual({ state: 'in_progress', waitingOn: null });
+    expect(deriveDefaultProcessStep('brc', { application: {} })).toEqual({ state: 'not_started', waitingOn: null });
+  });
+
+  it('pbs_mynj: unanswered existing-account question waits on the applicant', () => {
+    expect(deriveDefaultProcessStep('pbs_mynj', { application: { has_existing_pbs_account: null } })).toEqual({ state: 'waiting', waitingOn: 'applicant' });
+    expect(deriveDefaultProcessStep('pbs_mynj', { application: { pbs_account_created: true } })).toEqual({ state: 'complete', waitingOn: null });
+  });
+
+  it('tax_clearance: issue with a recheck request is in_progress, without one is waiting on the applicant', () => {
+    const withRecheck = { application: { tax_clearance_status: 'issue', tax_clearance_recheck_requested_at: '2026-08-01' } };
+    expect(deriveDefaultProcessStep('tax_clearance', withRecheck)).toEqual({ state: 'in_progress', waitingOn: null });
+    const withoutRecheck = { application: { tax_clearance_status: 'issue' } };
+    expect(deriveDefaultProcessStep('tax_clearance', withoutRecheck)).toEqual({ state: 'waiting', waitingOn: 'applicant' });
+    expect(deriveDefaultProcessStep('tax_clearance', { application: { tax_clearance_status: 'good' } })).toEqual({ state: 'complete', waitingOn: null });
+  });
+
+  it('grant_submission: a likely-but-unconfirmed submission waits on COR follow-up', () => {
+    const detail = {
+      application: { status: 'in_progress' },
+      statusEvents: [{ status: 'grant_submission_detected', created_at: '2026-08-27T10:00:00Z' }],
+      documents: []
+    };
+    expect(deriveDefaultProcessStep('grant_submission', detail)).toEqual({ state: 'waiting', waitingOn: 'cor_follow_up' });
+  });
+
+  it('payment: client-reported needs confirmation (in_progress), not a passive wait', () => {
+    const detail = { application: {}, payments: [{ status: 'client_reported' }] };
+    expect(deriveDefaultProcessStep('payment', detail)).toEqual({ state: 'in_progress', waitingOn: null });
+  });
+
+  it('covers all 8 step keys without throwing on a bare-minimum detail object', () => {
+    const detail = { application: {}, documents: [], payments: [], statusEvents: [] };
+    for (const key of PROCESS_STEP_KEYS) {
+      const result = deriveDefaultProcessStep(key, detail);
+      expect(result).toHaveProperty('state');
+      expect(result).toHaveProperty('waitingOn');
+    }
+  });
+});
+
+describe('pbsAccountGateReason', () => {
+  it('surfaces the real blocker before a click, not just after', () => {
+    expect(pbsAccountGateReason({ owners: [] }, null)).toMatch(/primary owner/i);
+    expect(pbsAccountGateReason({ owners: [{ title: '' }] }, null)).toMatch(/title/i);
+    expect(pbsAccountGateReason({ owners: [{ title: 'Mr.' }] }, null)).toMatch(/MyNJ login/i);
+    expect(pbsAccountGateReason({ owners: [{ title: 'Mr.' }] }, { username: 'x' })).toBeNull();
+  });
+});
+
+describe('grantSubmitGateReason', () => {
+  it('explains why grant submission is blocked, or clears once ready', () => {
+    expect(grantSubmitGateReason({ application: { status: 'applied' } })).toMatch(/already submitted/i);
+    expect(grantSubmitGateReason({ application: { status: 'in_progress' }, documents: [] })).toMatch(/5 required documents/i);
   });
 });

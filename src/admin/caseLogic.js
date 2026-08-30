@@ -121,48 +121,48 @@ export function adminQueueInfo(app) {
   const stage = adminStageLabel(app);
 
   // Immediate human-review items always win.
-  if (app.tax_clearance_recheck_requested_at) return { bucket: 'needs', action: 'Recheck Tax Clearance', tone: 'danger', stage, rank: 0 };
-  if (app.payment_status === 'client_reported') return { bucket: 'needs', action: 'Confirm payment', tone: 'danger', stage, rank: 1 };
-  if (app.brc_status === 'client_created') return { bucket: 'needs', action: 'Recheck BRC', tone: 'danger', stage, rank: 2 };
-  if (types.has('formation') && formationReview === 'not_reviewed') return { bucket: 'needs', action: 'Review Formation', tone: 'danger', stage, rank: 3 };
-  if (types.has('uez_approval_email') && approvalReview === 'not_reviewed') return { bucket: 'needs', action: 'Review UEZ approval', tone: 'danger', stage, rank: 4 };
+  if (app.tax_clearance_recheck_requested_at) return { bucket: 'needs', action: 'Recheck Tax Clearance', tone: 'danger', stage, rank: 0, stepKey: 'tax_clearance' };
+  if (app.payment_status === 'client_reported') return { bucket: 'needs', action: 'Confirm payment', tone: 'danger', stage, rank: 1, stepKey: 'payment' };
+  if (app.brc_status === 'client_created') return { bucket: 'needs', action: 'Recheck BRC', tone: 'danger', stage, rank: 2, stepKey: 'brc' };
+  if (types.has('formation') && formationReview === 'not_reviewed') return { bucket: 'needs', action: 'Review Formation', tone: 'danger', stage, rank: 3, stepKey: 'formation' };
+  if (types.has('uez_approval_email') && approvalReview === 'not_reviewed') return { bucket: 'needs', action: 'Review UEZ approval', tone: 'danger', stage, rank: 4, stepKey: 'uez_enrollment' };
 
-  if (submittedGrant) return { bucket: 'submitted', action: 'Grant submitted', tone: 'submitted', stage, rank: 0 };
-  if (!app.submitted_at) return { bucket: 'waiting', action: 'Applicant still completing signup', tone: 'quiet', stage, rank: 80 };
+  if (submittedGrant) return { bucket: 'submitted', action: 'Grant submitted', tone: 'submitted', stage, rank: 0, stepKey: 'grant_submission' };
+  if (!app.submitted_at) return { bucket: 'waiting', action: 'Applicant still completing signup', tone: 'quiet', stage, rank: 80, stepKey: null };
 
   // Process sequence after the applicant submits.
   if (!types.has('brc')) {
-    if (app.brc_status === 'not_found') return { bucket: 'waiting', action: 'Waiting on BRC follow-up', tone: 'warn', stage, rank: 50 };
-    return { bucket: 'needs', action: 'Fetch BRC', tone: 'danger', stage, rank: 5 };
+    if (app.brc_status === 'not_found') return { bucket: 'waiting', action: 'Waiting on BRC follow-up', tone: 'warn', stage, rank: 50, stepKey: 'brc' };
+    return { bucket: 'needs', action: 'Fetch BRC', tone: 'danger', stage, rank: 5, stepKey: 'brc' };
   }
 
-  if (app.has_existing_pbs_account == null) return { bucket: 'needs', action: 'Confirm PBS account answer', tone: 'danger', stage, rank: 6 };
-  if (!app.pbs_account_created) return { bucket: 'needs', action: 'Set up PBS', tone: 'danger', stage, rank: 6 };
+  if (app.has_existing_pbs_account == null) return { bucket: 'needs', action: 'Confirm PBS account answer', tone: 'danger', stage, rank: 6, stepKey: 'pbs_mynj' };
+  if (!app.pbs_account_created) return { bucket: 'needs', action: 'Set up PBS', tone: 'danger', stage, rank: 6, stepKey: 'pbs_mynj' };
 
   if (app.uez_application_status === 'not_started' || !app.uez_application_status) {
-    return { bucket: 'needs', action: 'UEZ application next', tone: 'danger', stage, rank: 7 };
+    return { bucket: 'needs', action: 'UEZ application next', tone: 'danger', stage, rank: 7, stepKey: 'uez_enrollment' };
   }
 
   if (app.uez_application_status === 'applied') {
-    if (types.has('uez_approval_email') && approvalReview === 'rejected') return { bucket: 'waiting', action: 'Waiting for UEZ email replacement', tone: 'warn', stage, rank: 52 };
-    if (!types.has('uez_approval_email') || approvalReview !== 'approved') return { bucket: 'waiting', action: 'Waiting for UEZ approval', tone: 'quiet', stage, rank: 55 };
+    if (types.has('uez_approval_email') && approvalReview === 'rejected') return { bucket: 'waiting', action: 'Waiting for UEZ email replacement', tone: 'warn', stage, rank: 52, stepKey: 'uez_enrollment' };
+    if (!types.has('uez_approval_email') || approvalReview !== 'approved') return { bucket: 'waiting', action: 'Waiting for UEZ approval', tone: 'quiet', stage, rank: 55, stepKey: 'uez_enrollment' };
   }
 
   if ((app.tax_clearance_status || (app.tax_clearance_good ? 'good' : 'no')) !== 'good' || !types.has('tax_clearance')) {
-    if ((app.tax_clearance_status || 'no') === 'issue' || types.has('tax_clearance_issue')) return { bucket: 'waiting', action: 'Tax clearance issue — waiting on client', tone: 'warn', stage, rank: 51 };
-    return { bucket: 'needs', action: 'Fetch tax clearance', tone: 'danger', stage, rank: 8 };
+    if ((app.tax_clearance_status || 'no') === 'issue' || types.has('tax_clearance_issue')) return { bucket: 'waiting', action: 'Tax clearance issue — waiting on client', tone: 'warn', stage, rank: 51, stepKey: 'tax_clearance' };
+    return { bucket: 'needs', action: 'Fetch tax clearance', tone: 'danger', stage, rank: 8, stepKey: 'tax_clearance' };
   }
 
-  if (!app.is_sole_proprietorship && !types.has('formation')) return { bucket: 'waiting', action: 'Waiting for Formation document', tone: 'warn', stage, rank: 53 };
-  if (types.has('formation') && formationReview === 'rejected') return { bucket: 'waiting', action: 'Waiting for Formation replacement', tone: 'warn', stage, rank: 54 };
+  if (!app.is_sole_proprietorship && !types.has('formation')) return { bucket: 'waiting', action: 'Waiting for Formation document', tone: 'warn', stage, rank: 53, stepKey: 'formation' };
+  if (types.has('formation') && formationReview === 'rejected') return { bucket: 'waiting', action: 'Waiting for Formation replacement', tone: 'warn', stage, rank: 54, stepKey: 'formation' };
 
-  if (app.payment_status !== 'paid') return { bucket: 'waiting', action: 'Waiting for payment', tone: 'quiet', stage, rank: 60 };
+  if (app.payment_status !== 'paid') return { bucket: 'waiting', action: 'Waiting for payment', tone: 'quiet', stage, rank: 60, stepKey: 'payment' };
 
-  if (!types.has('ldc_application')) return { bucket: 'needs', action: 'Fill out LDC application', tone: 'danger', stage, rank: 9 };
+  if (!types.has('ldc_application')) return { bucket: 'needs', action: 'Fill out LDC application', tone: 'danger', stage, rank: 9, stepKey: 'ldc_application' };
 
-  if ((app.required_document_ready_count || 0) >= 5) return { bucket: 'ready', action: 'Ready for grant submission', tone: 'ready', stage, rank: 0 };
+  if ((app.required_document_ready_count || 0) >= 5) return { bucket: 'ready', action: 'Ready for grant submission', tone: 'ready', stage, rank: 0, stepKey: 'grant_submission' };
 
-  return { bucket: 'waiting', action: 'Waiting for next document', tone: 'quiet', stage, rank: 70 };
+  return { bucket: 'waiting', action: 'Waiting for next document', tone: 'quiet', stage, rank: 70, stepKey: null };
 }
 
 export function docFor(detail, type) {
@@ -204,7 +204,6 @@ export function attentionItems(detail) {
   if (formation && detail.application.formation_review_status === 'not_reviewed') items.push('Review Certificate of Formation');
   if (formation && detail.application.formation_review_status === 'rejected') items.push('Certificate of Formation marked wrong');
   if (approval && (detail.application.uez_approval_review_status || 'not_reviewed') === 'not_reviewed') items.push('Review UEZ approval email');
-  if (detail.application.tax_clearance_status === 'submitted_checking') items.push('Review tax clearance letter');
   return items;
 }
 
@@ -301,4 +300,108 @@ export function queueCounts(applications) {
     submitted: list.filter((app) => adminQueueInfo(app).bucket === 'submitted').length,
     all: list.length
   };
+}
+
+// --- Process model (the 8-card case-page redesign) ----------------------------
+// uez_process_steps is a purely additive operational overlay: an admin's own
+// verdict on where a step stands, layered on top of (never replacing) the
+// factual columns below. When no explicit row exists yet for a step, the UI
+// falls back to a *display-only* derived default computed here — never
+// written back to the DB, recomputed fresh on every read, so there's no
+// backfill and no risk of a derived guess masquerading as a real decision.
+
+export const PROCESS_STEP_KEYS = [
+  'formation', 'brc', 'pbs_mynj', 'tax_clearance',
+  'uez_enrollment', 'ldc_application', 'grant_submission', 'payment'
+];
+
+export const PROCESS_STEP_STATES = ['not_started', 'in_progress', 'waiting', 'complete', 'not_applicable', 'manual'];
+export const WAITING_ON_VALUES = ['applicant', 'accountant', 'nj_state', 'document', 'cor_follow_up'];
+
+// Derives a sensible display default for one step from the existing Facts
+// columns/documents — used only when uez_process_steps has no explicit row
+// for (application, stepKey) yet. `detail` is the same {application, documents,
+// statusEvents, payments} shape used throughout this file.
+export function deriveDefaultProcessStep(stepKey, detail) {
+  const app = detail?.application || {};
+
+  switch (stepKey) {
+    case 'formation': {
+      const formation = docFor(detail, 'formation');
+      if (!formation) return app.is_sole_proprietorship ? { state: 'not_applicable', waitingOn: null } : { state: 'not_started', waitingOn: null };
+      const review = app.formation_review_status || 'not_reviewed';
+      if (review === 'approved') return { state: 'complete', waitingOn: null };
+      if (review === 'rejected') return { state: 'waiting', waitingOn: 'document' };
+      return { state: 'in_progress', waitingOn: null };
+    }
+
+    case 'brc': {
+      if (app.brc_status === 'found') return { state: 'complete', waitingOn: null };
+      if (app.brc_status === 'not_found') return { state: 'waiting', waitingOn: 'nj_state' };
+      if (!app.brc_status || app.brc_status === 'pending') return { state: 'not_started', waitingOn: null };
+      // checking / uploaded / client_created / manual_verification_required / lookup_error / recheck_requested
+      return { state: 'in_progress', waitingOn: null };
+    }
+
+    case 'pbs_mynj': {
+      if (app.pbs_account_created) return { state: 'complete', waitingOn: null };
+      if (app.has_existing_pbs_account == null) return { state: 'waiting', waitingOn: 'applicant' };
+      return { state: 'in_progress', waitingOn: null };
+    }
+
+    case 'tax_clearance': {
+      const status = app.tax_clearance_status || (app.tax_clearance_good ? 'good' : 'no');
+      if (status === 'good') return { state: 'complete', waitingOn: null };
+      if (status === 'issue') return app.tax_clearance_recheck_requested_at ? { state: 'in_progress', waitingOn: null } : { state: 'waiting', waitingOn: 'applicant' };
+      return { state: 'not_started', waitingOn: null };
+    }
+
+    case 'uez_enrollment': {
+      const status = app.uez_application_status;
+      if (status === 'approved') return { state: 'complete', waitingOn: null };
+      if (status === 'applied') {
+        const review = app.uez_approval_review_status || 'not_reviewed';
+        if (review === 'rejected') return { state: 'waiting', waitingOn: 'document' };
+        return { state: 'in_progress', waitingOn: null };
+      }
+      return { state: 'not_started', waitingOn: null };
+    }
+
+    case 'ldc_application':
+      return docFor(detail, 'ldc_application') ? { state: 'complete', waitingOn: null } : { state: 'not_started', waitingOn: null };
+
+    case 'grant_submission': {
+      if (app.status === 'applied' || app.status === 'grant_submitted') return { state: 'complete', waitingOn: null };
+      if (grantSubmissionLikelyDetected(detail)) return { state: 'waiting', waitingOn: 'cor_follow_up' };
+      if (packetReady(detail)) return { state: 'not_started', waitingOn: null };
+      return { state: 'waiting', waitingOn: 'document' };
+    }
+
+    case 'payment': {
+      const latest = detail?.payments?.[detail.payments.length - 1];
+      if (latest?.status === 'paid') return { state: 'complete', waitingOn: null };
+      if (latest?.status === 'client_reported') return { state: 'in_progress', waitingOn: null };
+      return { state: 'not_started', waitingOn: null };
+    }
+
+    default:
+      return { state: 'not_started', waitingOn: null };
+  }
+}
+
+// Pure guard-clause reasons for the two multi-condition actions, hoisted out
+// of their try/catch blocks in AdminPage.jsx so a disabled button can show
+// *why* before a click, not just as a post-click error message.
+export function pbsAccountGateReason(detail, myNjCredentials) {
+  const primary = detail?.owners?.[0];
+  if (!primary) return 'Add a primary owner before opening PBS.';
+  if (!primary.title) return "Add the primary owner's title before opening PBS.";
+  if (!myNjCredentials) return 'Generate the MyNJ login first.';
+  return null;
+}
+
+export function grantSubmitGateReason(detail) {
+  if (detail?.application?.status === 'applied') return 'Already submitted.';
+  if (!packetReady(detail)) return 'All 5 required documents must be ready first.';
+  return null;
 }
