@@ -141,13 +141,6 @@ export default function AdminPage() {
   const [noteEditingId, setNoteEditingId] = useState(null);
   const [noteEditDraft, setNoteEditDraft] = useState('');
   const [emailComposer, setEmailComposer] = useState(null);
-  const [dragStatusKey, setDragStatusKey] = useState(null);
-  const [statusOrder, setStatusOrder] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('cor_uez_admin_status_order') || 'null');
-      return Array.isArray(stored) && stored.length === 4 ? stored : ['pbs','uez','tax','payment'];
-    } catch (_) { return ['pbs','uez','tax','payment']; }
-  });
 
   useEffect(() => {
     let active = true;
@@ -259,19 +252,6 @@ export default function AdminPage() {
   async function handleSignOut() {
     await signOutApplicant();
     window.location.href = '/admin';
-  }
-
-  function saveStatusOrder(next) {
-    setStatusOrder(next);
-    localStorage.setItem('cor_uez_admin_status_order', JSON.stringify(next));
-  }
-
-  function dropStatus(targetKey) {
-    if (!dragStatusKey || dragStatusKey === targetKey) return setDragStatusKey(null);
-    const next = statusOrder.filter((key) => key !== dragStatusKey);
-    next.splice(next.indexOf(targetKey), 0, dragStatusKey);
-    saveStatusOrder(next);
-    setDragStatusKey(null);
   }
 
   async function previewDocument(doc) {
@@ -1061,56 +1041,32 @@ export default function AdminPage() {
               <div>{attentionItems(detail).map((item) => <span key={item}>{item}</span>)}</div>
             </div>}
 
-            <div className="ops-cockpit-grid">
-              <div className="ops-panel status-panel">
-                <div className="ops-panel-head"><h3>Status</h3></div>
-                <div className="compact-status-grid status-sort-list">
-                  {/* 'payment', 'uez', and 'tax' removed from this list — replaced by their ProcessStepCards below. Only 'pbs' left (last step still on the old grid). */}
-                  {statusOrder.filter((key) => key === 'pbs').map((key) => {
-                    const row = <><span>PBS</span><div className="tiny-toggle"><button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button><button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button></div></>;
-                    return <div key={key} className="compact-status-item sortable-status-row" draggable onDragStart={() => setDragStatusKey(key)} onDragOver={(e) => e.preventDefault()} onDrop={() => dropStatus(key)}><i className="drag-handle" title="Drag to reorder">⋮⋮</i>{row}</div>;
-                  })}
-                </div>
-              </div>
-
-              <div className="ops-panel documents-panel">
-                <div className="ops-panel-head"><h3>Documents</h3><span>{readyDocumentCount(detail)}/5 ready</span></div>
-                <div className="ops-doc-list">
-                  {/* Formation, UEZ Approval Email, BRC, and Tax Clearance removed — replaced by their ProcessStepCards below */}
-                  {/* 'ldc_application' removed — replaced by the LDC Application ProcessStepCard below */}
-                </div>
-                <div className="admin-manual-upload">
-                  <div className="admin-manual-upload-head"><strong>Manual document upload</strong><small>Fallback / records</small></div>
-                  <select value={manualDocType} onChange={(e) => setManualDocType(e.target.value)}>
-                    <option value="formation">Certificate of Formation</option>
-                    <option value="brc">Business Registration Certificate</option>
-                    <option value="uez_pending_certification">UEZ Pending Certification Application</option>
-                    <option value="uez_approval_email">UEZ Approval Email</option>
-                    <option value="tax_clearance">Tax Clearance Letter</option>
-                    <option value="tax_clearance_issue">Tax Clearance Issue Screenshot</option>
-                    <option value="ldc_application">Signed LDC Application</option>
-                    <option value="supporting">Other / Supporting Document</option>
-                  </select>
-                  <input type="file" accept=".pdf,.eml,image/*" onChange={(e) => setManualDocFile(e.target.files?.[0] || null)} />
-                  <button className="secondary" onClick={uploadManualAdminDocument} disabled={manualDocUploading || !manualDocFile}>{manualDocUploading ? 'Uploading…' : 'Upload document'}</button>
-                </div>
-              </div>
-
-              <div className="ops-panel actions-panel">
-                <div className="mobile-desktop-workflow-note">Desktop automation · These workflow buttons use the COR Chrome extension.</div>
-                <div className="ops-action-grid clean-action-grid">
-                  {/* 'FETCH BRC' removed — replaced by the BRC ProcessStepCard below */}
-                  <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
-                  <button className="ops-action primary" onClick={runPbsLogin} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
-                  {/* 'FETCH TAX CLEARANCE', 'FILL OUT LDC APP', and 'SUBMIT GRANT APP' removed — replaced by their ProcessStepCards below */}
-                </div>
+            {/* All 8 steps now live as ProcessStepCards below — the old
+                status/documents/actions cockpit grid is gone. Manual upload
+                is the one piece that isn't part of the per-step model
+                (it's a fallback/records tool, not a status), so it stays. */}
+            <div className="ops-panel manual-upload-panel">
+              <div className="admin-manual-upload">
+                <div className="admin-manual-upload-head"><strong>Manual document upload</strong><small>Fallback / records</small></div>
+                <select value={manualDocType} onChange={(e) => setManualDocType(e.target.value)}>
+                  <option value="formation">Certificate of Formation</option>
+                  <option value="brc">Business Registration Certificate</option>
+                  <option value="uez_pending_certification">UEZ Pending Certification Application</option>
+                  <option value="uez_approval_email">UEZ Approval Email</option>
+                  <option value="tax_clearance">Tax Clearance Letter</option>
+                  <option value="tax_clearance_issue">Tax Clearance Issue Screenshot</option>
+                  <option value="ldc_application">Signed LDC Application</option>
+                  <option value="supporting">Other / Supporting Document</option>
+                </select>
+                <input type="file" accept=".pdf,.eml,image/*" onChange={(e) => setManualDocFile(e.target.files?.[0] || null)} />
+                <button className="secondary" onClick={uploadManualAdminDocument} disabled={manualDocUploading || !manualDocFile}>{manualDocUploading ? 'Uploading…' : 'Upload document'}</button>
               </div>
             </div>
           </section>
 
-          {/* New Process redesign — landing one card at a time alongside the
-              old grid above for a verification pass before removing the
-              matching old row. Payment first (simplest: single action). */}
+          {/* The 8-card process redesign - one card per step, each an
+              operational verdict (not_started/in_progress/waiting/complete/
+              not_applicable/manual) layered over the facts below it. */}
           <div className="process-step-grid">
             <ProcessStepCard
               stepKey="payment"
@@ -1295,6 +1251,43 @@ export default function AdminPage() {
                   onClick: confirmGrantSubmitted,
                   disabled: busy
                 }] : [])
+              ]}
+            />
+
+            <ProcessStepCard
+              stepKey="pbs_mynj"
+              title="PBS / MyNJ"
+              busy={busy}
+              operational={resolveProcessStep('pbs_mynj', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const hasExisting = detail.application.has_existing_pbs_account;
+                return <>
+                  <div className="process-step-inline-select">
+                    <label>PBS account created</label>
+                    <div className="tiny-toggle">
+                      <button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button>
+                      <button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button>
+                    </div>
+                  </div>
+                  {myNjCredentials
+                    ? <small>MyNJ login on file</small>
+                    : <small>No MyNJ login yet{hasExisting == null ? ' — waiting on the applicant’s existing-account answer' : ''}</small>}
+                </>;
+              })()}
+              actions={[
+                {
+                  label: 'Open PBS account',
+                  hint: pbsAccountGateReason(detail, myNjCredentials) || 'Opens NJ Premier Business Services and creates the account and business listing via the COR Chrome extension.',
+                  onClick: runPbsSignup,
+                  disabled: busy || Boolean(pbsAccountGateReason(detail, myNjCredentials))
+                },
+                {
+                  label: 'Open PBS',
+                  hint: myNjCredentials ? 'Opens PBS and signs in with the stored MyNJ login.' : 'Generate the MyNJ login first.',
+                  onClick: runPbsLogin,
+                  disabled: busy || !myNjCredentials
+                }
               ]}
             />
           </div>
