@@ -70,7 +70,7 @@ export default function SignupLayoutPage() {
     finally { setBusy(false); }
   }
 
-  if (!layout) return <div className="app-shell auth-loading-shell"><div className="auth-loading-card">Loading signup layout…</div></div>;
+  if (!layout) return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">Loading signup layout…</div></div>;
 
   return <div className="admin-shell signup-layout-shell">
     <header className="admin-topbar">

@@ -13,6 +13,7 @@ import './clientDashboard.css';
 import './intakePolish.css';
 import './emailSettings.css';
 import './analytics.css';
+import './admin/adminTheme.css';
 
 function AdminWithAnalytics() {
   return <><AdminPage /><AdminVisitCounter /></>;

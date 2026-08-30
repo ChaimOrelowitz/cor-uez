@@ -93,8 +93,8 @@ export default function EmailSettingsPage() {
     window.location.href = '/admin';
   }
 
-  if (!ready) return <div className="app-shell auth-loading-shell"><div className="auth-loading-card">Loading email settings…</div></div>;
-  if (!authorized) return <div className="app-shell"><main className="admin-login-wrap"><div className="wizard-card admin-login-card"><div className="content-block"><h3>Admin sign-in required</h3><p>Sign in through the UEZ admin portal first.</p><a className="primary inline-button" href="/admin">Go to admin login</a>{message && <div className="validation-error">{message}</div>}</div></div></main></div>;
+  if (!ready) return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">Loading email settings…</div></div>;
+  if (!authorized) return <div className="app-shell admin-login-shell"><main className="admin-login-wrap"><div className="wizard-card admin-login-card"><div className="content-block"><h3>Admin sign-in required</h3><p>Sign in through the UEZ admin portal first.</p><a className="primary inline-button" href="/admin">Go to admin login</a>{message && <div className="validation-error">{message}</div>}</div></div></main></div>;
 
   return <div className="admin-shell email-settings-shell">
     <header className="admin-topbar">

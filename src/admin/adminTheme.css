@@ -1,0 +1,357 @@
+/* ==========================================================================
+   Admin visual theme — "dense operator tool"
+   ==========================================================================
+   Everything in this file is scoped under .admin-shell (the wrapper every
+   authenticated admin surface renders — AdminPage.jsx, SignupLayoutPage.jsx,
+   EmailSettingsPage.jsx) or under the compound selectors the admin login/
+   loading screens use (.app-shell.admin-login-shell, .wizard-card.admin-
+   login-card, .topbar.admin-login-topbar, .app-shell.auth-loading-shell.
+   admin-loading) — classes the client never renders. This is deliberate:
+   there is no CSS scoping mechanism in this app (every stylesheet loads
+   globally for every route in main.jsx), so EVERY rule here is written with
+   an admin-only ancestor/compound selector, even for classes that turn out
+   to be admin-only anyway — scoping costs nothing and removes any risk of
+   an unscoped rule leaking into the client wizard/portal.
+
+   Loaded last in main.jsx, so every rule here wins on source order at equal
+   specificity — no !important needed anywhere. Nothing in styles.css,
+   workflow.css, clientDashboard.css, intakePolish.css, or emailSettings.css
+   is edited in place; this file only adds new, more-specific rules.
+   ========================================================================== */
+
+/* ---- 1. Tokens ---------------------------------------------------------- */
+
+.admin-shell,
+.app-shell.admin-login-shell,
+.app-shell.auth-loading-shell.admin-loading {
+  --admin-bg: #f3f4f6;              /* neutral cool gray page bg — no lavender tint */
+  --admin-surface: #ffffff;
+  --admin-surface-sunken: #f8f9fb;  /* hover rows, inset wells */
+  --admin-border: #dcdfe4;
+  --admin-border-strong: #c7cbd3;
+
+  --admin-text: #1c1f26;
+  --admin-text-muted: #6b7280;
+  --admin-text-faint: #9096a1;
+
+  --admin-accent: #3d4f66;          /* graphite/steel-blue — distinct from the client's #676fe0 indigo family */
+  --admin-accent-hover: #2f3e52;
+  --admin-accent-soft: #e7eaee;
+  --admin-accent-ring: rgba(61, 79, 102, .25);
+
+  --admin-good-bg: #eef3ee;   --admin-good-text: #3c6b49;  --admin-good-border: #cddccf;
+  --admin-warn-bg: #f5efe4;   --admin-warn-text: #8a6a2e;  --admin-warn-border: #e6d9bd;
+  --admin-danger-bg: #f6ecea; --admin-danger-text: #9c4a3f; --admin-danger-border: #e3cac5;
+
+  --admin-radius-sm: 6px;
+  --admin-radius-md: 8px;
+  --admin-radius-lg: 10px;
+  --admin-radius-pill: 999px;
+  --admin-shadow: 0 1px 2px rgba(16, 20, 28, .06);
+
+  --admin-font-size-h1: 20px;
+  --admin-font-size-h2: 15px;
+  --admin-font-size-h3: 13px;
+  --admin-font-size-body: 12px;
+  --admin-font-size-small: 11px;
+  --admin-font-size-micro: 9px;
+  --admin-line-height: 1.35;
+}
+
+.admin-shell {
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-size: var(--admin-font-size-body);
+  line-height: var(--admin-line-height);
+}
+.app-shell.admin-login-shell,
+.app-shell.auth-loading-shell.admin-loading {
+  background: var(--admin-bg);
+  min-height: 100vh;
+}
+.wizard-card.admin-login-card {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--admin-shadow);
+}
+.topbar.admin-login-topbar {
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-border);
+  backdrop-filter: none;
+}
+.auth-loading-shell.admin-loading .auth-loading-card { color: var(--admin-text-muted); font-size: var(--admin-font-size-body); }
+
+/* ---- 2. Shared classes the client also renders — must stay scoped ------- */
+
+.admin-shell .primary,
+.wizard-card.admin-login-card .primary {
+  background: var(--admin-accent);
+  box-shadow: none;
+  border-radius: var(--admin-radius-sm);
+  padding: 9px 14px;
+  font-size: var(--admin-font-size-body);
+}
+.admin-shell .primary:hover:not(:disabled),
+.wizard-card.admin-login-card .primary:hover:not(:disabled) { background: var(--admin-accent-hover); }
+.admin-shell .secondary {
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text-muted);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-sm);
+  padding: 9px 14px;
+  font-size: var(--admin-font-size-body);
+}
+
+.admin-shell input, .admin-shell select, .admin-shell textarea,
+.wizard-card.admin-login-card input {
+  border-radius: var(--admin-radius-sm);
+  border-color: var(--admin-border);
+  background: var(--admin-surface);
+  padding: 8px 10px;
+  font-size: var(--admin-font-size-body);
+}
+.admin-shell input:focus, .admin-shell select:focus, .admin-shell textarea:focus,
+.wizard-card.admin-login-card input:focus {
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-ring);
+  background: var(--admin-surface);
+}
+.admin-shell label { color: var(--admin-text-muted); font-size: var(--admin-font-size-small); margin: 10px 0 4px; }
+
+.admin-shell .status-pill { border-radius: var(--admin-radius-pill); padding: 4px 8px; font-size: var(--admin-font-size-small); background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-shell .status-pill.good { background: var(--admin-good-bg); color: var(--admin-good-text); }
+.admin-shell .status-pill.warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+
+.admin-shell .muted { color: var(--admin-text-faint); font-size: var(--admin-font-size-small); }
+.admin-shell .validation-error { background: var(--admin-danger-bg); color: var(--admin-danger-text); border-color: var(--admin-danger-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .text-button { color: var(--admin-accent); font-size: var(--admin-font-size-body); }
+
+/* ---- 3. Top bar, sidebar, filter row, list rows -------------------------- */
+
+.admin-shell .admin-topbar { height: 52px; background: var(--admin-surface); border-bottom: 1px solid var(--admin-border); }
+.admin-shell .admin-brand span { color: var(--admin-text-faint); }
+.admin-shell .admin-top-actions a, .admin-shell .admin-top-actions button {
+  background: var(--admin-surface-sunken); color: var(--admin-text-muted); border-radius: var(--admin-radius-sm); font-size: var(--admin-font-size-small);
+}
+.admin-shell .admin-sidebar { background: var(--admin-surface); border-right: 1px solid var(--admin-border); }
+.admin-shell .admin-sidebar-head span { color: var(--admin-text-faint); }
+.admin-shell .admin-filter-row { border-bottom: 1px solid var(--admin-border); }
+.admin-shell .admin-filter-row button { background: var(--admin-surface-sunken); color: var(--admin-text-muted); border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-filter-row button.active { background: var(--admin-accent); color: #fff; }
+
+.admin-shell .application-list-item { border-bottom: 1px solid var(--admin-border); background: var(--admin-surface); padding: 10px 14px; }
+.admin-shell .application-list-item:hover { background: var(--admin-surface-sunken); }
+.admin-shell .application-list-item.active { background: var(--admin-accent-soft); box-shadow: inset 3px 0 var(--admin-accent); }
+.admin-shell .application-list-item small { color: var(--admin-text-faint); }
+.admin-shell .mini-status { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-shell .mini-status.warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+.admin-shell .mini-status.good { background: var(--admin-good-bg); color: var(--admin-good-text); }
+.admin-shell .empty-list { color: var(--admin-text-faint); }
+
+.admin-shell .queue-list-title strong { color: var(--admin-text); }
+.admin-shell .queue-stage { color: var(--admin-text-faint); }
+.admin-shell .queue-next-action { color: var(--admin-text-muted); }
+.admin-shell .queue-next-action i { background: var(--admin-border-strong); }
+.admin-shell .queue-next-action.danger { color: var(--admin-danger-text); }
+.admin-shell .queue-next-action.danger i { background: #c8776b; }
+.admin-shell .queue-next-action.warn { color: var(--admin-warn-text); }
+.admin-shell .queue-next-action.warn i { background: #c9a25c; }
+.admin-shell .queue-next-action.ready, .admin-shell .queue-next-action.submitted { color: var(--admin-good-text); }
+.admin-shell .queue-next-action.ready i, .admin-shell .queue-next-action.submitted i { background: #6fa382; }
+.admin-shell .queue-next-action.quiet { color: var(--admin-text-faint); }
+.admin-shell .queue-payment-flag { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+.admin-shell .application-list-item.queue-needs:hover,
+.admin-shell .application-list-item.active.queue-needs { box-shadow: inset 3px 0 var(--admin-danger-text); background: var(--admin-danger-bg); }
+.admin-shell .application-list-item.queue-ready:hover,
+.admin-shell .application-list-item.active.queue-ready { box-shadow: inset 3px 0 var(--admin-good-text); background: var(--admin-good-bg); }
+.admin-shell .application-list-item.queue-waiting:hover,
+.admin-shell .application-list-item.active.queue-waiting { box-shadow: inset 3px 0 var(--admin-border-strong); background: var(--admin-surface-sunken); }
+.admin-shell .queue-submitted { background: var(--admin-surface); }
+
+.admin-shell .admin-mobile-menu summary { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-shell .admin-mobile-menu-popover { background: var(--admin-surface); border-color: var(--admin-border); box-shadow: var(--admin-shadow); }
+.admin-shell .admin-mobile-menu-popover a, .admin-shell .admin-mobile-menu-popover button { color: var(--admin-text); }
+.admin-shell .mobile-detail-nav { background: var(--admin-surface); border-bottom: 1px solid var(--admin-border); }
+.admin-shell .mobile-detail-nav > button { background: var(--admin-surface-sunken); color: var(--admin-accent); }
+.admin-shell .mobile-detail-nav small { color: var(--admin-text-faint); }
+
+/* ---- 4. Header / recommended action / attention strip -------------------- */
+
+.admin-shell .admin-detail-header h1 { font-size: var(--admin-font-size-h1); }
+.admin-shell .admin-detail-header p { color: var(--admin-text-muted); }
+.admin-shell .admin-header-status span { background: var(--admin-accent-soft); color: var(--admin-accent); }
+.admin-shell .admin-header-status small { color: var(--admin-text-faint); }
+.admin-shell .cockpit-chip { background: var(--admin-surface); border-color: var(--admin-border); color: var(--admin-text-muted); }
+.admin-shell .cockpit-chip.good { background: var(--admin-good-bg); border-color: var(--admin-good-border); color: var(--admin-good-text); }
+.admin-shell .cockpit-chip.warn { background: var(--admin-warn-bg); border-color: var(--admin-warn-border); color: var(--admin-warn-text); }
+.admin-shell .admin-message { background: var(--admin-accent-soft); color: var(--admin-accent); border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-message-error { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
+
+.admin-shell .ops-attention-strip { background: var(--admin-warn-bg); border-color: var(--admin-warn-border); }
+.admin-shell .ops-attention-strip > strong { color: var(--admin-warn-text); }
+.admin-shell .ops-attention-strip span { background: var(--admin-surface); border-color: var(--admin-warn-border); color: var(--admin-warn-text); }
+.admin-shell .attention-dot { background: var(--admin-warn-text); }
+
+.admin-shell .recommended-action-banner { border-radius: var(--admin-radius-md); box-shadow: var(--admin-shadow); border-color: var(--admin-border); }
+.admin-shell .recommended-action-label, .admin-shell .recommended-action-stage { color: var(--admin-text-faint); }
+.admin-shell .recommended-action-body strong { color: var(--admin-text); font-size: var(--admin-font-size-h2); }
+.admin-shell .recommended-action-banner > i { background: var(--admin-border-strong); }
+.admin-shell .recommended-action-banner.tone-danger { border-color: var(--admin-danger-border); background: var(--admin-danger-bg); }
+.admin-shell .recommended-action-banner.tone-danger > i { background: var(--admin-danger-text); }
+.admin-shell .recommended-action-banner.tone-danger strong { color: var(--admin-danger-text); }
+.admin-shell .recommended-action-banner.tone-warn { border-color: var(--admin-warn-border); background: var(--admin-warn-bg); }
+.admin-shell .recommended-action-banner.tone-warn > i { background: var(--admin-warn-text); }
+.admin-shell .recommended-action-banner.tone-warn strong { color: var(--admin-warn-text); }
+.admin-shell .recommended-action-banner.tone-ready,
+.admin-shell .recommended-action-banner.tone-submitted { border-color: var(--admin-good-border); background: var(--admin-good-bg); }
+.admin-shell .recommended-action-banner.tone-ready > i,
+.admin-shell .recommended-action-banner.tone-submitted > i { background: var(--admin-good-text); }
+.admin-shell .recommended-action-banner.tone-ready strong,
+.admin-shell .recommended-action-banner.tone-submitted strong { color: var(--admin-good-text); }
+.admin-shell .recommended-action-secondary.tone-danger { color: var(--admin-danger-text); }
+.admin-shell .recommended-action-secondary.tone-warn { color: var(--admin-warn-text); }
+.admin-shell .recommended-action-secondary.tone-quiet { color: var(--admin-text-faint); }
+
+/* ---- 5. Card/panel family (process cards, ops panels, admin cards) ------ */
+
+.admin-shell .admin-card {
+  border-radius: var(--admin-radius-lg);
+  border-color: var(--admin-border);
+  box-shadow: var(--admin-shadow);
+  padding: 14px;
+  background: var(--admin-surface);
+}
+.admin-shell .admin-card-head { border-bottom-color: var(--admin-border); }
+.admin-shell .admin-card-head h3 { font-size: var(--admin-font-size-h2); }
+.admin-shell .admin-card-head > span:not(.status-pill) { color: var(--admin-text-faint); }
+.admin-shell .admin-secondary-card { box-shadow: none; }
+.admin-shell .admin-accordion { border-color: var(--admin-border); border-radius: var(--admin-radius-md); }
+.admin-shell .admin-accordion > summary span { color: var(--admin-text-faint); }
+.admin-shell .admin-accordion > summary:after { color: var(--admin-text-faint); }
+
+.admin-shell .process-step-card, .admin-shell .ops-panel {
+  border-radius: var(--admin-radius-md);
+  box-shadow: none;
+  border-color: var(--admin-border);
+  padding: 10px;
+  background: var(--admin-surface);
+}
+.admin-shell .process-step-head h4, .admin-shell .ops-panel-head h3 { font-size: var(--admin-font-size-h3); color: var(--admin-text); }
+.admin-shell .process-step-facts { color: var(--admin-text); }
+.admin-shell .process-step-facts small { color: var(--admin-text-faint); }
+.admin-shell .process-step-operational { border-top-color: var(--admin-border); }
+.admin-shell .process-step-byline { color: var(--admin-text-faint); }
+.admin-shell .process-step-edit select, .admin-shell .process-step-edit input, .admin-shell .process-step-edit textarea { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .process-step-action-hint { color: var(--admin-text-faint); }
+.admin-shell .process-step-action-disabled { color: var(--admin-danger-text); }
+.admin-shell .process-step-inline-select label { color: var(--admin-text-faint); }
+.admin-shell .process-step-inline-select select { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .ops-panel-head span { color: var(--admin-text-faint); }
+
+.admin-shell .ops-action { border-radius: var(--admin-radius-sm); border-color: var(--admin-border); background: var(--admin-surface-sunken); color: var(--admin-text); }
+.admin-shell .ops-action span { color: var(--admin-text-faint); }
+.admin-shell .ops-action.primary { background: var(--admin-accent-soft); border-color: var(--admin-border-strong); }
+.admin-shell .ops-action.success-action, .admin-shell .ops-action.ready-action { background: var(--admin-good-bg); border-color: var(--admin-good-border); color: var(--admin-good-text); }
+
+.admin-shell .data-grid > div { border-bottom-color: var(--admin-border); }
+.admin-shell .data-grid dt { color: var(--admin-text-faint); }
+.admin-shell .admin-edit-grid label { color: var(--admin-text-faint); }
+.admin-shell .admin-edit-grid input, .admin-shell .admin-edit-grid textarea { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .lookup-values span { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-shell .lookup-values strong { color: var(--admin-text); }
+.admin-shell .admin-help { color: var(--admin-text-faint); }
+
+/* Small accent-colored links/icons scattered across admin cards — same
+   graphite accent instead of the client's indigo #626bd7. */
+.admin-shell .credential-grid button,
+.admin-shell .owner-admin-title span,
+.admin-shell .admin-document-list b,
+.admin-shell .case-note-actions button:hover { color: var(--admin-accent); }
+
+.admin-shell .credential-grid > div { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); background: var(--admin-surface-sunken); }
+.admin-shell .credential-grid span { color: var(--admin-text-faint); }
+.admin-shell .credential-grid strong { color: var(--admin-text); }
+.admin-shell .credential-edit-grid label { color: var(--admin-text-muted); }
+.admin-shell .credential-edit-grid input { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .brc-result-form { border-top-color: var(--admin-border); }
+.admin-shell .brc-result-form input { border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-pbs-answer-box { border-color: var(--admin-border); border-radius: var(--admin-radius-md); background: var(--admin-surface-sunken); }
+
+.admin-shell .success-button { background: var(--admin-good-bg); color: var(--admin-good-text); border-radius: var(--admin-radius-sm); }
+.admin-shell .warning-button { background: var(--admin-warn-bg); color: var(--admin-warn-text); border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-delete-button, .admin-shell .owner-remove-button { background: var(--admin-danger-bg); color: var(--admin-danger-text); border-color: var(--admin-danger-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-doc-delete-btn { background: var(--admin-danger-bg); color: var(--admin-danger-text); border-color: var(--admin-danger-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-doc-delete-btn:hover { background: var(--admin-danger-border); }
+.admin-shell .admin-document-list small, .admin-shell .admin-doc-row { color: var(--admin-text-faint); }
+.admin-shell .admin-doc-row { border-bottom-color: var(--admin-border); }
+.admin-shell .admin-timeline { border-top-color: var(--admin-border); }
+.admin-shell .admin-timeline > div { border-bottom-color: var(--admin-border); }
+.admin-shell .admin-timeline p { color: var(--admin-text-muted); }
+.admin-shell .admin-timeline small { color: var(--admin-text-faint); }
+
+.admin-shell .owner-admin-card { border-color: var(--admin-border); border-radius: var(--admin-radius-md); background: var(--admin-surface-sunken); }
+
+.admin-shell .admin-manual-upload { border-color: var(--admin-border-strong); border-radius: var(--admin-radius-md); background: var(--admin-surface-sunken); }
+.admin-shell .admin-manual-upload select, .admin-shell .admin-manual-upload input { border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-manual-upload-head small { color: var(--admin-text-faint); }
+
+.admin-shell .formation-review-box, .admin-shell .processing-readiness, .admin-shell .admin-alert { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); background: var(--admin-surface-sunken); }
+.admin-shell .processing-readiness.ready { background: var(--admin-good-bg); border-color: var(--admin-good-border); }
+.admin-shell .admin-alert { background: var(--admin-warn-bg); border-color: var(--admin-warn-border); }
+
+.admin-shell .admin-details-heading { border-top-color: var(--admin-border); }
+.admin-shell .admin-details-heading span { color: var(--admin-text-faint); }
+.admin-shell .admin-details-heading small { color: var(--admin-text-faint); }
+
+/* Tax Clearance tri-state + doc thumbnail (already admin-scoped, tighten palette) */
+.admin-shell .tax-tristate button.active-warn { background: var(--admin-warn-bg) !important; color: var(--admin-warn-text) !important; border-color: var(--admin-warn-border) !important; }
+.admin-shell .tiny-toggle .active-good { background: var(--admin-good-bg); border-color: var(--admin-good-border); color: var(--admin-good-text); }
+.admin-shell .tiny-toggle .active-neutral { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-shell .tax-recheck-note { color: var(--admin-warn-text); }
+.admin-shell .doc-thumb { border-color: var(--admin-border); background: var(--admin-surface-sunken); border-radius: var(--admin-radius-sm); }
+
+/* ---- 6. Modals (document preview, PBS iframe, email composer) ----------- */
+
+.admin-shell .document-modal { border-radius: var(--admin-radius-lg); box-shadow: 0 12px 32px rgba(16, 20, 28, .18); }
+.admin-shell .document-modal-head { border-bottom-color: var(--admin-border); }
+.admin-shell .document-modal-head small { color: var(--admin-text-faint); }
+.admin-shell .document-modal-head > button { background: var(--admin-surface-sunken); }
+.admin-shell .document-modal-body { background: var(--admin-surface-sunken); }
+.admin-shell .document-modal-footer { border-top-color: var(--admin-border); }
+.admin-shell .pbs-frame-note { color: var(--admin-text-faint); }
+
+.admin-shell .email-composer-body label { color: var(--admin-text-faint); }
+.admin-shell .email-composer-body input, .admin-shell .email-composer-body textarea { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .email-composer-body input:disabled, .admin-shell .email-composer-body textarea:disabled { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+.admin-shell .email-composer-attachment { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
+.admin-shell .email-composer-attachment small { color: var(--admin-text-faint); }
+
+/* ---- 7. Analytics widget -------------------------------------------------- */
+
+.admin-shell .admin-visit-counter { border-color: var(--admin-border); border-radius: var(--admin-radius-md); background: var(--admin-surface-sunken); color: var(--admin-text); }
+.admin-shell .admin-visit-counter > div + div { border-left-color: var(--admin-border); }
+.admin-shell .admin-visit-counter span { color: var(--admin-text-faint); }
+.admin-shell .admin-visit-counter strong { color: var(--admin-text); }
+
+/* ---- 8. Signup Layout editor --------------------------------------------- */
+
+.admin-shell .signup-layout-heading h1 { font-size: var(--admin-font-size-h1); }
+.admin-shell .signup-layout-heading p { color: var(--admin-text-muted); }
+.admin-shell .wizard-card.layout-group { border-radius: var(--admin-radius-lg); box-shadow: var(--admin-shadow); border: 1px solid var(--admin-border); }
+.admin-shell .layout-group-head { border-bottom-color: var(--admin-border); }
+.admin-shell .layout-group-head span { color: var(--admin-text-faint); }
+.admin-shell .layout-visual-grid { background: linear-gradient(90deg, transparent calc(50% - .5px), var(--admin-border) calc(50% - .5px), var(--admin-border) calc(50% + .5px), transparent calc(50% + .5px)); }
+.admin-shell .layout-field-tile { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); box-shadow: var(--admin-shadow); }
+.admin-shell .layout-span-toggle { background: var(--admin-surface-sunken); }
+.admin-shell .layout-span-toggle button.active { background: var(--admin-surface); color: var(--admin-accent); }
+.admin-shell .layout-row-actions button { border-color: var(--admin-border); background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+
+/* ---- 9. Email Settings page ----------------------------------------------- */
+
+.admin-shell .email-settings-intro h1 { font-size: var(--admin-font-size-h1); }
+.admin-shell .email-settings-intro p { color: var(--admin-text-muted); }
+.admin-shell .manual-recipient-card, .admin-shell .email-template-card { background: var(--admin-surface); border-color: var(--admin-border); border-radius: var(--admin-radius-md); box-shadow: var(--admin-shadow); }
+.admin-shell .manual-recipient-card label { color: var(--admin-text-faint); }
+.admin-shell .email-template-head p { color: var(--admin-text-faint); }
+.admin-shell .email-variable-help { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }

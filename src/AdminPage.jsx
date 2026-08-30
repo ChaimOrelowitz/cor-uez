@@ -984,12 +984,12 @@ export default function AdminPage() {
   )}` : '#';
 
   if (!authResolved || (session && !profile)) {
-    return <div className="app-shell auth-loading-shell"><div className="auth-loading-card">Loading admin…</div></div>;
+    return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">Loading admin…</div></div>;
   }
 
   if (!session || profile?.role !== 'admin') {
     return <div className="app-shell admin-login-shell">
-      <header className="topbar"><div className="brand-mark">COR</div><div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Admin</div></div></header>
+      <header className="topbar admin-login-topbar"><div className="brand-mark">COR</div><div><div className="brand-name">COR Solutions</div><div className="brand-subtitle">UEZ Admin</div></div></header>
       <main className="admin-login-wrap">
         <div className="wizard-card admin-login-card">
           <div className="content-block">
