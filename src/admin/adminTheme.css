@@ -123,6 +123,27 @@
 .admin-shell .status-pill.good { background: var(--admin-good-bg); color: var(--admin-good-text); }
 .admin-shell .status-pill.warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
 
+/* The status pill is a real <select> now — pick a value, it saves immediately,
+   no separate edit step. Strip the native select chrome, keep the pill look,
+   add a small caret so it still reads as clickable. */
+.admin-shell select.status-pill {
+  border: 1px solid transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 4px 20px 4px 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 9px top 55%, right 5px top 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.admin-shell select.status-pill:hover:not(:disabled) { border-color: var(--admin-border-strong); }
+.admin-shell select.status-pill:focus { outline: none; box-shadow: 0 0 0 2px var(--admin-accent-ring); }
+.admin-shell select.status-pill:disabled { cursor: default; opacity: .6; }
+
 .admin-shell .muted { color: var(--admin-text-faint); font-size: var(--admin-font-size-small); }
 .admin-shell .validation-error { background: var(--admin-danger-bg); color: var(--admin-danger-text); border-color: var(--admin-danger-border); border-radius: var(--admin-radius-sm); }
 .admin-shell .text-button { color: var(--admin-accent); font-size: var(--admin-font-size-body); }
@@ -242,9 +263,6 @@
 .admin-shell .process-step-facts small { color: var(--admin-text-faint); }
 .admin-shell .process-step-operational { border-top-color: var(--admin-border); }
 .admin-shell .process-step-byline { color: var(--admin-text-faint); }
-.admin-shell .process-step-edit select, .admin-shell .process-step-edit input, .admin-shell .process-step-edit textarea { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
-.admin-shell .process-step-action-hint { color: var(--admin-text-faint); }
-.admin-shell .process-step-action-disabled { color: var(--admin-danger-text); }
 .admin-shell .process-step-inline-select label { color: var(--admin-text-faint); }
 .admin-shell .process-step-inline-select select { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
 .admin-shell .ops-panel-head span { color: var(--admin-text-faint); }
