@@ -13,7 +13,7 @@ import {
   formationSatisfied,
   grantSubmissionLikelyDetected,
   grantSubmitGateReason,
-  lastEmailSentAt,
+  lastEmailSent,
   packetReady,
   paymentStatusLabel,
   pbsAccountGateReason,
@@ -312,39 +312,46 @@ describe('grantSubmissionLikelyDetected', () => {
   });
 });
 
-describe('lastEmailSentAt', () => {
+describe('lastEmailSent', () => {
   it('is null with no status events at all', () => {
-    expect(lastEmailSentAt({ statusEvents: [] }, 'tax_issue')).toBe(null);
+    expect(lastEmailSent({ statusEvents: [] }, 'tax_issue')).toBe(null);
   });
 
-  it('returns created_at for a successful send', () => {
+  it('returns createdAt and providerMessageId for a successful send', () => {
+    const detail = { statusEvents: [
+      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-20T10:00:00Z', metadata: { providerMessageId: 'abc-123' } }
+    ] };
+    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-20T10:00:00Z', providerMessageId: 'abc-123' });
+  });
+
+  it('providerMessageId is null when metadata has none (older events before this field existed)', () => {
     const detail = { statusEvents: [
       { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-20T10:00:00Z' }
     ] };
-    expect(lastEmailSentAt(detail, 'tax_issue')).toBe('2026-08-20T10:00:00Z');
+    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-20T10:00:00Z', providerMessageId: null });
   });
 
   it('does not match a failed-send-only history', () => {
     const detail = { statusEvents: [
       { status: 'admin_email_sent', label: 'Email not sent: tax_issue', created_at: '2026-08-20T10:00:00Z' }
     ] };
-    expect(lastEmailSentAt(detail, 'tax_issue')).toBe(null);
+    expect(lastEmailSent(detail, 'tax_issue')).toBe(null);
   });
 
   it('returns the latest success, ignoring an earlier success and a later failure', () => {
     const detail = { statusEvents: [
-      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-18T10:00:00Z' },
-      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-22T09:00:00Z' },
+      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-18T10:00:00Z', metadata: { providerMessageId: 'first' } },
+      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-22T09:00:00Z', metadata: { providerMessageId: 'second' } },
       { status: 'admin_email_sent', label: 'Email not sent: tax_issue', created_at: '2026-08-25T09:00:00Z' }
     ] };
-    expect(lastEmailSentAt(detail, 'tax_issue')).toBe('2026-08-22T09:00:00Z');
+    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-22T09:00:00Z', providerMessageId: 'second' });
   });
 
   it('does not match a different template key', () => {
     const detail = { statusEvents: [
       { status: 'admin_email_sent', label: 'Email sent: pbs_account_created', created_at: '2026-08-20T10:00:00Z' }
     ] };
-    expect(lastEmailSentAt(detail, 'tax_issue')).toBe(null);
+    expect(lastEmailSent(detail, 'tax_issue')).toBe(null);
   });
 });
 

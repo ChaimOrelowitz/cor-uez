@@ -40,7 +40,7 @@ import {
   formatTimestamp,
   grantSubmissionLikelyDetected,
   grantSubmitGateReason,
-  lastEmailSentAt,
+  lastEmailSent,
   nameControl,
   njTaxId,
   ownerDraftFrom,
@@ -1200,7 +1200,7 @@ export default function AdminPage() {
                 const issueDoc = docFor(detail, 'tax_clearance_issue');
                 const status = detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no');
                 const shownDoc = doc || issueDoc;
-                const lastSentAt = lastEmailSentAt(detail, 'tax_issue');
+                const lastSent = lastEmailSent(detail, 'tax_issue');
                 return <>
                   <div className="process-step-inline-select">
                     <label>Tax clearance</label>
@@ -1217,9 +1217,10 @@ export default function AdminPage() {
                         <small>{doc ? '✓ Tax clearance letter on file' : '⚠ Issue screenshot on file'} — {shownDoc.filename}</small>
                       </div>
                     : <small>No tax clearance document yet</small>}
-                  {lastSentAt && (
+                  {lastSent && (
                     <small className="tax-email-sent-note">
-                      Email sent {formatTimestamp(lastSentAt)} · <a href="#" onClick={(e) => { e.preventDefault(); sendTaxIssueEmail(); }}>Resend</a>
+                      Email sent {formatTimestamp(lastSent.createdAt)}
+                      {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
                     </small>
                   )}
                 </>;

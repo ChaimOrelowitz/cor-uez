@@ -16,14 +16,15 @@ router.use(requireUezAuth);
 // Internal-only ("every time an email is sent there is a log and timestamp") —
 // this is in addition to the uez_email_log row sendApplicationEmail already
 // writes; this is what makes the send show up in the admin Activity panel.
-async function addEmailActivity(applicationId, { label, message, userId }) {
+async function addEmailActivity(applicationId, { label, message, userId, metadata }) {
   await supabase.from('uez_status_events').insert({
     application_id: applicationId,
     status: 'admin_email_sent',
     label,
     message,
     visible_to_applicant: false,
-    created_by: userId || null
+    created_by: userId || null,
+    metadata: metadata || {}
   });
 }
 
@@ -155,7 +156,10 @@ router.post('/admin/applications/:id/send/:key', requireUezAdmin, async (req, re
       message: result.sent
         ? `Sent to ${result.log?.recipient || application.contact_email}.`
         : (result.error || (result.skipped ? `Skipped (${result.reason}).` : 'Send failed.')),
-      userId: req.user.id
+      userId: req.user.id,
+      // Lets the admin case page link straight to this send in the Resend
+      // dashboard (resend.com/emails/{id}) instead of just noting it happened.
+      metadata: result.sent && result.log?.provider_message_id ? { providerMessageId: result.log.provider_message_id } : {}
     }).catch(() => {});
 
     res.json(result);

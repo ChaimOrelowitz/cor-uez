@@ -305,15 +305,18 @@ export function grantSubmissionLikelyDetected(detail) {
 
 // Sourced from uez_status_events rows already on `detail` (addEmailActivity
 // in backend/routes/uezEmail.js writes `Email sent: ${templateKey}` on a
-// successful manual send, `Email not sent: ${templateKey}` on failure/skip).
-// Exact match on both status and the full label - never substring-matched -
-// so a failed send can never be mistaken for a successful one.
-export function lastEmailSentAt(detail, templateKey) {
+// successful manual send, `Email not sent: ${templateKey}` on failure/skip,
+// and stamps the Resend message id into the event's metadata so the case
+// page can link straight to it). Exact match on both status and the full
+// label - never substring-matched - so a failed send can never be mistaken
+// for a successful one.
+export function lastEmailSent(detail, templateKey) {
   const events = detail?.statusEvents || [];
   const match = [...events].reverse().find(
     (e) => e.status === 'admin_email_sent' && e.label === `Email sent: ${templateKey}`
   );
-  return match ? match.created_at : null;
+  if (!match) return null;
+  return { createdAt: match.created_at, providerMessageId: match.metadata?.providerMessageId || null };
 }
 
 export function applicationDraftFrom(app) {
