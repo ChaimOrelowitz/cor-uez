@@ -28,6 +28,7 @@ import {
   sendAdminApplicationEmail,
   updateAdminCaseNote,
   updateAdminProcessStep,
+  resetAdminProcessStep,
   uploadApplicationDocument,
   whoAmI
 } from './api';
@@ -901,6 +902,15 @@ export default function AdminPage() {
       : prev);
   }
 
+  async function resetProcessStep(stepKey) {
+    const applicationId = detail?.application?.id;
+    if (!applicationId) return;
+    await resetAdminProcessStep(applicationId, stepKey);
+    setDetail((prev) => (prev && prev.application.id === applicationId)
+      ? { ...prev, processSteps: (prev.processSteps || []).filter((s) => s.step_key !== stepKey) }
+      : prev);
+  }
+
   async function addCaseNote() {
     const applicationId = detail?.application?.id;
     const body = noteDraft.trim();
@@ -1103,6 +1113,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('formation', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 const formation = docFor(detail, 'formation');
                 const sole = detail.application.is_sole_proprietorship;
@@ -1129,6 +1140,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('brc', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 const brc = docFor(detail, 'brc');
                 const status = detail.application.brc_status;
@@ -1172,6 +1184,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('pbs_mynj', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 const hasExisting = detail.application.has_existing_pbs_account;
                 return <>
@@ -1223,6 +1236,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('tax_clearance', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 const doc = docFor(detail, 'tax_clearance');
                 const issueDoc = docFor(detail, 'tax_clearance_issue');
@@ -1273,6 +1287,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('uez_enrollment', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 const approval = docFor(detail, 'uez_approval_email');
                 const review = detail.application.uez_approval_review_status || 'not_reviewed';
@@ -1306,6 +1321,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('ldc_application', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 const doc = docFor(detail, 'ldc_application');
                 return <div className="doc-preview-row">
@@ -1326,6 +1342,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('payment', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 const latest = detail.payments?.[detail.payments.length - 1];
                 const requestedAt = detail.application.payment_requested_at;
@@ -1360,6 +1377,7 @@ export default function AdminPage() {
               busy={busy}
               operational={resolveProcessStep('grant_submission', detail)}
               onSaveOperational={saveProcessStep}
+              onResetOperational={resetProcessStep}
               factsContent={(() => {
                 if (detail.application.status === 'applied' || detail.application.status === 'grant_submitted') return <strong>✓ Submitted</strong>;
                 if (grantSubmissionLikelyDetected(detail)) return <strong>Looks submitted — needs confirmation</strong>;

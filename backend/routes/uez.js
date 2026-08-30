@@ -1685,4 +1685,35 @@ router.put('/admin/applications/:id/process-steps/:stepKey', requireUezAdmin, as
   }
 });
 
+// Clears an explicit verdict, reverting the card to the calculated default
+// (deriveDefaultProcessStep) - the status pill saves instantly with no
+// confirm step, so a stray click can otherwise leave a wrong value stuck
+// with no way back to "let the facts decide" short of guessing the right
+// state by hand.
+router.delete('/admin/applications/:id/process-steps/:stepKey', requireUezAdmin, async (req, res) => {
+  try {
+    const stepKey = req.params.stepKey;
+    if (!PROCESS_STEP_KEYS.includes(stepKey)) return res.status(404).json({ error: 'Unknown process step.' });
+
+    const { error } = await supabase.from('uez_process_steps')
+      .delete()
+      .eq('application_id', req.params.id)
+      .eq('step_key', stepKey);
+    if (error) throw error;
+
+    await addStatusEvent(
+      req.params.id,
+      'process_step_reset',
+      `${PROCESS_STEP_LABELS[stepKey] || stepKey} reset to auto`,
+      null,
+      req.user.id,
+      false
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 module.exports = router;

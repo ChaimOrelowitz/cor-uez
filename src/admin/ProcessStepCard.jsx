@@ -12,25 +12,36 @@ import { PROCESS_STEP_STATES, PROCESS_STEP_STATE_LABELS as STATE_LABELS, formatT
 // card only ever writes a bare state change now. Any previously-saved
 // waitingOn/waitingReason still displays in the byline below (historical
 // data, read-only here), it just can't be set from this control anymore.
+//
+// One escape hatch: since there's no confirm step, a stray click can leave
+// a wrong value stuck with no way back to "let the facts decide." Once an
+// explicit verdict exists, the same dropdown gets a "Reset to auto" option
+// that deletes it and reverts to the calculated default.
 const WAITING_ON_LABELS = {
   applicant: 'Waiting on applicant', accountant: 'Waiting on accountant',
   nj_state: 'Waiting on NJ State', document: 'Waiting on document', cor_follow_up: 'Waiting on me'
 };
 
-export default function ProcessStepCard({ stepKey, title, factsContent, operational, busy, onSaveOperational, actions }) {
+const RESET_VALUE = '__reset__';
+
+export default function ProcessStepCard({ stepKey, title, factsContent, operational, busy, onSaveOperational, onResetOperational, actions }) {
   const [saving, setSaving] = useState(false);
 
-  async function changeState(newState) {
-    if (newState === operational.state) return;
+  async function changeState(newValue) {
+    if (newValue === operational.state) return;
     setSaving(true);
     try {
-      await onSaveOperational(stepKey, {
-        state: newState,
-        waitingOn: null,
-        waitingSince: null,
-        waitingReason: null,
-        manualNote: operational.manualNote || null
-      });
+      if (newValue === RESET_VALUE) {
+        await onResetOperational(stepKey);
+      } else {
+        await onSaveOperational(stepKey, {
+          state: newValue,
+          waitingOn: null,
+          waitingSince: null,
+          waitingReason: null,
+          manualNote: operational.manualNote || null
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -49,6 +60,7 @@ export default function ProcessStepCard({ stepKey, title, factsContent, operatio
           disabled={busy || saving}
         >
           {PROCESS_STEP_STATES.map((s) => <option key={s} value={s}>{STATE_LABELS[s]}</option>)}
+          {operational.source === 'explicit' && <option value={RESET_VALUE}>↺ Reset to auto</option>}
         </select>
       </div>
 

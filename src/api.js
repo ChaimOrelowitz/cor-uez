@@ -317,3 +317,9 @@ export function updateAdminProcessStep(applicationId, stepKey, payload) {
     body: JSON.stringify(payload)
   });
 }
+
+export function resetAdminProcessStep(applicationId, stepKey) {
+  return request(`/api/uez/admin/applications/${applicationId}/process-steps/${encodeURIComponent(stepKey)}`, {
+    method: 'DELETE'
+  });
+}
