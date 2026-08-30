@@ -13,6 +13,7 @@ import {
   formationSatisfied,
   grantSubmissionLikelyDetected,
   grantSubmitGateReason,
+  lastEmailSentAt,
   packetReady,
   paymentStatusLabel,
   pbsAccountGateReason,
@@ -308,6 +309,42 @@ describe('grantSubmissionLikelyDetected', () => {
       statusEvents: [{ status: 'grant_submission_detected', created_at: '2026-08-27T10:00:00Z' }]
     };
     expect(grantSubmissionLikelyDetected(detail)).toBe(false);
+  });
+});
+
+describe('lastEmailSentAt', () => {
+  it('is null with no status events at all', () => {
+    expect(lastEmailSentAt({ statusEvents: [] }, 'tax_issue')).toBe(null);
+  });
+
+  it('returns created_at for a successful send', () => {
+    const detail = { statusEvents: [
+      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-20T10:00:00Z' }
+    ] };
+    expect(lastEmailSentAt(detail, 'tax_issue')).toBe('2026-08-20T10:00:00Z');
+  });
+
+  it('does not match a failed-send-only history', () => {
+    const detail = { statusEvents: [
+      { status: 'admin_email_sent', label: 'Email not sent: tax_issue', created_at: '2026-08-20T10:00:00Z' }
+    ] };
+    expect(lastEmailSentAt(detail, 'tax_issue')).toBe(null);
+  });
+
+  it('returns the latest success, ignoring an earlier success and a later failure', () => {
+    const detail = { statusEvents: [
+      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-18T10:00:00Z' },
+      { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-22T09:00:00Z' },
+      { status: 'admin_email_sent', label: 'Email not sent: tax_issue', created_at: '2026-08-25T09:00:00Z' }
+    ] };
+    expect(lastEmailSentAt(detail, 'tax_issue')).toBe('2026-08-22T09:00:00Z');
+  });
+
+  it('does not match a different template key', () => {
+    const detail = { statusEvents: [
+      { status: 'admin_email_sent', label: 'Email sent: pbs_account_created', created_at: '2026-08-20T10:00:00Z' }
+    ] };
+    expect(lastEmailSentAt(detail, 'tax_issue')).toBe(null);
   });
 });
 

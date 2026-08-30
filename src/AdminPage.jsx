@@ -40,6 +40,7 @@ import {
   formatTimestamp,
   grantSubmissionLikelyDetected,
   grantSubmitGateReason,
+  lastEmailSentAt,
   nameControl,
   njTaxId,
   ownerDraftFrom,
@@ -55,6 +56,7 @@ import ActivityPanel from './admin/ActivityPanel';
 import AdminSidebar from './admin/AdminSidebar';
 import BrcDetailsCard from './admin/BrcDetailsCard';
 import BusinessDetailsCard from './admin/BusinessDetailsCard';
+import DocThumbnail from './admin/DocThumbnail';
 import DocumentsPanel from './admin/DocumentsPanel';
 import EmailComposer from './admin/EmailComposer';
 import MyNjPbsCard from './admin/MyNjPbsCard';
@@ -1197,6 +1199,8 @@ export default function AdminPage() {
                 const doc = docFor(detail, 'tax_clearance');
                 const issueDoc = docFor(detail, 'tax_clearance_issue');
                 const status = detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no');
+                const shownDoc = doc || issueDoc;
+                const lastSentAt = lastEmailSentAt(detail, 'tax_issue');
                 return <>
                   <div className="process-step-inline-select">
                     <label>Tax clearance</label>
@@ -1207,11 +1211,17 @@ export default function AdminPage() {
                     </div>
                   </div>
                   {detail.application.tax_clearance_recheck_requested_at && <small className="tax-recheck-note">Client says resolved</small>}
-                  {doc
-                    ? <button type="button" className="text-button" onClick={() => previewDocument(doc)}>✓ Tax clearance letter on file — {doc.filename}</button>
-                    : issueDoc
-                      ? <button type="button" className="text-button" onClick={() => previewDocument(issueDoc)}>⚠ Issue screenshot on file — {issueDoc.filename}</button>
-                      : <small>No tax clearance document yet</small>}
+                  {shownDoc
+                    ? <div className="tax-doc-row">
+                        <DocThumbnail doc={shownDoc} applicationId={detail.application.id} onClick={() => previewDocument(shownDoc)} />
+                        <small>{doc ? '✓ Tax clearance letter on file' : '⚠ Issue screenshot on file'} — {shownDoc.filename}</small>
+                      </div>
+                    : <small>No tax clearance document yet</small>}
+                  {lastSentAt && (
+                    <small className="tax-email-sent-note">
+                      Email sent {formatTimestamp(lastSentAt)} · <a href="#" onClick={(e) => { e.preventDefault(); sendTaxIssueEmail(); }}>Resend</a>
+                    </small>
+                  )}
                 </>;
               })()}
               actions={[
@@ -1222,7 +1232,7 @@ export default function AdminPage() {
                   disabled: busy || !myNjCredentials
                 },
                 ...(detail.application.tax_clearance_status === 'issue' ? [{
-                  label: 'Send tax clearance issue email',
+                  label: 'Send TC Email',
                   hint: 'Preview the follow-up email — automatically attaches the issue screenshot on file, if there is one — before it goes out.',
                   onClick: sendTaxIssueEmail,
                   disabled: busy

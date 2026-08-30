@@ -303,6 +303,19 @@ export function grantSubmissionLikelyDetected(detail) {
   return !lastConfirmed || new Date(lastDetected.created_at) > new Date(lastConfirmed.created_at);
 }
 
+// Sourced from uez_status_events rows already on `detail` (addEmailActivity
+// in backend/routes/uezEmail.js writes `Email sent: ${templateKey}` on a
+// successful manual send, `Email not sent: ${templateKey}` on failure/skip).
+// Exact match on both status and the full label - never substring-matched -
+// so a failed send can never be mistaken for a successful one.
+export function lastEmailSentAt(detail, templateKey) {
+  const events = detail?.statusEvents || [];
+  const match = [...events].reverse().find(
+    (e) => e.status === 'admin_email_sent' && e.label === `Email sent: ${templateKey}`
+  );
+  return match ? match.created_at : null;
+}
+
 export function applicationDraftFrom(app) {
   return {
     contactEmail: app.contact_email || '',
