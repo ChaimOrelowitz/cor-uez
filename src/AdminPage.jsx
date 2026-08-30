@@ -1075,10 +1075,9 @@ export default function AdminPage() {
               <div className="ops-panel documents-panel">
                 <div className="ops-panel-head"><h3>Documents</h3><span>{readyDocumentCount(detail)}/5 ready</span></div>
                 <div className="ops-doc-list">
-                  {/* Formation and UEZ Approval Email removed — replaced by their ProcessStepCards below */}
+                  {/* Formation, UEZ Approval Email, and BRC removed — replaced by their ProcessStepCards below */}
                   {/* 'ldc_application' removed — replaced by the LDC Application ProcessStepCard below */}
                   {[
-                    ['brc', 'BRC'],
                     ['tax_clearance', 'Tax Clearance']
                   ].map(([type, label]) => {
                     const doc = docFor(detail, type);
@@ -1105,7 +1104,7 @@ export default function AdminPage() {
               <div className="ops-panel actions-panel">
                 <div className="mobile-desktop-workflow-note">Desktop automation · These workflow buttons use the COR Chrome extension.</div>
                 <div className="ops-action-grid clean-action-grid">
-                  <button className={`ops-action ${docFor(detail, 'brc') ? 'success-action' : 'primary'}`} onClick={runBrcLookup} disabled={busy}><span>FETCH</span><strong>BRC</strong></button>
+                  {/* 'FETCH BRC' removed — replaced by the BRC ProcessStepCard below */}
                   <button className={`ops-action ${detail.application.pbs_account_created ? 'success-action' : 'primary'}`} onClick={runPbsSignup} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS ACCOUNT</strong></button>
                   <button className="ops-action primary" onClick={runPbsLogin} disabled={busy || !myNjCredentials}><span>OPEN</span><strong>PBS</strong></button>
                   <button className={`ops-action ${docFor(detail, 'tax_clearance') ? 'success-action' : 'primary'}`} onClick={runTaxClearance} disabled={busy || !myNjCredentials}><span>FETCH</span><strong>TAX CLEARANCE</strong></button>
@@ -1215,6 +1214,36 @@ export default function AdminPage() {
                 </>;
               })()}
               actions={[]}
+            />
+
+            <ProcessStepCard
+              stepKey="brc"
+              title="BRC"
+              busy={busy}
+              operational={resolveProcessStep('brc', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const brc = docFor(detail, 'brc');
+                const status = detail.application.brc_status;
+                if (brc) return <button type="button" className="text-button" onClick={() => previewDocument(brc)}>✓ BRC on file — {brc.filename}</button>;
+                if (status === 'not_found') return <strong>NJ did not find a matching BRC</strong>;
+                if (status && status !== 'pending') return <strong>{status.replace(/_/g, ' ')}</strong>;
+                return <strong>Not yet fetched</strong>;
+              })()}
+              actions={[
+                {
+                  label: 'Fetch BRC',
+                  hint: 'Runs the automated NJ BRC lookup via the COR Chrome extension. On a match, the PDF and certificate details are saved directly to this applicant’s UEZ file.',
+                  onClick: runBrcLookup,
+                  disabled: busy
+                },
+                ...(detail.application.brc_status === 'not_found' ? [{
+                  label: 'Send BRC problem email',
+                  hint: 'Shows you the exact email before it goes out.',
+                  onClick: sendBrcProblemEmail,
+                  disabled: busy
+                }] : [])
+              ]}
             />
           </div>
 
