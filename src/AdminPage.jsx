@@ -791,6 +791,32 @@ export default function AdminPage() {
     openEmailComposer('formation_rejected');
   }
 
+  // The rest of the per-step "send the email for this step" actions, same
+  // preview-then-send flow via openEmailComposer/EmailComposer. Each of
+  // these already fires automatically at the moment the step actually
+  // happens (see backend/routes/uez.js) - these buttons are for previewing
+  // or resending it on demand, e.g. if it bounced or COR wants to check the
+  // wording before it reaches the client.
+  function sendPbsAccountCreatedEmail() {
+    openEmailComposer('pbs_account_created');
+  }
+
+  function sendTaxIssueEmail() {
+    openEmailComposer('tax_issue');
+  }
+
+  function sendUezApplicationSubmittedEmail() {
+    openEmailComposer('uez_application_submitted');
+  }
+
+  function sendPaymentReceivedEmail() {
+    openEmailComposer('payment_received');
+  }
+
+  function sendGrantSubmittedEmail() {
+    openEmailComposer('grant_submitted');
+  }
+
   async function openEmailComposer(templateKey) {
     const applicationId = detail?.application?.id;
     if (!applicationId) return;
@@ -1151,6 +1177,12 @@ export default function AdminPage() {
                   hint: myNjCredentials ? 'Opens PBS and signs in with the stored MyNJ login.' : 'Generate the MyNJ login first.',
                   onClick: runPbsLogin,
                   disabled: busy || !myNjCredentials
+                },
+                {
+                  label: 'Send PBS account email',
+                  hint: myNjCredentials ? 'Preview the "PBS account created" email — includes the MyNJ login — before it goes out.' : 'Generate the MyNJ login first; the email includes it.',
+                  onClick: sendPbsAccountCreatedEmail,
+                  disabled: busy || !myNjCredentials
                 }
               ]}
             />
@@ -1182,12 +1214,20 @@ export default function AdminPage() {
                       : <small>No tax clearance document yet</small>}
                 </>;
               })()}
-              actions={[{
-                label: 'Fetch Tax Clearance',
-                hint: 'Runs the automated NJ tax-clearance request via the COR Chrome extension. On success, the letter is saved directly to this applicant’s UEZ file.',
-                onClick: runTaxClearance,
-                disabled: busy || !myNjCredentials
-              }]}
+              actions={[
+                {
+                  label: 'Fetch Tax Clearance',
+                  hint: 'Runs the automated NJ tax-clearance request via the COR Chrome extension. On success, the letter is saved directly to this applicant’s UEZ file.',
+                  onClick: runTaxClearance,
+                  disabled: busy || !myNjCredentials
+                },
+                ...(detail.application.tax_clearance_status === 'issue' ? [{
+                  label: 'Send tax clearance issue email',
+                  hint: 'Preview the follow-up email — automatically attaches the issue screenshot on file, if there is one — before it goes out.',
+                  onClick: sendTaxIssueEmail,
+                  disabled: busy
+                }] : [])
+              ]}
             />
 
             <ProcessStepCard
@@ -1215,7 +1255,12 @@ export default function AdminPage() {
                     : <small>No UEZ approval email yet</small>}
                 </>;
               })()}
-              actions={[]}
+              actions={['applied', 'approved'].includes(detail.application.uez_application_status) ? [{
+                label: 'Send UEZ application submitted email',
+                hint: 'Preview the email confirming the UEZ application was submitted, before it goes out.',
+                onClick: sendUezApplicationSubmittedEmail,
+                disabled: busy
+              }] : []}
             />
 
             <ProcessStepCard
@@ -1251,12 +1296,20 @@ export default function AdminPage() {
                   {latest?.amount != null && <small>${Number(latest.amount).toLocaleString()}{latest.payment_method ? ` · ${latest.payment_method}` : ''}</small>}
                 </>;
               })()}
-              actions={[{
-                label: 'Confirm payment received',
-                hint: 'Marks the payment as received once you’ve verified it in your bank.',
-                onClick: confirmPayment,
-                disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
-              }]}
+              actions={[
+                {
+                  label: 'Confirm payment received',
+                  hint: 'Marks the payment as received once you’ve verified it in your bank.',
+                  onClick: confirmPayment,
+                  disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
+                },
+                ...(detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? [{
+                  label: 'Send payment received email',
+                  hint: 'Preview the payment-confirmation email before it goes out.',
+                  onClick: sendPaymentReceivedEmail,
+                  disabled: busy
+                }] : [])
+              ]}
             />
 
             <ProcessStepCard
@@ -1282,6 +1335,12 @@ export default function AdminPage() {
                   label: 'Confirm grant submitted',
                   hint: 'COR saw what looks like a successful Lakewood submission, but couldn’t confirm it automatically (no submission ID on that flow).',
                   onClick: confirmGrantSubmitted,
+                  disabled: busy
+                }] : []),
+                ...(detail.application.status === 'applied' || detail.application.status === 'grant_submitted' ? [{
+                  label: 'Send grant submitted email',
+                  hint: 'Preview the grant-submitted confirmation email before it goes out.',
+                  onClick: sendGrantSubmittedEmail,
                   disabled: busy
                 }] : [])
               ]}

@@ -1,6 +1,19 @@
 import React from 'react';
 import { formatTimestamp } from './caseLogic';
 
+// Friendly labels for the modal header — falls back to the raw template_key
+// for any template not in this list (e.g. one added later straight in the
+// Email Settings page), so a new template never breaks the composer.
+const TEMPLATE_LABELS = {
+  brc_not_found: 'BRC problem',
+  formation_rejected: 'Formation replacement request',
+  pbs_account_created: 'PBS account created',
+  tax_issue: 'Tax clearance issue',
+  uez_application_submitted: 'UEZ application submitted',
+  payment_received: 'Payment received',
+  grant_submitted: 'Grant submitted'
+};
+
 // The "show me the actual email before it goes out" flow: preview loads,
 // subject/body are editable, Send calls back into the caller, and the
 // durable sent/failed result stays visible until the admin closes it.
@@ -13,7 +26,7 @@ export default function EmailComposer({ composer, onChangeSubject, onChangeBody,
     <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !composer.sending) onClose(); }}>
       <div className="document-modal email-composer-modal" role="dialog" aria-modal="true" aria-label="Send email">
         <div className="document-modal-head">
-          <div><strong>Send email</strong><small>{composer.templateKey}</small></div>
+          <div><strong>Send email</strong><small>{TEMPLATE_LABELS[composer.templateKey] || composer.templateKey}</small></div>
           <button onClick={onClose} aria-label="Close" disabled={composer.sending}>×</button>
         </div>
         <div className="document-modal-body email-composer-body">
