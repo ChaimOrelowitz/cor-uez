@@ -1091,15 +1091,17 @@ export default function AdminPage() {
                 const formation = docFor(detail, 'formation');
                 const sole = detail.application.is_sole_proprietorship;
                 const review = detail.application.formation_review_status || 'not_reviewed';
-                if (sole && !formation) return <strong>Not required (sole proprietorship)</strong>;
-                if (!formation) return <strong>Missing</strong>;
-                return <button type="button" className="text-button" onClick={() => previewDocument(formation)}>
-                  {review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'} — {formation.filename}
-                </button>;
+                return <div className="doc-preview-row">
+                  <DocThumbnail doc={formation} applicationId={detail.application.id} onClick={() => formation && previewDocument(formation)} />
+                  {sole && !formation
+                    ? <small>Not required (sole proprietorship)</small>
+                    : !formation
+                      ? <small>Missing</small>
+                      : <small>{review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'} — {formation.filename}</small>}
+                </div>;
               })()}
               actions={detail.application.formation_review_status === 'rejected' ? [{
                 label: 'Send replacement request email',
-                hint: 'Shows you the exact email before it goes out.',
                 onClick: sendFormationRejectedEmail,
                 disabled: busy
               }] : []}
@@ -1114,21 +1116,25 @@ export default function AdminPage() {
               factsContent={(() => {
                 const brc = docFor(detail, 'brc');
                 const status = detail.application.brc_status;
-                if (brc) return <button type="button" className="text-button" onClick={() => previewDocument(brc)}>✓ BRC on file — {brc.filename}</button>;
-                if (status === 'not_found') return <strong>NJ did not find a matching BRC</strong>;
-                if (status && status !== 'pending') return <strong>{status.replace(/_/g, ' ')}</strong>;
-                return <strong>Not yet fetched</strong>;
+                return <div className="doc-preview-row">
+                  <DocThumbnail doc={brc} applicationId={detail.application.id} onClick={() => brc && previewDocument(brc)} />
+                  {brc
+                    ? <small>✓ BRC on file — {brc.filename}</small>
+                    : status === 'not_found'
+                      ? <small>NJ did not find a matching BRC</small>
+                      : status && status !== 'pending'
+                        ? <small>{status.replace(/_/g, ' ')}</small>
+                        : <small>Not yet fetched</small>}
+                </div>;
               })()}
               actions={[
                 {
                   label: 'Fetch BRC',
-                  hint: 'Runs the automated NJ BRC lookup via the COR Chrome extension. On a match, the PDF and certificate details are saved directly to this applicant’s UEZ file.',
                   onClick: runBrcLookup,
                   disabled: busy
                 },
                 ...(detail.application.brc_status === 'not_found' ? [{
                   label: 'Send BRC problem email',
-                  hint: 'Shows you the exact email before it goes out.',
                   onClick: sendBrcProblemEmail,
                   disabled: busy
                 }] : [])
@@ -1170,19 +1176,16 @@ export default function AdminPage() {
                   // "Open PBS" below, done by hand in the visible NJ window),
                   // no automated flow for it.
                   label: 'Open PBS account',
-                  hint: pbsAccountGateReason(detail, myNjCredentials) || 'Opens NJ Premier Business Services and creates the account and business listing via the COR Chrome extension.',
                   onClick: runPbsSignup,
                   disabled: busy || Boolean(pbsAccountGateReason(detail, myNjCredentials))
                 },
                 {
                   label: 'Open PBS',
-                  hint: myNjCredentials ? 'Opens PBS and signs in with the stored MyNJ login.' : 'Generate the MyNJ login first.',
                   onClick: runPbsLogin,
                   disabled: busy || !myNjCredentials
                 },
                 {
                   label: 'Send PBS account email',
-                  hint: myNjCredentials ? 'Preview the "PBS account created" email — includes the MyNJ login — before it goes out.' : 'Generate the MyNJ login first; the email includes it.',
                   onClick: sendPbsAccountCreatedEmail,
                   disabled: busy || !myNjCredentials
                 }
@@ -1212,7 +1215,7 @@ export default function AdminPage() {
                   </div>
                   {detail.application.tax_clearance_recheck_requested_at && <small className="tax-recheck-note">Client says resolved</small>}
                   {shownDoc
-                    ? <div className="tax-doc-row">
+                    ? <div className="doc-preview-row">
                         <DocThumbnail doc={shownDoc} applicationId={detail.application.id} onClick={() => previewDocument(shownDoc)} />
                         <small>{doc ? '✓ Tax clearance letter on file' : '⚠ Issue screenshot on file'} — {shownDoc.filename}</small>
                       </div>
@@ -1228,13 +1231,11 @@ export default function AdminPage() {
               actions={[
                 {
                   label: 'Fetch Tax Clearance',
-                  hint: 'Runs the automated NJ tax-clearance request via the COR Chrome extension. On success, the letter is saved directly to this applicant’s UEZ file.',
                   onClick: runTaxClearance,
                   disabled: busy || !myNjCredentials
                 },
                 ...(detail.application.tax_clearance_status === 'issue' ? [{
                   label: 'Send TC Email',
-                  hint: 'Preview the follow-up email — automatically attaches the issue screenshot on file, if there is one — before it goes out.',
                   onClick: sendTaxIssueEmail,
                   disabled: busy
                 }] : [])
@@ -1259,16 +1260,16 @@ export default function AdminPage() {
                       <option value="approved">Approved</option>
                     </select>
                   </div>
-                  {approval
-                    ? <button type="button" className="text-button" onClick={() => previewDocument(approval)}>
-                        {review === 'approved' ? '✓ Approval email approved' : review === 'rejected' ? '⚠ Approval email marked wrong' : '! Approval email needs review'} — {approval.filename}
-                      </button>
-                    : <small>No UEZ approval email yet</small>}
+                  <div className="doc-preview-row">
+                    <DocThumbnail doc={approval} applicationId={detail.application.id} onClick={() => approval && previewDocument(approval)} />
+                    {approval
+                      ? <small>{review === 'approved' ? '✓ Approval email approved' : review === 'rejected' ? '⚠ Approval email marked wrong' : '! Approval email needs review'} — {approval.filename}</small>
+                      : <small>No UEZ approval email yet</small>}
+                  </div>
                 </>;
               })()}
               actions={['applied', 'approved'].includes(detail.application.uez_application_status) ? [{
                 label: 'Send UEZ application submitted email',
-                hint: 'Preview the email confirming the UEZ application was submitted, before it goes out.',
                 onClick: sendUezApplicationSubmittedEmail,
                 disabled: busy
               }] : []}
@@ -1282,13 +1283,13 @@ export default function AdminPage() {
               onSaveOperational={saveProcessStep}
               factsContent={(() => {
                 const doc = docFor(detail, 'ldc_application');
-                return doc
-                  ? <button type="button" className="text-button" onClick={() => previewDocument(doc)}>✓ Signed application on file — {doc.filename}</button>
-                  : <strong>Not yet filled out</strong>;
+                return <div className="doc-preview-row">
+                  <DocThumbnail doc={doc} applicationId={detail.application.id} onClick={() => doc && previewDocument(doc)} />
+                  {doc ? <small>✓ Signed application on file — {doc.filename}</small> : <small>Not yet filled out</small>}
+                </div>;
               })()}
               actions={[{
                 label: 'Fill out LDC application',
-                hint: 'Fills and signs the Lakewood LDC incentive application via the COR Chrome extension.',
                 onClick: runLdcJotform,
                 disabled: busy
               }]}
@@ -1310,13 +1311,11 @@ export default function AdminPage() {
               actions={[
                 {
                   label: 'Confirm payment received',
-                  hint: 'Marks the payment as received once you’ve verified it in your bank.',
                   onClick: confirmPayment,
                   disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
                 },
                 ...(detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? [{
                   label: 'Send payment received email',
-                  hint: 'Preview the payment-confirmation email before it goes out.',
                   onClick: sendPaymentReceivedEmail,
                   disabled: busy
                 }] : [])
@@ -1338,19 +1337,16 @@ export default function AdminPage() {
               actions={[
                 {
                   label: 'Submit Grant App',
-                  hint: grantSubmitGateReason(detail) || 'Submits the Lakewood UEZ Technology Grant application via the COR Chrome extension.',
                   onClick: runLakewoodGrantPortal,
                   disabled: busy || Boolean(grantSubmitGateReason(detail))
                 },
                 ...(grantSubmissionLikelyDetected(detail) ? [{
                   label: 'Confirm grant submitted',
-                  hint: 'COR saw what looks like a successful Lakewood submission, but couldn’t confirm it automatically (no submission ID on that flow).',
                   onClick: confirmGrantSubmitted,
                   disabled: busy
                 }] : []),
                 ...(detail.application.status === 'applied' || detail.application.status === 'grant_submitted' ? [{
                   label: 'Send grant submitted email',
-                  hint: 'Preview the grant-submitted confirmation email before it goes out.',
                   onClick: sendGrantSubmittedEmail,
                   disabled: busy
                 }] : [])

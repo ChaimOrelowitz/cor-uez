@@ -13,11 +13,15 @@ function isImageDoc(doc) {
 // shown inline at thumbnail size. Images render as an <img>; everything else
 // (PDF, .eml) falls back to a generic document glyph rather than trying to
 // shrink an iframe into a tiny box, which nothing in this app supports.
+// doc may be null/undefined - every process-step card with a document
+// renders this holder even before anything's on file, so the layout doesn't
+// jump once a doc actually shows up.
 export default function DocThumbnail({ doc, applicationId, onClick }) {
   const [url, setUrl] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(doc));
 
   useEffect(() => {
+    if (!doc) { setUrl(''); setLoading(false); return; }
     let cancelled = false;
     setUrl('');
     setLoading(true);
@@ -26,7 +30,11 @@ export default function DocThumbnail({ doc, applicationId, onClick }) {
       .catch(() => { /* decorative - the icon fallback still opens the real modal */ })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [doc.id, applicationId]);
+  }, [doc?.id, applicationId]);
+
+  if (!doc) {
+    return <span className="doc-thumb doc-thumb-empty" aria-hidden="true" />;
+  }
 
   const image = isImageDoc(doc);
 

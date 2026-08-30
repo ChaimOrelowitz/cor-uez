@@ -66,9 +66,7 @@ export default function ProcessStepCard({ stepKey, title, factsContent, operatio
 
       <div className="process-step-operational">
         {!draft ? <>
-          {operational.source === 'explicit'
-            ? <small className="process-step-byline">Set by {operational.updatedByName || 'admin'} · {formatTimestamp(operational.updatedAt)}{operational.state === 'waiting' && operational.waitingOn ? ` · ${WAITING_ON_LABELS[operational.waitingOn]}` : ''}{operational.waitingReason ? ` — ${operational.waitingReason}` : ''}</small>
-            : <small className="process-step-byline muted">(auto)</small>}
+          {operational.source === 'explicit' && <small className="process-step-byline">Set by {operational.updatedByName || 'admin'} · {formatTimestamp(operational.updatedAt)}{operational.state === 'waiting' && operational.waitingOn ? ` · ${WAITING_ON_LABELS[operational.waitingOn]}` : ''}{operational.waitingReason ? ` — ${operational.waitingReason}` : ''}</small>}
           <button type="button" className="text-button" onClick={() => setDraft(current)} disabled={busy}>Change status</button>
         </> : (
           <div className="process-step-edit">
@@ -96,8 +94,6 @@ export default function ProcessStepCard({ stepKey, title, factsContent, operatio
         {actions.map((action) => (
           <div key={action.label} className="process-step-action">
             <button className="ops-action primary" onClick={action.onClick} disabled={action.disabled || busy}>{action.label}</button>
-            {action.hint && <small className="process-step-action-hint">{action.hint}</small>}
-            {action.disabled && action.disabledReason && <small className="process-step-action-disabled">{action.disabledReason}</small>}
           </div>
         ))}
       </div>}
