@@ -1527,7 +1527,9 @@ router.delete('/admin/applications/:id/notes/:noteId', requireUezAdmin, async (r
 // deriveDefaultProcessStep on the frontend); this table only exists for the
 // cases where Chaim's own read of the case differs from what the facts alone
 // would suggest, or where he wants to record a reason/manual note.
-const PROCESS_STEP_KEYS = ['formation', 'brc', 'pbs_mynj', 'tax_clearance', 'uez_enrollment', 'ldc_application', 'grant_submission', 'payment'];
+// Order mirrors the canonical PROCESS_STEP_KEYS in src/admin/caseLogic.js (not
+// shared/imported across the frontend/backend boundary — keep in sync by hand).
+const PROCESS_STEP_KEYS = ['formation', 'brc', 'pbs_mynj', 'tax_clearance', 'uez_enrollment', 'ldc_application', 'payment', 'grant_submission'];
 const PROCESS_STEP_STATES = ['not_started', 'in_progress', 'waiting', 'complete', 'not_applicable', 'manual'];
 const WAITING_ON_VALUES = ['applicant', 'accountant', 'nj_state', 'document', 'cor_follow_up'];
 const PROCESS_STEP_LABELS = {

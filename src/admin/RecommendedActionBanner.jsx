@@ -12,6 +12,11 @@ export default function RecommendedActionBanner({ queue }) {
       <div className="recommended-action-body">
         <span className="recommended-action-label">Recommended next</span>
         <strong>{queue.action}</strong>
+        {queue.secondaryAction && (
+          <small className={`recommended-action-secondary tone-${queue.secondaryAction.tone}`}>
+            Also: {queue.secondaryAction.action}
+          </small>
+        )}
       </div>
       <span className="recommended-action-stage">{queue.stage}</span>
     </div>

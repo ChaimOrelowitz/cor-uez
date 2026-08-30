@@ -201,6 +201,70 @@ describe('adminQueueInfo', () => {
   });
 });
 
+// Tax Clearance and UEZ Enrollment are worked in parallel in real life, so
+// adminQueueInfo evaluates both instead of letting whichever check runs
+// first hide the other — these cases pin that behavior down directly.
+describe('adminQueueInfo parallel tax/UEZ', () => {
+  const base = { submitted_at: '2026-01-01', document_types: ['brc'], has_existing_pbs_account: false, pbs_account_created: true };
+
+  it('UEZ not started and tax not fetched: UEZ is primary, tax surfaces as a secondary needs-action', () => {
+    const info = adminQueueInfo({ ...base });
+    expect(info).toMatchObject({ bucket: 'needs', action: 'UEZ application next', rank: 7, stepKey: 'uez_enrollment' });
+    expect(info.secondaryAction).toMatchObject({ action: 'Fetch tax clearance', stepKey: 'tax_clearance', bucket: 'needs' });
+  });
+
+  it('UEZ not started and tax has an issue: UEZ stays primary, tax issue surfaces as a secondary waiting note', () => {
+    const info = adminQueueInfo({ ...base, tax_clearance_status: 'issue' });
+    expect(info).toMatchObject({ bucket: 'needs', action: 'UEZ application next', stepKey: 'uez_enrollment' });
+    expect(info.secondaryAction).toMatchObject({ action: expect.stringMatching(/tax clearance issue/i), stepKey: 'tax_clearance', bucket: 'waiting' });
+  });
+
+  it('UEZ approved but tax not good: tax is primary, no secondary, and LDC is not suggested yet', () => {
+    const info = adminQueueInfo({ ...base, uez_application_status: 'approved', tax_clearance_status: 'no' });
+    expect(info).toMatchObject({ bucket: 'needs', action: 'Fetch tax clearance', stepKey: 'tax_clearance' });
+    expect(info.secondaryAction).toBeNull();
+    expect(info.stepKey).not.toBe('ldc_application');
+  });
+
+  it('UEZ applied and rejected, tax not fetched: tax becomes primary (needs beats waiting), UEZ surfaces as secondary', () => {
+    // Today's fix: previously the UEZ waiting-state ended the search early and
+    // the admin was never told an actionable tax-clearance fetch was sitting there.
+    const info = adminQueueInfo({
+      ...base,
+      document_types: ['brc', 'uez_approval_email'],
+      uez_application_status: 'applied',
+      uez_approval_review_status: 'rejected'
+    });
+    expect(info).toMatchObject({ bucket: 'needs', action: 'Fetch tax clearance', stepKey: 'tax_clearance' });
+    expect(info.secondaryAction).toMatchObject({ action: 'Waiting for UEZ email replacement', stepKey: 'uez_enrollment', bucket: 'waiting' });
+  });
+
+  it('both waiting at once: the lower (more urgent) rank wins as primary', () => {
+    const info = adminQueueInfo({ ...base, uez_application_status: 'applied', tax_clearance_status: 'issue' });
+    expect(info).toMatchObject({ bucket: 'waiting', action: expect.stringMatching(/tax clearance issue/i), stepKey: 'tax_clearance' });
+    expect(info.secondaryAction).toMatchObject({ stepKey: 'uez_enrollment' });
+  });
+
+  it('both satisfied: falls through to LDC Application unchanged, with no secondary action', () => {
+    const info = adminQueueInfo({
+      ...base,
+      document_types: ['brc', 'tax_clearance'],
+      uez_application_status: 'approved',
+      tax_clearance_status: 'good',
+      is_sole_proprietorship: true,
+      payment_status: 'paid'
+    });
+    expect(info).toMatchObject({ bucket: 'needs', action: 'Fill out LDC application', rank: 9, stepKey: 'ldc_application' });
+    expect(info.secondaryAction).toBeUndefined();
+  });
+});
+
+describe('PROCESS_STEP_KEYS order', () => {
+  it('places payment before grant_submission, matching the real-world workflow (payment is penultimate)', () => {
+    expect(PROCESS_STEP_KEYS.indexOf('payment')).toBeLessThan(PROCESS_STEP_KEYS.indexOf('grant_submission'));
+  });
+});
+
 describe('grantSubmissionLikelyDetected', () => {
   it('is false with no status events at all', () => {
     expect(grantSubmissionLikelyDetected({ application: { status: 'in_progress' }, statusEvents: [] })).toBe(false);

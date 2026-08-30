@@ -108,6 +108,50 @@ export function adminStageLabel(app) {
   return 'APPLICANT SIGNUP';
 }
 
+// Tax Clearance and UEZ Enrollment are worked in parallel in real life — an
+// issue on one doesn't mean COR waits before pushing on the other. So each is
+// evaluated independently here instead of one hiding the other behind an
+// early return; adminQueueInfo below combines them into a primary + optional
+// secondaryAction instead of picking just one and going silent on the rest.
+function uezEnrollmentStepEntry(app, types, approvalReview) {
+  const status = app.uez_application_status;
+  if (!status || status === 'not_started') {
+    return { bucket: 'needs', action: 'UEZ application next', tone: 'danger', rank: 7, stepKey: 'uez_enrollment' };
+  }
+  if (status === 'applied') {
+    if (types.has('uez_approval_email') && approvalReview === 'rejected') {
+      return { bucket: 'waiting', action: 'Waiting for UEZ email replacement', tone: 'warn', rank: 52, stepKey: 'uez_enrollment' };
+    }
+    if (!types.has('uez_approval_email') || approvalReview !== 'approved') {
+      return { bucket: 'waiting', action: 'Waiting for UEZ approval', tone: 'quiet', rank: 55, stepKey: 'uez_enrollment' };
+    }
+  }
+  return null; // approved — satisfied, nothing to surface
+}
+
+function taxClearanceStepEntry(app, types) {
+  const status = app.tax_clearance_status || (app.tax_clearance_good ? 'good' : 'no');
+  if (status !== 'good' || !types.has('tax_clearance')) {
+    if (status === 'issue' || types.has('tax_clearance_issue')) {
+      return { bucket: 'waiting', action: 'Tax clearance issue — waiting on client', tone: 'warn', rank: 51, stepKey: 'tax_clearance' };
+    }
+    return { bucket: 'needs', action: 'Fetch tax clearance', tone: 'danger', rank: 8, stepKey: 'tax_clearance' };
+  }
+  return null; // good — satisfied, nothing to surface
+}
+
+// needs beats waiting; within the same bucket, lower rank wins — the same
+// bucket-then-rank precedence filterAndSortApplications already uses below.
+function pickPrimaryAndSecondary(uezEntry, taxEntry) {
+  if (!uezEntry) return [taxEntry, null];
+  if (!taxEntry) return [uezEntry, null];
+  const weight = { needs: 0, waiting: 1 };
+  const uezWeight = weight[uezEntry.bucket] ?? 9;
+  const taxWeight = weight[taxEntry.bucket] ?? 9;
+  if (uezWeight !== taxWeight) return uezWeight < taxWeight ? [uezEntry, taxEntry] : [taxEntry, uezEntry];
+  return uezEntry.rank <= taxEntry.rank ? [uezEntry, taxEntry] : [taxEntry, uezEntry];
+}
+
 // The single most important derivation in the admin app: given one applicant
 // row, decide what bucket they're in (needs my action / waiting / ready /
 // submitted) and what the one recommended next action is. This is what
@@ -139,18 +183,15 @@ export function adminQueueInfo(app) {
   if (app.has_existing_pbs_account == null) return { bucket: 'needs', action: 'Confirm PBS account answer', tone: 'danger', stage, rank: 6, stepKey: 'pbs_mynj' };
   if (!app.pbs_account_created) return { bucket: 'needs', action: 'Set up PBS', tone: 'danger', stage, rank: 6, stepKey: 'pbs_mynj' };
 
-  if (app.uez_application_status === 'not_started' || !app.uez_application_status) {
-    return { bucket: 'needs', action: 'UEZ application next', tone: 'danger', stage, rank: 7, stepKey: 'uez_enrollment' };
-  }
-
-  if (app.uez_application_status === 'applied') {
-    if (types.has('uez_approval_email') && approvalReview === 'rejected') return { bucket: 'waiting', action: 'Waiting for UEZ email replacement', tone: 'warn', stage, rank: 52, stepKey: 'uez_enrollment' };
-    if (!types.has('uez_approval_email') || approvalReview !== 'approved') return { bucket: 'waiting', action: 'Waiting for UEZ approval', tone: 'quiet', stage, rank: 55, stepKey: 'uez_enrollment' };
-  }
-
-  if ((app.tax_clearance_status || (app.tax_clearance_good ? 'good' : 'no')) !== 'good' || !types.has('tax_clearance')) {
-    if ((app.tax_clearance_status || 'no') === 'issue' || types.has('tax_clearance_issue')) return { bucket: 'waiting', action: 'Tax clearance issue — waiting on client', tone: 'warn', stage, rank: 51, stepKey: 'tax_clearance' };
-    return { bucket: 'needs', action: 'Fetch tax clearance', tone: 'danger', stage, rank: 8, stepKey: 'tax_clearance' };
+  const uezEntry = uezEnrollmentStepEntry(app, types, approvalReview);
+  const taxEntry = taxClearanceStepEntry(app, types);
+  if (uezEntry || taxEntry) {
+    const [primary, secondary] = pickPrimaryAndSecondary(uezEntry, taxEntry);
+    return {
+      bucket: primary.bucket, action: primary.action, tone: primary.tone, stage,
+      rank: primary.rank, stepKey: primary.stepKey,
+      secondaryAction: secondary ? { action: secondary.action, stepKey: secondary.stepKey, tone: secondary.tone, bucket: secondary.bucket } : null
+    };
   }
 
   if (!app.is_sole_proprietorship && !types.has('formation')) return { bucket: 'waiting', action: 'Waiting for Formation document', tone: 'warn', stage, rank: 53, stepKey: 'formation' };
@@ -310,9 +351,15 @@ export function queueCounts(applications) {
 // written back to the DB, recomputed fresh on every read, so there's no
 // backfill and no risk of a derived guess masquerading as a real decision.
 
+// Canonical order the case actually gets worked in: confirm Formation, fetch
+// BRC (or tell the client to register one), set up PBS/MyNJ, then work Tax
+// Clearance and UEZ Enrollment in parallel, fill out the LDC application once
+// both are good, collect Payment, and submit the Grant last. AdminPage.jsx's
+// `.process-step-grid` card order is meant to mirror this exactly — there's
+// no programmatic link between the two, so keep them in sync by hand.
 export const PROCESS_STEP_KEYS = [
   'formation', 'brc', 'pbs_mynj', 'tax_clearance',
-  'uez_enrollment', 'ldc_application', 'grant_submission', 'payment'
+  'uez_enrollment', 'ldc_application', 'payment', 'grant_submission'
 ];
 
 export const PROCESS_STEP_STATES = ['not_started', 'in_progress', 'waiting', 'complete', 'not_applicable', 'manual'];

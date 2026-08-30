@@ -1066,49 +1066,12 @@ export default function AdminPage() {
 
           {/* The 8-card process redesign - one card per step, each an
               operational verdict (not_started/in_progress/waiting/complete/
-              not_applicable/manual) layered over the facts below it. */}
+              not_applicable/manual) layered over the facts below it. Card
+              order mirrors PROCESS_STEP_KEYS in caseLogic.js: confirm
+              Formation, fetch BRC, set up PBS/MyNJ, then work Tax Clearance
+              and UEZ Enrollment in parallel, fill out the LDC application
+              once both are good, collect Payment, submit the Grant last. */}
           <div className="process-step-grid">
-            <ProcessStepCard
-              stepKey="payment"
-              title="Payment"
-              busy={busy}
-              operational={resolveProcessStep('payment', detail)}
-              onSaveOperational={saveProcessStep}
-              factsContent={(() => {
-                const latest = detail.payments?.[detail.payments.length - 1];
-                return <>
-                  <strong>{paymentStatusLabel(latest?.status)}</strong>
-                  {latest?.amount != null && <small>${Number(latest.amount).toLocaleString()}{latest.payment_method ? ` · ${latest.payment_method}` : ''}</small>}
-                </>;
-              })()}
-              actions={[{
-                label: 'Confirm payment received',
-                hint: 'Marks the payment as received once you’ve verified it in your bank.',
-                onClick: confirmPayment,
-                disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
-              }]}
-            />
-
-            <ProcessStepCard
-              stepKey="ldc_application"
-              title="LDC Application"
-              busy={busy}
-              operational={resolveProcessStep('ldc_application', detail)}
-              onSaveOperational={saveProcessStep}
-              factsContent={(() => {
-                const doc = docFor(detail, 'ldc_application');
-                return doc
-                  ? <button type="button" className="text-button" onClick={() => previewDocument(doc)}>✓ Signed application on file — {doc.filename}</button>
-                  : <strong>Not yet filled out</strong>;
-              })()}
-              actions={[{
-                label: 'Fill out LDC application',
-                hint: 'Fills and signs the Lakewood LDC incentive application via the COR Chrome extension.',
-                onClick: runLdcJotform,
-                disabled: busy
-              }]}
-            />
-
             <ProcessStepCard
               stepKey="formation"
               title="Formation"
@@ -1131,34 +1094,6 @@ export default function AdminPage() {
                 onClick: sendFormationRejectedEmail,
                 disabled: busy
               }] : []}
-            />
-
-            <ProcessStepCard
-              stepKey="uez_enrollment"
-              title="UEZ Enrollment"
-              busy={busy}
-              operational={resolveProcessStep('uez_enrollment', detail)}
-              onSaveOperational={saveProcessStep}
-              factsContent={(() => {
-                const approval = docFor(detail, 'uez_approval_email');
-                const review = detail.application.uez_approval_review_status || 'not_reviewed';
-                return <>
-                  <div className="process-step-inline-select">
-                    <label>UEZ status</label>
-                    <select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}>
-                      <option value="not_started">Not Started</option>
-                      <option value="applied">Applied</option>
-                      <option value="approved">Approved</option>
-                    </select>
-                  </div>
-                  {approval
-                    ? <button type="button" className="text-button" onClick={() => previewDocument(approval)}>
-                        {review === 'approved' ? '✓ Approval email approved' : review === 'rejected' ? '⚠ Approval email marked wrong' : '! Approval email needs review'} — {approval.filename}
-                      </button>
-                    : <small>No UEZ approval email yet</small>}
-                </>;
-              })()}
-              actions={[]}
             />
 
             <ProcessStepCard
@@ -1188,6 +1123,47 @@ export default function AdminPage() {
                   onClick: sendBrcProblemEmail,
                   disabled: busy
                 }] : [])
+              ]}
+            />
+
+            <ProcessStepCard
+              stepKey="pbs_mynj"
+              title="PBS / MyNJ"
+              busy={busy}
+              operational={resolveProcessStep('pbs_mynj', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const hasExisting = detail.application.has_existing_pbs_account;
+                return <>
+                  <div className="process-step-inline-select">
+                    <label>PBS account created</label>
+                    <div className="tiny-toggle">
+                      <button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button>
+                      <button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button>
+                    </div>
+                  </div>
+                  {myNjCredentials
+                    ? <small>MyNJ login on file</small>
+                    : <small>No MyNJ login yet{hasExisting == null ? ' — waiting on the applicant’s existing-account answer' : ''}</small>}
+                </>;
+              })()}
+              actions={[
+                {
+                  // Existing-PBS-account clients only need the business added,
+                  // not a whole new account — that branch stays manual (via
+                  // "Open PBS" below, done by hand in the visible NJ window),
+                  // no automated flow for it.
+                  label: 'Open PBS account',
+                  hint: pbsAccountGateReason(detail, myNjCredentials) || 'Opens NJ Premier Business Services and creates the account and business listing via the COR Chrome extension.',
+                  onClick: runPbsSignup,
+                  disabled: busy || Boolean(pbsAccountGateReason(detail, myNjCredentials))
+                },
+                {
+                  label: 'Open PBS',
+                  hint: myNjCredentials ? 'Opens PBS and signs in with the stored MyNJ login.' : 'Generate the MyNJ login first.',
+                  onClick: runPbsLogin,
+                  disabled: busy || !myNjCredentials
+                }
               ]}
             />
 
@@ -1227,6 +1203,75 @@ export default function AdminPage() {
             />
 
             <ProcessStepCard
+              stepKey="uez_enrollment"
+              title="UEZ Enrollment"
+              busy={busy}
+              operational={resolveProcessStep('uez_enrollment', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const approval = docFor(detail, 'uez_approval_email');
+                const review = detail.application.uez_approval_review_status || 'not_reviewed';
+                return <>
+                  <div className="process-step-inline-select">
+                    <label>UEZ status</label>
+                    <select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}>
+                      <option value="not_started">Not Started</option>
+                      <option value="applied">Applied</option>
+                      <option value="approved">Approved</option>
+                    </select>
+                  </div>
+                  {approval
+                    ? <button type="button" className="text-button" onClick={() => previewDocument(approval)}>
+                        {review === 'approved' ? '✓ Approval email approved' : review === 'rejected' ? '⚠ Approval email marked wrong' : '! Approval email needs review'} — {approval.filename}
+                      </button>
+                    : <small>No UEZ approval email yet</small>}
+                </>;
+              })()}
+              actions={[]}
+            />
+
+            <ProcessStepCard
+              stepKey="ldc_application"
+              title="LDC Application"
+              busy={busy}
+              operational={resolveProcessStep('ldc_application', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const doc = docFor(detail, 'ldc_application');
+                return doc
+                  ? <button type="button" className="text-button" onClick={() => previewDocument(doc)}>✓ Signed application on file — {doc.filename}</button>
+                  : <strong>Not yet filled out</strong>;
+              })()}
+              actions={[{
+                label: 'Fill out LDC application',
+                hint: 'Fills and signs the Lakewood LDC incentive application via the COR Chrome extension.',
+                onClick: runLdcJotform,
+                disabled: busy
+              }]}
+            />
+
+            <ProcessStepCard
+              stepKey="payment"
+              title="Payment"
+              busy={busy}
+              operational={resolveProcessStep('payment', detail)}
+              onSaveOperational={saveProcessStep}
+              factsContent={(() => {
+                const latest = detail.payments?.[detail.payments.length - 1];
+                return <>
+                  <strong>{paymentStatusLabel(latest?.status)}</strong>
+                  {latest?.amount != null && <small>${Number(latest.amount).toLocaleString()}{latest.payment_method ? ` · ${latest.payment_method}` : ''}</small>}
+                </>;
+              })()}
+              actions={[{
+                label: 'Confirm payment received',
+                hint: 'Marks the payment as received once you’ve verified it in your bank.',
+                onClick: confirmPayment,
+                disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
+              }]}
+            />
+
+            <ProcessStepCard
               stepKey="grant_submission"
               title="Grant Submission"
               busy={busy}
@@ -1251,43 +1296,6 @@ export default function AdminPage() {
                   onClick: confirmGrantSubmitted,
                   disabled: busy
                 }] : [])
-              ]}
-            />
-
-            <ProcessStepCard
-              stepKey="pbs_mynj"
-              title="PBS / MyNJ"
-              busy={busy}
-              operational={resolveProcessStep('pbs_mynj', detail)}
-              onSaveOperational={saveProcessStep}
-              factsContent={(() => {
-                const hasExisting = detail.application.has_existing_pbs_account;
-                return <>
-                  <div className="process-step-inline-select">
-                    <label>PBS account created</label>
-                    <div className="tiny-toggle">
-                      <button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={() => setProcessFlag('pbsAccountCreated', true)} disabled={busy}>Yes</button>
-                      <button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button>
-                    </div>
-                  </div>
-                  {myNjCredentials
-                    ? <small>MyNJ login on file</small>
-                    : <small>No MyNJ login yet{hasExisting == null ? ' — waiting on the applicant’s existing-account answer' : ''}</small>}
-                </>;
-              })()}
-              actions={[
-                {
-                  label: 'Open PBS account',
-                  hint: pbsAccountGateReason(detail, myNjCredentials) || 'Opens NJ Premier Business Services and creates the account and business listing via the COR Chrome extension.',
-                  onClick: runPbsSignup,
-                  disabled: busy || Boolean(pbsAccountGateReason(detail, myNjCredentials))
-                },
-                {
-                  label: 'Open PBS',
-                  hint: myNjCredentials ? 'Opens PBS and signs in with the stored MyNJ login.' : 'Generate the MyNJ login first.',
-                  onClick: runPbsLogin,
-                  disabled: busy || !myNjCredentials
-                }
               ]}
             />
           </div>
