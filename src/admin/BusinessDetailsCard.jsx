@@ -10,7 +10,7 @@ export default function BusinessDetailsCard({ application, editMode, draft, onCh
     <details className="admin-accordion">
       <summary><strong>Business details</strong><span>{application.ein || 'No EIN'}</span></summary>
       <section className="admin-card admin-business-card admin-secondary-card">
-        <div className="admin-card-head"><h3>Business</h3><span>{programLabel(application.program_code)}</span></div>
+        <div className="admin-card-head"><h3>Business</h3><span className="status-pill">{programLabel(application.program_code)}</span></div>
         {editMode ? <div className="admin-edit-grid">
           <div><label>Business name <span className="required-star">*</span></label><input value={draft.businessName} onChange={(e) => onChangeField('businessName', e.target.value)} /></div>
           <div><label>Registered business name</label><input value={draft.registeredBusinessName} onChange={(e) => onChangeField('registeredBusinessName', e.target.value)} /></div>

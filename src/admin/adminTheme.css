@@ -244,10 +244,11 @@
   background: var(--admin-surface);
 }
 .admin-shell .admin-card-head { border-bottom-color: var(--admin-border); }
-.admin-shell .admin-card-head h3 { font-size: var(--admin-font-size-h2); }
+.admin-shell .admin-card-head h3 { font-size: var(--admin-font-size-h2); text-align: left; }
 .admin-shell .admin-card-head > span:not(.status-pill) { color: var(--admin-text-faint); }
 .admin-shell .admin-secondary-card { box-shadow: none; }
 .admin-shell .admin-accordion { border-color: var(--admin-border); border-radius: var(--admin-radius-md); }
+.admin-shell .admin-accordion > summary strong { text-align: left; }
 .admin-shell .admin-accordion > summary span { color: var(--admin-text-faint); }
 .admin-shell .admin-accordion > summary:after { color: var(--admin-text-faint); }
 
@@ -258,7 +259,7 @@
   padding: 10px;
   background: var(--admin-surface);
 }
-.admin-shell .process-step-head h4, .admin-shell .ops-panel-head h3 { font-size: var(--admin-font-size-h3); color: var(--admin-text); }
+.admin-shell .process-step-head h4, .admin-shell .ops-panel-head h3 { font-size: var(--admin-font-size-h3); color: var(--admin-text); text-align: left; }
 .admin-shell .process-step-facts { color: var(--admin-text); }
 .admin-shell .process-step-facts small { color: var(--admin-text-faint); }
 .admin-shell .process-step-operational { border-top-color: var(--admin-border); }
@@ -267,10 +268,19 @@
 .admin-shell .process-step-inline-select select { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
 .admin-shell .ops-panel-head span { color: var(--admin-text-faint); }
 
-.admin-shell .ops-action { border-radius: var(--admin-radius-sm); border-color: var(--admin-border); background: var(--admin-surface-sunken); color: var(--admin-text); }
-.admin-shell .ops-action span { color: var(--admin-text-faint); }
+/* Uniform action-button size — same padding/weight as .primary/.secondary
+   everywhere else in admin, no more oversized single-line buttons. */
+.admin-shell .ops-action {
+  border-radius: var(--admin-radius-sm);
+  border-color: var(--admin-border);
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text);
+  padding: 9px 14px;
+  font-size: var(--admin-font-size-body);
+  font-weight: 700;
+}
 .admin-shell .ops-action.primary { background: var(--admin-accent-soft); border-color: var(--admin-border-strong); }
-.admin-shell .ops-action.success-action, .admin-shell .ops-action.ready-action { background: var(--admin-good-bg); border-color: var(--admin-good-border); color: var(--admin-good-text); }
+.admin-shell .ops-action:hover:not(:disabled) { border-color: var(--admin-border-strong); }
 
 .admin-shell .data-grid > div { border-bottom-color: var(--admin-border); }
 .admin-shell .data-grid dt { color: var(--admin-text-faint); }

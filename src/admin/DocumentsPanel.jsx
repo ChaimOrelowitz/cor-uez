@@ -16,7 +16,7 @@ export default function DocumentsPanel({
     <details className="admin-accordion">
       <summary><strong>Documents</strong><span>{`${list.length} files`}</span></summary>
       <section className="admin-card admin-documents-card admin-secondary-card">
-        <div className="admin-card-head"><h3>Documents</h3><span>{list.length}</span></div>
+        <div className="admin-card-head"><h3>Documents</h3><span className="status-pill">{list.length}</span></div>
         <div className="admin-document-list">
           {list.map((doc) => (
             <div key={doc.id} className="admin-doc-row">

@@ -12,7 +12,7 @@ export default function OwnersCard({ owners, editMode, ownerDrafts, onChangeOwne
     <details className="admin-accordion">
       <summary><strong>Owners</strong><span>{`${owners.length} owner${owners.length === 1 ? '' : 's'}`}</span></summary>
       <section className="admin-card admin-wide admin-owners-card admin-secondary-card">
-        <div className="admin-card-head"><h3>Owners</h3><span>{editMode ? ownerDrafts.length : owners.length}</span></div>
+        <div className="admin-card-head"><h3>Owners</h3><span className="status-pill">{editMode ? ownerDrafts.length : owners.length}</span></div>
         {editMode ? <>
           <div className="owner-admin-list owner-edit-list">
             {ownerDrafts.map((owner, index) => (

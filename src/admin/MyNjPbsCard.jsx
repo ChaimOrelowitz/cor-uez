@@ -31,7 +31,7 @@ export default function MyNjPbsCard({
       <section className="admin-card mynj-card admin-account-card admin-secondary-card">
         <div className="admin-card-head">
           <h3>MyNJ / PBS account</h3>
-          <span>{application.pbs_status === 'account_created' || application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span>
+          <span className={`status-pill ${application.pbs_status === 'account_created' || application.pbs_status === 'uez_approval_uploaded' ? 'good' : myNjCredentials ? 'warn' : ''}`}>{application.pbs_status === 'account_created' || application.pbs_status === 'uez_approval_uploaded' ? 'ACCOUNT CREATED' : myNjCredentials ? 'LOGIN READY' : 'NOT CREATED'}</span>
         </div>
         <div className="admin-pbs-answer-box">
           <label>Does this business already have a PBS account?</label>

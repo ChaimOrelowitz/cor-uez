@@ -9,7 +9,7 @@ export default function PaymentCard({ payments, draft, busy, onDraftChange, onCo
       <section className="admin-card payment-admin-card admin-secondary-card">
         <div className="admin-card-head">
           <h3>Payment details</h3>
-          <span>{latest?.status === 'paid' ? 'PAID' : latest?.status === 'client_reported' ? 'CLIENT SAYS PAID' : 'NOT RECORDED'}</span>
+          <span className={`status-pill ${latest?.status === 'paid' ? 'good' : latest?.status === 'client_reported' ? 'warn' : ''}`}>{latest?.status === 'paid' ? 'PAID' : latest?.status === 'client_reported' ? 'CLIENT SAYS PAID' : 'NOT RECORDED'}</span>
         </div>
         {latest?.status === 'client_reported' && <div className="admin-alert">Client says payment was sent. Check your bank before confirming.</div>}
         <div className="admin-edit-grid">
