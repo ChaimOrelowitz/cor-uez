@@ -69,7 +69,10 @@ export default function ProcessStepCard({ stepKey, title, factsContent, operatio
     }
   }
 
-  const pillTone = operational.state === 'complete' ? 'good' : (operational.state === 'waiting' || operational.state === 'in_progress') ? 'warn' : '';
+  const pillTone = operational.state === 'complete' ? 'good'
+    : (operational.state === 'waiting' || operational.state === 'in_progress') ? 'warn'
+    : operational.state === 'cancelled' ? 'muted'
+    : '';
 
   return (
     <div className="process-step-card" id={`process-step-${stepKey}`}>

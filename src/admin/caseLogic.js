@@ -423,7 +423,7 @@ export const PROCESS_STEP_KEYS = [
   'uez_enrollment', 'ldc_application', 'payment', 'grant_submission'
 ];
 
-export const PROCESS_STEP_STATES = ['not_started', 'in_progress', 'waiting', 'complete', 'not_applicable', 'manual'];
+export const PROCESS_STEP_STATES = ['not_started', 'in_progress', 'waiting', 'complete', 'not_applicable', 'manual', 'cancelled'];
 export const WAITING_ON_VALUES = ['applicant', 'accountant', 'nj_state', 'document', 'cor_follow_up'];
 
 // The exact title each step's ProcessStepCard renders — single source of
@@ -441,7 +441,7 @@ export const PROCESS_STEP_TITLES = {
 
 export const PROCESS_STEP_STATE_LABELS = {
   not_started: 'Not started', in_progress: 'In progress', waiting: 'Waiting',
-  complete: 'Complete', not_applicable: 'Not applicable', manual: 'Handled manually'
+  complete: 'Complete', not_applicable: 'Not applicable', manual: 'Handled manually', cancelled: 'Cancelled'
 };
 
 // Derives a sensible display default for one step from the existing Facts

@@ -157,6 +157,7 @@
 }
 .admin-shell .status-pill.good { background: var(--admin-good-bg); color: var(--admin-good-text); }
 .admin-shell .status-pill.warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+.admin-shell .status-pill.muted { background: rgba(156,163,175,.12); color: var(--admin-text-faint); }
 
 /* The status pill is a real <select> now — pick a value, it saves immediately,
    no separate edit step. Strip the native select chrome, keep the pill look,

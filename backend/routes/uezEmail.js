@@ -6,8 +6,30 @@ const {
   getTemplates,
   updateTemplate,
   renderApplicationEmail,
-  sendApplicationEmail
+  sendApplicationEmail,
+  ensureTemplateExists
 } = require('../services/uezEmail');
+
+// Default content for templates that are wired in code but not yet in the DB.
+// ensureTemplateExists inserts only when the row is missing — after first use
+// the row is editable via Email Settings like any other template.
+const TEMPLATE_DEFAULTS = {
+  brc_wrong_address: {
+    display_name: 'BRC address not in UEZ',
+    subject: 'Action needed: update your registered business address',
+    body: `Hi {{first_name}},
+
+Thank you for starting your UEZ application. We looked up your Business Registration Certificate (BRC) and found that the address on file — {{brc_address}} — is not located within the UEZ zone.
+
+To move forward, please update your registered business address with the NJ Division of Revenue to reflect your UEZ-eligible location, then let us know when it's been updated.
+
+If you have any questions, feel free to reach out.
+
+Best,
+The COR UEZ Team`,
+    sort_order: 20
+  }
+};
 
 const router = express.Router();
 const DOCUMENT_BUCKET = 'uez-documents';
@@ -116,6 +138,10 @@ router.get('/admin/applications/:id/preview/:key', requireUezAdmin, async (req, 
     const application = await applicationForId(req.params.id);
     if (!application) return res.status(404).json({ error: 'Application not found.' });
 
+    if (TEMPLATE_DEFAULTS[req.params.key]) {
+      await ensureTemplateExists(req.params.key, TEMPLATE_DEFAULTS[req.params.key]);
+    }
+
     const { extra, attachments } = await autoExtrasForTemplate(req.params.key, application.id, { strict: false });
     const rendered = await renderApplicationEmail(application, req.params.key, { extra });
 
@@ -138,6 +164,10 @@ router.post('/admin/applications/:id/send/:key', requireUezAdmin, async (req, re
   try {
     const application = await applicationForId(req.params.id);
     if (!application) return res.status(404).json({ error: 'Application not found.' });
+
+    if (TEMPLATE_DEFAULTS[req.params.key]) {
+      await ensureTemplateExists(req.params.key, TEMPLATE_DEFAULTS[req.params.key]);
+    }
 
     const bodyExtra = req.body?.extra && typeof req.body.extra === 'object' ? { ...req.body.extra } : {};
     const { extra: autoExtra, attachments } = await autoExtrasForTemplate(req.params.key, application.id, { strict: true });
