@@ -949,3 +949,176 @@
 .admin-shell .manual-recipient-card label { color: var(--admin-text-faint); }
 .admin-shell .email-template-head p { color: var(--admin-text-faint); }
 .admin-shell .email-variable-help { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
+
+/* ============================================================
+   DARK MODE — toggled by .admin-shell.dark
+   All light-mode variables are overridden here; nothing else
+   in the component tree changes. The sidebar stays unchanged
+   (it's already dark) — only the main surface palette flips.
+   ============================================================ */
+
+.admin-shell.dark {
+  --admin-bg:             #0d1117;
+  --admin-surface:        #161b22;
+  --admin-surface-sunken: #0d1117;
+  --admin-border:         #30363d;
+  --admin-border-strong:  #484f58;
+
+  --admin-text:           #e6edf3;
+  --admin-text-muted:     #8b949e;
+  --admin-text-faint:     #6e7681;
+
+  --admin-accent:         #58a6ff;
+  --admin-accent-hover:   #79b8ff;
+  --admin-accent-soft:    rgba(88,166,255,.10);
+  --admin-accent-ring:    rgba(88,166,255,.25);
+
+  --admin-good-bg:        rgba(46,160,67,.15);
+  --admin-good-text:      #3fb950;
+  --admin-good-border:    rgba(46,160,67,.30);
+
+  --admin-warn-bg:        rgba(210,153,34,.15);
+  --admin-warn-text:      #d29922;
+  --admin-warn-border:    rgba(210,153,34,.30);
+
+  --admin-danger-bg:      rgba(248,81,73,.12);
+  --admin-danger-text:    #f85149;
+  --admin-danger-border:  rgba(248,81,73,.25);
+
+  --admin-shadow:         0 1px 3px rgba(0,0,0,.4);
+}
+
+/* Topbar in dark mode */
+.admin-shell.dark .admin-topbar {
+  background: #161b22;
+  border-bottom-color: #30363d;
+}
+
+/* Main content area bg */
+.admin-shell.dark .admin-main-content,
+.admin-shell.dark .admin-detail-panel {
+  background: var(--admin-bg);
+}
+
+/* Cards and panels */
+.admin-shell.dark .process-step-card,
+.admin-shell.dark .ops-panel,
+.admin-shell.dark .admin-card,
+.admin-shell.dark .wizard-card,
+.admin-shell.dark .notes-panel,
+.admin-shell.dark .activity-panel,
+.admin-shell.dark .documents-panel,
+.admin-shell.dark .admin-accordion {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+
+/* Inputs and textareas */
+.admin-shell.dark input,
+.admin-shell.dark textarea,
+.admin-shell.dark select:not(.status-pill):not(.cockpit-status-select) {
+  background: var(--admin-surface-sunken);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+.admin-shell.dark input::placeholder,
+.admin-shell.dark textarea::placeholder { color: var(--admin-text-faint); }
+.admin-shell.dark input:focus,
+.admin-shell.dark textarea:focus { border-color: var(--admin-accent); }
+.admin-shell.dark input:disabled,
+.admin-shell.dark textarea:disabled { opacity: .5; }
+
+/* Status pill select */
+.admin-shell.dark select.status-pill {
+  background-color: var(--admin-surface-sunken);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+.admin-shell.dark select.status-pill.good {
+  background-color: var(--admin-good-bg);
+  color: var(--admin-good-text);
+}
+.admin-shell.dark select.status-pill.warn {
+  background-color: var(--admin-warn-bg);
+  color: var(--admin-warn-text);
+}
+
+/* Buttons */
+.admin-shell.dark .primary {
+  background: var(--admin-accent);
+  color: #fff;
+}
+.admin-shell.dark .primary:hover:not(:disabled) { background: var(--admin-accent-hover); }
+.admin-shell.dark .secondary {
+  background: var(--admin-surface-sunken);
+  border-color: var(--admin-border);
+  color: var(--admin-text-muted);
+}
+.admin-shell.dark .admin-top-actions a,
+.admin-shell.dark .admin-top-actions button {
+  background: #21262d;
+  color: var(--admin-text-muted);
+  border-color: var(--admin-border);
+}
+.admin-shell.dark .admin-top-actions a:hover,
+.admin-shell.dark .admin-top-actions button:hover {
+  color: var(--admin-text);
+  border-color: var(--admin-border-strong);
+}
+
+/* Cockpit */
+.admin-shell.dark .application-cockpit {
+  background: #161b22;
+  border-bottom-color: #30363d;
+}
+.admin-shell.dark .cockpit-pipeline { background: #0d1117; border-color: #30363d; }
+.admin-shell.dark .cockpit-dot { background: #30363d; }
+.admin-shell.dark .cockpit-dot.dot-done { background: #3fb950; }
+.admin-shell.dark .cockpit-dot.dot-active { background: #d29922; }
+.admin-shell.dark .cockpit-dot.dot-bad { background: #f85149; }
+.admin-shell.dark .cockpit-chip {
+  background: #21262d;
+  border-color: #30363d;
+  color: var(--admin-text-muted);
+}
+
+/* Tabs */
+.admin-shell.dark .case-tab-bar {
+  background: #161b22;
+  border-bottom-color: #30363d;
+}
+.admin-shell.dark .case-tab-bar button { color: var(--admin-text-faint); }
+.admin-shell.dark .case-tab-bar button.active {
+  color: var(--admin-accent);
+  border-bottom-color: var(--admin-accent);
+}
+.admin-shell.dark .case-tab-bar button:hover:not(.active) { color: var(--admin-text-muted); }
+
+/* Email composer modal */
+.admin-shell.dark .document-modal {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+.admin-shell.dark .document-modal-head {
+  background: var(--admin-surface-sunken);
+  border-bottom-color: var(--admin-border);
+}
+.admin-shell.dark .document-modal-footer { border-top-color: var(--admin-border); }
+
+/* Admin message banners */
+.admin-shell.dark .admin-message {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
+}
+.admin-shell.dark .admin-message-error {
+  background: var(--admin-danger-bg);
+  color: var(--admin-danger-text);
+}
+
+/* Dark mode toggle button itself */
+.admin-shell .dark-mode-toggle {
+  font-size: 14px;
+  padding: 4px 8px !important;
+  line-height: 1;
+}
+

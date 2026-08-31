@@ -125,6 +125,7 @@ function openOfficialBrcLookup(application) {
 export default function AdminPage() {
   const [session, setSession] = useState(null);
   const [authResolved, setAuthResolved] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('adminDarkMode') === '1');
   const [profile, setProfile] = useState(null);
   const [login, setLogin] = useState({ email: '', password: '' });
   const [applications, setApplications] = useState([]);
@@ -1074,10 +1075,18 @@ export default function AdminPage() {
     </div>;
   }
 
-  return <div className="admin-shell">
+  function toggleDarkMode() {
+    setDarkMode((d) => {
+      const next = !d;
+      localStorage.setItem('adminDarkMode', next ? '1' : '0');
+      return next;
+    });
+  }
+
+  return <div className={`admin-shell${darkMode ? ' dark' : ''}`}>
     <header className="admin-topbar">
       <div className="admin-brand"><div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div></div>
-      <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button onClick={handleSignOut}>Log out</button></div>
+      <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button><button onClick={handleSignOut}>Log out</button></div>
       <details className="admin-mobile-menu">
         <summary aria-label="Open admin menu">•••</summary>
         <div className="admin-mobile-menu-popover">
