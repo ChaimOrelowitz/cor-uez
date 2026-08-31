@@ -159,7 +159,6 @@ export default function AdminPage() {
   const [noteEditingId, setNoteEditingId] = useState(null);
   const [noteEditDraft, setNoteEditDraft] = useState('');
   const [emailComposer, setEmailComposer] = useState(null);
-  const [activeTab, setActiveTab] = useState('formation_brc');
 
   useEffect(() => {
     let active = true;
@@ -1077,7 +1076,6 @@ export default function AdminPage() {
 
   function selectApplication(id) {
     setMobileDetailOpen(true);
-    setActiveTab('formation_brc');  // reset to first tab on every new selection
     openApplication(id);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
@@ -1117,7 +1115,7 @@ export default function AdminPage() {
     });
   }
 
-  return <div className={`admin-shell${darkMode ? ' dark' : ''}`}>
+  return <div className="admin-shell" data-theme={darkMode ? undefined : 'light'}>
     <header className="admin-topbar">
       <div className="admin-brand"><div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div></div>
       <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button><button onClick={handleSignOut}>Log out</button></div>
@@ -1190,28 +1188,6 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-            {/* Pipeline strip — 8 step dots, each clickable to navigate to its tab */}
-            <nav className="cockpit-pipeline" aria-label="Application pipeline">
-              {PIPELINE_STEPS.map(({ key, tab, short }) => {
-                const step = resolveProcessStep(key, detail);
-                const dotClass =
-                  step.state === 'complete'     ? 'dot-done'    :
-                  step.state === 'in_progress'  ? 'dot-active'  :
-                  step.state === 'waiting'      ? 'dot-waiting' :
-                  step.state === 'not_applicable' ? 'dot-na'    : '';
-                return (
-                  <button
-                    key={key}
-                    className={`cockpit-step-dot ${dotClass}`}
-                    onClick={() => setActiveTab(tab)}
-                    title={`${PROCESS_STEP_TITLES[key]}: ${step.state.replace(/_/g, ' ')}`}
-                  >
-                    <i aria-hidden="true" />
-                    <span>{short}</span>
-                  </button>
-                );
-              })}
-            </nav>
           </div>
 
           <div className="admin-edit-actions">
@@ -1232,8 +1208,6 @@ export default function AdminPage() {
           </div>}
 
           <CaseDetailTabs
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
             detail={detail}
             busy={busy}
             myNjCredentials={myNjCredentials}
