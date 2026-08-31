@@ -108,14 +108,38 @@ export default function CaseDetailTabs({
     const lastSent = lastEmailSent(detail, 'formation_rejected');
     return (
       <>
-        <div className="doc-preview-row">
-          <DocThumbnail doc={formation} applicationId={detail.application.id} onClick={() => formation && previewDocument(formation)} />
-          {sole && !formation
-            ? <small>Not required (sole proprietorship)</small>
-            : !formation
-              ? <small>Missing</small>
-              : <small>{review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'} — {formation.filename}</small>}
-        </div>
+        {/* Inline preview — readable without clicking */}
+        {!sole && (
+          <DocThumbnail
+            variant="inline"
+            doc={formation}
+            applicationId={detail.application.id}
+            onClick={() => formation && previewDocument(formation)}
+          />
+        )}
+
+        {/* Status line */}
+        {sole && !formation
+          ? <small>Not required (sole proprietorship)</small>
+          : !formation
+            ? <small className="cof-status-missing">Missing — applicant has not uploaded yet</small>
+            : <small className={`cof-status-${review}`}>
+                {review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'}
+                {' — '}{formation.filename}
+              </small>}
+
+        {/* FEIN hint — shown whenever a doc is present and not yet approved */}
+        {formation && review !== 'approved' && (
+          <small className="cof-fein-hint">
+            💡 Common mistake: applicants sometimes upload the FEIN letter (IRS SS-4) instead of the NJ Certificate of Formation
+          </small>
+        )}
+        {!formation && !sole && (
+          <small className="cof-fein-hint">
+            💡 If the applicant uploaded something and it's missing here, they may have uploaded the FEIN letter (IRS SS-4) by mistake
+          </small>
+        )}
+
         {lastSent && (
           <small className="email-sent-note">
             Replacement request sent {formatTimestamp(lastSent.createdAt)}

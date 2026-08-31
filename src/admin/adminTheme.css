@@ -1168,3 +1168,110 @@
   line-height: 1;
 }
 
+/* ---- Inline document preview (Formation & BRC tab) ----------------------- */
+/* Renders the signed document URL full-width so the admin can read it        */
+/* without clicking to open the modal. Images show as <img>; PDFs as iframe. */
+
+.admin-shell .doc-inline-preview {
+  position: relative;
+  background: var(--admin-surface-sunken);
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.admin-shell .doc-inline-img {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  background: #fff;
+  cursor: zoom-in;
+}
+
+.admin-shell .doc-inline-iframe {
+  display: block;
+  width: 100%;
+  height: 360px;
+  border: none;
+}
+
+.admin-shell .doc-inline-loading {
+  height: 120px;
+  background: linear-gradient(
+    90deg,
+    var(--admin-surface-sunken) 25%,
+    var(--admin-border) 50%,
+    var(--admin-surface-sunken) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-inline 1.4s infinite linear;
+}
+
+@keyframes shimmer-inline {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.admin-shell .doc-inline-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px;
+  cursor: pointer;
+  color: var(--admin-text-muted);
+}
+.admin-shell .doc-inline-fallback span { font-size: 2rem; }
+.admin-shell .doc-inline-fallback small { font-size: 11px; }
+
+.admin-shell .doc-inline-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 72px;
+  color: var(--admin-text-faint);
+  font-size: 12px;
+  border: 1px dashed var(--admin-border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+/* "Open full screen ↗" button floated over the preview */
+.admin-shell .doc-inline-open-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.52);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  z-index: 1;
+  white-space: nowrap;
+}
+.admin-shell .doc-inline-open-btn:hover { background: rgba(0, 0, 0, 0.72); }
+
+/* CoF status lines */
+.admin-shell .cof-status-approved { color: var(--admin-success-text, #15803d); }
+.admin-shell .cof-status-rejected { color: var(--admin-danger-text, #b91c1c); }
+.admin-shell .cof-status-not_reviewed { color: var(--admin-warn-text, #92400e); }
+.admin-shell .cof-status-missing { color: var(--admin-text-muted); }
+
+/* FEIN hint — small italic callout below the doc status */
+.admin-shell .cof-fein-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--admin-text-faint);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Dark-mode: the iframe/img backgrounds need explicit override */
+.admin-shell.dark .doc-inline-img { background: #1a1d24; }
+
