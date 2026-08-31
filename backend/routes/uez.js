@@ -1489,11 +1489,13 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
 
     const overallStatus = status === 'cancelled'
       ? 'cancelled'
-      : ['grant_submitted', 'applied', 'submitted'].includes(status)
-        ? 'applied'
-        : ['not_started'].includes(status)
-          ? 'not_started'
-          : application.status === 'applied' ? 'applied' : 'in_progress';
+      : status === 'ready_for_submission'
+        ? 'ready_for_submission'
+        : ['grant_submitted', 'applied', 'submitted'].includes(status)
+          ? 'applied'
+          : status === 'not_started'
+            ? 'not_started'
+            : application.status === 'applied' ? 'applied' : 'in_progress';
 
     const { data, error } = await supabase.from('uez_applications').update({
       status: overallStatus,

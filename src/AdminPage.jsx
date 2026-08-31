@@ -180,6 +180,21 @@ export default function AdminPage() {
   // case a timer doesn't cover — something changed outside this tab (another
   // admin, an applicant upload, an extension callback landing late) — is handled
   // by refreshing once when you come back to the tab, not by polling while you're on it.
+  // Auto-promote to "Ready for Submission" when all 5 docs are in and admin
+  // has confirmed payment — only nudges forward (never demotes a submitted app).
+  useEffect(() => {
+    if (!detail) return;
+    const status = detail.application?.status;
+    const safeStatuses = ['applied', 'grant_submitted', 'submitted', 'ready_for_submission', 'cancelled'];
+    if (safeStatuses.includes(status)) return;
+    const allDocs = readyDocumentCount(detail) >= 5;
+    const adminPaid = detail.application?.payment_status === 'paid';
+    if (allDocs && adminPaid) {
+      setGlobalStatus('ready_for_submission');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.application?.status, detail?.application?.payment_status, detail?.documents]);
+
   useEffect(() => {
     if (!session || profile?.role !== 'admin') return undefined;
     let active = true;
@@ -1026,10 +1041,11 @@ export default function AdminPage() {
     }
   }
 
-  // Normalize current DB status → one of our 4 canonical select values
+  // Normalize current DB status → one of our 5 canonical select values
   function globalStatusValue(status) {
     if (status === 'applied' || status === 'grant_submitted' || status === 'submitted') return 'applied';
     if (status === 'cancelled') return 'cancelled';
+    if (status === 'ready_for_submission') return 'ready_for_submission';
     if (status === 'in_progress' || status === 'ready_for_ldc') return 'in_progress';
     return 'not_started';
   }
@@ -1139,6 +1155,7 @@ export default function AdminPage() {
                 >
                   <option value="not_started">Not Started</option>
                   <option value="in_progress">In Progress</option>
+                  <option value="ready_for_submission">Ready for Submission</option>
                   <option value="applied">Submitted</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
