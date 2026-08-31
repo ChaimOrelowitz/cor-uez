@@ -1007,6 +1007,28 @@ export default function AdminPage() {
     }
   }
 
+  async function setGlobalStatus(status) {
+    if (!detail?.application?.id) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await updateAdminApplicationStatus(detail.application.id, { status });
+      await refreshList(detail.application.id);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Normalize current DB status → one of our 4 canonical select values
+  function globalStatusValue(status) {
+    if (status === 'applied' || status === 'grant_submitted' || status === 'submitted') return 'applied';
+    if (status === 'cancelled') return 'cancelled';
+    if (status === 'in_progress' || status === 'ready_for_ldc') return 'in_progress';
+    return 'not_started';
+  }
+
   const filtered = useMemo(
     () => filterAndSortApplications(applications, filter, search),
     [applications, filter, search]
@@ -1067,12 +1089,8 @@ export default function AdminPage() {
     <main className={`admin-layout ${mobileDetailOpen ? 'mobile-detail-open' : 'mobile-list-open'}`}>
       <AdminSidebar
         applications={applications}
-        filtered={filtered}
-        counts={counts}
-        filter={filter}
-        search={search}
         selectedId={selectedId}
-        onFilterChange={setFilter}
+        search={search}
         onSearchChange={setSearch}
         onSelectApplication={selectApplication}
       />
@@ -1099,7 +1117,18 @@ export default function AdminPage() {
                 </p>
               </div>
               <div className="cockpit-chips-row">
-                <span className={`cockpit-chip ${detail.application.status === 'applied' ? 'good' : ''}`}>{statusLabel(detail.application.status)}</span>
+                <select
+                  className={`cockpit-status-select gs-${globalStatusValue(detail.application.status)}`}
+                  value={globalStatusValue(detail.application.status)}
+                  onChange={(e) => setGlobalStatus(e.target.value)}
+                  disabled={busy}
+                  title="Set application status"
+                >
+                  <option value="not_started">Not Started</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="applied">Submitted</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
                 <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
                 <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
                 <button

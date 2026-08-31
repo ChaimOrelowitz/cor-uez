@@ -313,7 +313,91 @@
 .admin-shell .mini-status { background: rgba(255,255,255,.08); color: var(--admin-sidebar-text-muted); }
 .admin-shell .mini-status.warn { background: rgba(245,158,11,.2); color: #fcd34d; }
 .admin-shell .mini-status.good { background: rgba(34,197,94,.15); color: #86efac; }
-.admin-shell .empty-list { color: var(--admin-sidebar-text-muted); }
+.admin-shell .empty-list { color: var(--admin-sidebar-text-muted); padding: 16px; font-size: 11px; }
+
+/* ── Sidebar group headers ────────────────────────────────────────────────── */
+.admin-shell .sidebar-head-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.admin-shell .sidebar-head-row span { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-head-row strong { color: var(--admin-sidebar-text); font-size: 12px; }
+
+.admin-shell .sidebar-group { margin-bottom: 2px; }
+.admin-shell .sidebar-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px 4px;
+  border-top: 1px solid var(--admin-sidebar-border);
+}
+.admin-shell .sidebar-group-header:first-child { border-top: none; }
+.admin-shell .sidebar-group-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--admin-sidebar-text-muted);
+}
+.admin-shell .sidebar-group-count {
+  font-size: 9px;
+  background: rgba(255,255,255,.08);
+  color: var(--admin-sidebar-text-muted);
+  padding: 0 5px;
+  border-radius: 20px;
+}
+/* Color-code section labels by group */
+.admin-shell .sidebar-group-not_started .sidebar-group-label { color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-group-in_progress .sidebar-group-label  { color: #93c5fd; }
+.admin-shell .sidebar-group-in_progress .sidebar-group-count  { background: rgba(59,130,246,.2); color: #93c5fd; }
+.admin-shell .sidebar-group-submitted .sidebar-group-label    { color: #86efac; }
+.admin-shell .sidebar-group-submitted .sidebar-group-count    { background: rgba(34,197,94,.15); color: #86efac; }
+.admin-shell .sidebar-group-cancelled .sidebar-group-label    { color: #9ca3af; opacity: .6; }
+
+/* Sidebar row internals */
+.admin-shell .application-list-item { width: 100%; cursor: pointer; border: none; }
+.admin-shell .sidebar-row-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--admin-sidebar-text);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.admin-shell .sidebar-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.admin-shell .sidebar-row-date {
+  font-size: 10px;
+  color: var(--admin-sidebar-text-muted);
+}
+.admin-shell .sidebar-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 20px;
+}
+.admin-shell .sidebar-badge.paid {
+  background: rgba(34,197,94,.18);
+  color: #86efac;
+}
+.admin-shell .sidebar-badge.payment-pending {
+  background: rgba(245,158,11,.2);
+  color: #fcd34d;
+}
+/* Cancelled rows get dimmer */
+.admin-shell .sidebar-group-item-cancelled { opacity: .55; }
+.admin-shell .sidebar-group-item-cancelled:hover,
+.admin-shell .sidebar-group-item-cancelled.active { opacity: 1; }
 
 .admin-shell .admin-mobile-menu summary { background: var(--admin-sidebar-surface); color: var(--admin-sidebar-text); }
 .admin-shell .admin-mobile-menu-popover { background: var(--admin-sidebar-bg); border-color: var(--admin-sidebar-border); box-shadow: var(--admin-shadow); }
@@ -324,10 +408,10 @@
 
 /* ---- 4. Cockpit command strip + attention --------------------------------- */
 
-/* Identity row */
+/* Identity row — dark background gives it the control-panel zone feel */
 .admin-shell .admin-detail-header {
-  background: var(--admin-surface);
-  border-bottom: 1px solid var(--admin-border);
+  background: #0e1526;
+  border-bottom: none;
   padding: 14px 18px 0;
 }
 .admin-shell .cockpit-identity { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
@@ -337,9 +421,10 @@
   letter-spacing: -.01em;
   line-height: 1.1;
   margin: 0;
+  color: #e8ecf5;
 }
 .admin-shell .admin-detail-header .cockpit-meta {
-  color: var(--admin-text-muted);
+  color: #6b7a9a;
   font-size: 11px;
 }
 .admin-shell .admin-detail-header .eyebrow {
@@ -347,22 +432,22 @@
   font-weight: 800;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--admin-accent);
+  color: #3b82f6;
   display: block;
   margin-bottom: 2px;
 }
 
-/* Pipeline strip — 8 step dots */
+/* Pipeline strip — 8 step dots, dark-bg version */
 .admin-shell .cockpit-pipeline {
   display: flex;
   align-items: center;
   gap: 0;
-  border-top: 1px solid var(--admin-border);
-  margin: 0 -18px;        /* bleed to card edges */
+  border-top: 1px solid rgba(255,255,255,.06);
+  margin: 0 -18px;
   padding: 0 18px;
   overflow-x: auto;
   scrollbar-width: none;
-  background: var(--admin-surface-sunken);
+  background: rgba(0,0,0,.25);
 }
 .admin-shell .cockpit-pipeline::-webkit-scrollbar { display: none; }
 
@@ -375,36 +460,36 @@
   padding: 7px 12px 8px;
   background: none;
   border: none;
-  border-right: 1px solid var(--admin-border);
+  border-right: 1px solid rgba(255,255,255,.06);
   cursor: pointer;
   transition: background .12s;
   min-width: 52px;
 }
 .admin-shell .cockpit-step-dot:last-child { border-right: none; }
-.admin-shell .cockpit-step-dot:hover { background: var(--admin-accent-soft); }
+.admin-shell .cockpit-step-dot:hover { background: rgba(59,130,246,.1); }
 .admin-shell .cockpit-step-dot i {
   display: block;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--dot-idle);
+  background: #2d3a55;
   flex-shrink: 0;
 }
-.admin-shell .cockpit-step-dot.dot-done i  { background: var(--dot-done); }
-.admin-shell .cockpit-step-dot.dot-active i { background: var(--dot-active); box-shadow: 0 0 0 2px var(--admin-accent-soft), 0 0 0 3px var(--admin-accent); }
+.admin-shell .cockpit-step-dot.dot-done i    { background: var(--dot-done); }
+.admin-shell .cockpit-step-dot.dot-active i  { background: var(--dot-active); box-shadow: 0 0 0 2px rgba(37,99,235,.25), 0 0 0 3px #2563eb; }
 .admin-shell .cockpit-step-dot.dot-waiting i { background: var(--dot-waiting); }
-.admin-shell .cockpit-step-dot.dot-na i { background: var(--dot-na); opacity: .5; }
+.admin-shell .cockpit-step-dot.dot-na i      { background: #1e2a40; }
 .admin-shell .cockpit-step-dot span {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
-  color: var(--admin-text-faint);
+  color: #3d4f70;
   white-space: nowrap;
 }
-.admin-shell .cockpit-step-dot.dot-done span  { color: var(--admin-good-text); }
-.admin-shell .cockpit-step-dot.dot-active span { color: var(--admin-accent); }
-.admin-shell .cockpit-step-dot.dot-waiting span { color: #92400e; }
+.admin-shell .cockpit-step-dot.dot-done span    { color: #4ade80; }
+.admin-shell .cockpit-step-dot.dot-active span  { color: #93c5fd; }
+.admin-shell .cockpit-step-dot.dot-waiting span { color: #fbbf24; }
 
 /* Cockpit status chips row */
 .admin-shell .cockpit-chips-row {
@@ -414,19 +499,82 @@
   padding: 8px 0 10px;
   flex-wrap: wrap;
 }
-.admin-shell .admin-header-status span { background: var(--admin-accent-soft); color: var(--admin-accent); }
-.admin-shell .admin-header-status small { color: var(--admin-text-faint); }
+.admin-shell .admin-header-status span { background: rgba(37,99,235,.18); color: #93c5fd; }
+.admin-shell .admin-header-status small { color: #6b7a9a; }
+
+/* Chips on dark cockpit background */
 .admin-shell .cockpit-chip {
-  background: var(--admin-surface);
-  border: 1px solid var(--admin-border);
-  color: var(--admin-text-muted);
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.12);
+  color: #a8b3ce;
   border-radius: var(--admin-radius-sm);
   padding: 3px 9px;
   font-size: 11px;
   font-weight: 600;
 }
-.admin-shell .cockpit-chip.good { background: var(--admin-good-bg); border-color: var(--admin-good-border); color: var(--admin-good-text); }
-.admin-shell .cockpit-chip.warn { background: var(--admin-warn-bg); border-color: var(--admin-warn-border); color: var(--admin-warn-text); }
+.admin-shell .cockpit-chip.good {
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.28);
+  color: #4ade80;
+}
+.admin-shell .cockpit-chip.warn {
+  background: rgba(245,158,11,.12);
+  border-color: rgba(245,158,11,.28);
+  color: #fbbf24;
+}
+
+/* ---- Status dropdown in cockpit chips row -------------------------------- */
+.admin-shell .cockpit-status-select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  border-radius: var(--admin-radius-sm);
+  padding: 3px 24px 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  border: 1px solid transparent;
+  outline: none;
+  transition: filter .12s, opacity .12s;
+  /* chevron arrow baked in */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23fff' stroke-opacity='.45' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+}
+.admin-shell .cockpit-status-select:disabled { opacity: .5; cursor: default; }
+.admin-shell .cockpit-status-select:focus { box-shadow: 0 0 0 2px var(--admin-accent-ring); }
+
+/* Per-status colour variants */
+.admin-shell .cockpit-status-select.gs-not_started {
+  background-color: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.14);
+  color: #a8b3ce;
+}
+.admin-shell .cockpit-status-select.gs-in_progress {
+  background-color: rgba(37,99,235,.18);
+  border-color: rgba(37,99,235,.4);
+  color: #93c5fd;
+}
+.admin-shell .cockpit-status-select.gs-applied {
+  background-color: rgba(34,197,94,.14);
+  border-color: rgba(34,197,94,.35);
+  color: #4ade80;
+}
+.admin-shell .cockpit-status-select.gs-cancelled {
+  background-color: rgba(156,64,63,.16);
+  border-color: rgba(156,64,63,.36);
+  color: #f87171;
+}
+/* native option elements inherit background from browser; override the arrow tint per variant */
+.admin-shell .cockpit-status-select.gs-in_progress {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2393c5fd' stroke-opacity='.7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.admin-shell .cockpit-status-select.gs-applied {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234ade80' stroke-opacity='.7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.admin-shell .cockpit-status-select.gs-cancelled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23f87171' stroke-opacity='.7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
 .admin-shell .admin-message { background: var(--admin-accent-soft); color: var(--admin-accent); border-radius: var(--admin-radius-sm); }
 .admin-shell .admin-message-error { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
 
