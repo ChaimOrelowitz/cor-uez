@@ -885,7 +885,7 @@ function FieldPair({ label, value, onChange, disabled }) {
 
 // ── Step-specific action buttons ──────────────────────────────────────────────
 function StepActions({
-  stepKey, detail, busy, myNjCredentials, step,
+  stepKey, detail, busy, myNjCredentials, myNjEditMode, step,
   reviewFormationDoc, sendFormationRejectedEmail,
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
   markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail,

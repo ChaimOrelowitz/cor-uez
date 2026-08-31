@@ -1435,8 +1435,7 @@
 .admin-shell .cw-shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  min-height: calc(100vh - 280px);
   position: relative;
   background: var(--cw-app-bg);
   color: var(--cw-text);
