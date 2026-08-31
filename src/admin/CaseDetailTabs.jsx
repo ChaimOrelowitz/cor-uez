@@ -950,14 +950,12 @@ function StepActions({
 
   switch (stepKey) {
     case 'formation': {
-      const doc = docFor(detail, 'formation');
-      const review = app.formation_review_status || 'not_reviewed';
       const lastSent = lastEmailSent(detail, 'formation_rejected');
       return (
         <>
-          {doc && review !== 'approved' && <Btn label="✓ Approve CoF" onClick={() => reviewFormationDoc('approved')} variant="ok" />}
-          {doc && review !== 'rejected' && <Btn label="Wrong document" onClick={() => reviewFormationDoc('rejected')} variant="danger" />}
-          {review === 'rejected' && <Btn label={`✉ Send replacement request${lastSent ? ' (resend)' : ''}`} onClick={sendFormationRejectedEmail} />}
+          <Btn label="✓ Approve CoF" onClick={() => reviewFormationDoc('approved')} variant="ok" />
+          <Btn label="Wrong document" onClick={() => reviewFormationDoc('rejected')} variant="danger" />
+          <Btn label={`✉ Send replacement request${lastSent ? ' (resend)' : ''}`} onClick={sendFormationRejectedEmail} />
         </>
       );
     }
