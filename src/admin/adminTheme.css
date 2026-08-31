@@ -34,10 +34,28 @@
   --admin-text-muted: #6b7280;
   --admin-text-faint: #9096a1;
 
-  --admin-accent: #3d4f66;          /* graphite/steel-blue — distinct from the client's #676fe0 indigo family */
-  --admin-accent-hover: #2f3e52;
-  --admin-accent-soft: #e7eaee;
-  --admin-accent-ring: rgba(61, 79, 102, .25);
+  /* sidebar — dark navy panel, its own independent palette */
+  --admin-sidebar-bg:           #151c2c;
+  --admin-sidebar-surface:      #1d2640;
+  --admin-sidebar-text:         #dde2ee;
+  --admin-sidebar-text-muted:   #8a91a8;
+  --admin-sidebar-border:       rgba(255,255,255,.07);
+  --admin-sidebar-hover:        rgba(255,255,255,.05);
+  --admin-sidebar-active-bg:    rgba(59, 130, 246, .18);
+  --admin-sidebar-active-bar:   #3b82f6;
+
+  /* accent — vivid blue replaces the old graphite; admin ≠ client indigo */
+  --admin-accent: #2563eb;
+  --admin-accent-hover: #1d4ed8;
+  --admin-accent-soft: #eff6ff;
+  --admin-accent-ring: rgba(37, 99, 235, .22);
+
+  /* step pipeline dots — four semantic states */
+  --dot-done:       #22c55e;
+  --dot-active:     #2563eb;
+  --dot-waiting:    #f59e0b;
+  --dot-idle:       #d1d5db;
+  --dot-na:         #e5e7eb;
 
   --admin-good-bg: #eef3ee;   --admin-good-text: #3c6b49;  --admin-good-border: #cddccf;
   --admin-warn-bg: #f5efe4;   --admin-warn-text: #8a6a2e;  --admin-warn-border: #e6d9bd;
@@ -172,65 +190,269 @@
 .admin-shell .admin-top-actions a, .admin-shell .admin-top-actions button {
   background: var(--admin-surface-sunken); color: var(--admin-text-muted); border-radius: var(--admin-radius-sm); font-size: var(--admin-font-size-small);
 }
-.admin-shell .admin-sidebar { background: var(--admin-surface); border-right: 1px solid var(--admin-border); }
-.admin-shell .admin-sidebar-head span { color: var(--admin-text-faint); }
-.admin-shell .admin-filter-row { border-bottom: 1px solid var(--admin-border); }
-.admin-shell .admin-filter-row button { background: var(--admin-surface-sunken); color: var(--admin-text-muted); border-radius: var(--admin-radius-sm); }
-.admin-shell .admin-filter-row button.active { background: var(--admin-accent); color: #fff; }
+/* ── Sidebar shell ────────────────────────────────────────────────────────── */
+.admin-shell .admin-sidebar {
+  background: var(--admin-sidebar-bg);
+  border-right: none;
+  color: var(--admin-sidebar-text);
+}
+.admin-shell .admin-sidebar-head {
+  background: var(--admin-sidebar-bg);
+  border-bottom: 1px solid var(--admin-sidebar-border);
+}
+.admin-shell .admin-sidebar-head span { color: var(--admin-sidebar-text-muted); }
+.admin-shell .admin-sidebar-head strong { color: var(--admin-sidebar-text); }
+.admin-shell .admin-sidebar-head input {
+  background: rgba(255,255,255,.06);
+  border-color: var(--admin-sidebar-border);
+  color: var(--admin-sidebar-text);
+  border-radius: var(--admin-radius-sm);
+}
+.admin-shell .admin-sidebar-head input::placeholder { color: var(--admin-sidebar-text-muted); }
+.admin-shell .admin-sidebar-head input:focus {
+  background: rgba(255,255,255,.1);
+  border-color: var(--admin-sidebar-active-bar);
+  box-shadow: none;
+}
 
-.admin-shell .application-list-item { border-bottom: 1px solid var(--admin-border); background: var(--admin-surface); padding: 10px 14px; }
-.admin-shell .application-list-item:hover { background: var(--admin-surface-sunken); }
-.admin-shell .application-list-item.active { background: var(--admin-accent-soft); box-shadow: inset 3px 0 var(--admin-accent); }
-.admin-shell .application-list-item small { color: var(--admin-text-faint); }
-.admin-shell .mini-status { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
-.admin-shell .mini-status.warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
-.admin-shell .mini-status.good { background: var(--admin-good-bg); color: var(--admin-good-text); }
-.admin-shell .empty-list { color: var(--admin-text-faint); }
+/* ── Filter pill row ──────────────────────────────────────────────────────── */
+.admin-shell .admin-filter-row {
+  background: var(--admin-sidebar-bg);
+  border-bottom: 1px solid var(--admin-sidebar-border);
+}
+.admin-shell .admin-filter-row button {
+  background: none;
+  color: var(--admin-sidebar-text-muted);
+  border: none;
+  border-radius: var(--admin-radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.admin-shell .admin-filter-row button span {
+  background: rgba(255,255,255,.08);
+  color: var(--admin-sidebar-text-muted);
+  border-radius: 20px;
+  padding: 0 5px;
+  font-size: 9px;
+  margin-left: 3px;
+}
+.admin-shell .admin-filter-row button:hover { color: var(--admin-sidebar-text); }
+.admin-shell .admin-filter-row button.active {
+  background: rgba(59, 130, 246, .14);
+  color: #93c5fd;
+}
+.admin-shell .admin-filter-row button.active span {
+  background: rgba(59, 130, 246, .3);
+  color: #bfdbfe;
+}
 
-.admin-shell .queue-list-title strong { color: var(--admin-text); }
-.admin-shell .queue-stage { color: var(--admin-text-faint); }
-.admin-shell .queue-next-action { color: var(--admin-text-muted); }
-.admin-shell .queue-next-action i { background: var(--admin-border-strong); }
-.admin-shell .queue-next-action.danger { color: var(--admin-danger-text); }
-.admin-shell .queue-next-action.danger i { background: #c8776b; }
-.admin-shell .queue-next-action.warn { color: var(--admin-warn-text); }
-.admin-shell .queue-next-action.warn i { background: #c9a25c; }
-.admin-shell .queue-next-action.ready, .admin-shell .queue-next-action.submitted { color: var(--admin-good-text); }
-.admin-shell .queue-next-action.ready i, .admin-shell .queue-next-action.submitted i { background: #6fa382; }
-.admin-shell .queue-next-action.quiet { color: var(--admin-text-faint); }
-.admin-shell .queue-payment-flag { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+/* ── Application list rows ────────────────────────────────────────────────── */
+.admin-shell .application-list-item {
+  border-bottom: 1px solid var(--admin-sidebar-border);
+  background: transparent;
+  padding: 9px 14px;
+  color: var(--admin-sidebar-text);
+  text-align: left;
+}
+.admin-shell .application-list-item:hover {
+  background: var(--admin-sidebar-hover);
+}
+.admin-shell .application-list-item.active {
+  background: var(--admin-sidebar-active-bg);
+  box-shadow: inset 3px 0 var(--admin-sidebar-active-bar);
+}
+.admin-shell .application-list-item small { color: var(--admin-sidebar-text-muted); }
+
+/* queue tone overrides — keep the color signals, adapt to dark bg */
+.admin-shell .queue-list-title strong { color: var(--admin-sidebar-text); font-size: 12px; }
+.admin-shell .queue-stage { color: var(--admin-sidebar-text-muted); font-size: 10px; }
+.admin-shell .queue-next-action { color: var(--admin-sidebar-text-muted); font-size: 10.5px; }
+.admin-shell .queue-next-action i { background: var(--admin-sidebar-text-muted); opacity: .6; }
+.admin-shell .queue-next-action.danger { color: #fca5a5; }
+.admin-shell .queue-next-action.danger i { background: #fca5a5; }
+.admin-shell .queue-next-action.warn { color: #fcd34d; }
+.admin-shell .queue-next-action.warn i { background: #fcd34d; }
+.admin-shell .queue-next-action.ready,
+.admin-shell .queue-next-action.submitted { color: #86efac; }
+.admin-shell .queue-next-action.ready i,
+.admin-shell .queue-next-action.submitted i { background: #86efac; }
+.admin-shell .queue-next-action.quiet { color: var(--admin-sidebar-text-muted); opacity: .7; }
+.admin-shell .queue-payment-flag {
+  background: rgba(245, 158, 11, .2);
+  color: #fcd34d;
+  border-radius: var(--admin-radius-sm);
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  display: inline-block;
+  margin-top: 3px;
+}
+
+/* queue-bucket accent bars — left edge color signals bucket */
 .admin-shell .application-list-item.queue-needs:hover,
-.admin-shell .application-list-item.active.queue-needs { box-shadow: inset 3px 0 var(--admin-danger-text); background: var(--admin-danger-bg); }
+.admin-shell .application-list-item.active.queue-needs {
+  background: rgba(239,68,68,.12);
+  box-shadow: inset 3px 0 #f87171;
+}
 .admin-shell .application-list-item.queue-ready:hover,
-.admin-shell .application-list-item.active.queue-ready { box-shadow: inset 3px 0 var(--admin-good-text); background: var(--admin-good-bg); }
+.admin-shell .application-list-item.active.queue-ready {
+  background: rgba(34,197,94,.1);
+  box-shadow: inset 3px 0 #4ade80;
+}
 .admin-shell .application-list-item.queue-waiting:hover,
-.admin-shell .application-list-item.active.queue-waiting { box-shadow: inset 3px 0 var(--admin-border-strong); background: var(--admin-surface-sunken); }
-.admin-shell .queue-submitted { background: var(--admin-surface); }
+.admin-shell .application-list-item.active.queue-waiting {
+  background: var(--admin-sidebar-hover);
+  box-shadow: inset 3px 0 var(--admin-sidebar-text-muted);
+}
+.admin-shell .queue-submitted { background: transparent; }
 
-.admin-shell .admin-mobile-menu summary { background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
-.admin-shell .admin-mobile-menu-popover { background: var(--admin-surface); border-color: var(--admin-border); box-shadow: var(--admin-shadow); }
-.admin-shell .admin-mobile-menu-popover a, .admin-shell .admin-mobile-menu-popover button { color: var(--admin-text); }
+.admin-shell .mini-status { background: rgba(255,255,255,.08); color: var(--admin-sidebar-text-muted); }
+.admin-shell .mini-status.warn { background: rgba(245,158,11,.2); color: #fcd34d; }
+.admin-shell .mini-status.good { background: rgba(34,197,94,.15); color: #86efac; }
+.admin-shell .empty-list { color: var(--admin-sidebar-text-muted); }
+
+.admin-shell .admin-mobile-menu summary { background: var(--admin-sidebar-surface); color: var(--admin-sidebar-text); }
+.admin-shell .admin-mobile-menu-popover { background: var(--admin-sidebar-bg); border-color: var(--admin-sidebar-border); box-shadow: var(--admin-shadow); }
+.admin-shell .admin-mobile-menu-popover a, .admin-shell .admin-mobile-menu-popover button { color: var(--admin-sidebar-text); }
 .admin-shell .mobile-detail-nav { background: var(--admin-surface); border-bottom: 1px solid var(--admin-border); }
 .admin-shell .mobile-detail-nav > button { background: var(--admin-surface-sunken); color: var(--admin-accent); }
 .admin-shell .mobile-detail-nav small { color: var(--admin-text-faint); }
 
-/* ---- 4. Header / recommended action / attention strip -------------------- */
+/* ---- 4. Cockpit command strip + attention --------------------------------- */
 
-.admin-shell .admin-detail-header h1 { font-size: var(--admin-font-size-h1); }
-.admin-shell .admin-detail-header p { color: var(--admin-text-muted); }
+/* Identity row */
+.admin-shell .admin-detail-header {
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-border);
+  padding: 14px 18px 0;
+}
+.admin-shell .cockpit-identity { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+.admin-shell .admin-detail-header h1 {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.1;
+  margin: 0;
+}
+.admin-shell .admin-detail-header .cockpit-meta {
+  color: var(--admin-text-muted);
+  font-size: 11px;
+}
+.admin-shell .admin-detail-header .eyebrow {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--admin-accent);
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Pipeline strip — 8 step dots */
+.admin-shell .cockpit-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-top: 1px solid var(--admin-border);
+  margin: 0 -18px;        /* bleed to card edges */
+  padding: 0 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--admin-surface-sunken);
+}
+.admin-shell .cockpit-pipeline::-webkit-scrollbar { display: none; }
+
+.admin-shell .cockpit-step-dot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  padding: 7px 12px 8px;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--admin-border);
+  cursor: pointer;
+  transition: background .12s;
+  min-width: 52px;
+}
+.admin-shell .cockpit-step-dot:last-child { border-right: none; }
+.admin-shell .cockpit-step-dot:hover { background: var(--admin-accent-soft); }
+.admin-shell .cockpit-step-dot i {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dot-idle);
+  flex-shrink: 0;
+}
+.admin-shell .cockpit-step-dot.dot-done i  { background: var(--dot-done); }
+.admin-shell .cockpit-step-dot.dot-active i { background: var(--dot-active); box-shadow: 0 0 0 2px var(--admin-accent-soft), 0 0 0 3px var(--admin-accent); }
+.admin-shell .cockpit-step-dot.dot-waiting i { background: var(--dot-waiting); }
+.admin-shell .cockpit-step-dot.dot-na i { background: var(--dot-na); opacity: .5; }
+.admin-shell .cockpit-step-dot span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--admin-text-faint);
+  white-space: nowrap;
+}
+.admin-shell .cockpit-step-dot.dot-done span  { color: var(--admin-good-text); }
+.admin-shell .cockpit-step-dot.dot-active span { color: var(--admin-accent); }
+.admin-shell .cockpit-step-dot.dot-waiting span { color: #92400e; }
+
+/* Cockpit status chips row */
+.admin-shell .cockpit-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 10px;
+  flex-wrap: wrap;
+}
 .admin-shell .admin-header-status span { background: var(--admin-accent-soft); color: var(--admin-accent); }
 .admin-shell .admin-header-status small { color: var(--admin-text-faint); }
-.admin-shell .cockpit-chip { background: var(--admin-surface); border-color: var(--admin-border); color: var(--admin-text-muted); }
+.admin-shell .cockpit-chip {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-text-muted);
+  border-radius: var(--admin-radius-sm);
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
 .admin-shell .cockpit-chip.good { background: var(--admin-good-bg); border-color: var(--admin-good-border); color: var(--admin-good-text); }
 .admin-shell .cockpit-chip.warn { background: var(--admin-warn-bg); border-color: var(--admin-warn-border); color: var(--admin-warn-text); }
 .admin-shell .admin-message { background: var(--admin-accent-soft); color: var(--admin-accent); border-radius: var(--admin-radius-sm); }
 .admin-shell .admin-message-error { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
+
+/* Open PBS button — lives in the chips row */
+.admin-shell .cockpit-open-pbs-btn {
+  background: var(--admin-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--admin-radius-sm);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  cursor: pointer;
+  margin-left: auto;
+  transition: background .12s;
+}
+.admin-shell .cockpit-open-pbs-btn:hover:not(:disabled) { background: var(--admin-accent-hover); }
+.admin-shell .cockpit-open-pbs-btn:disabled { opacity: .4; cursor: default; }
 
 .admin-shell .ops-attention-strip { background: var(--admin-warn-bg); border-color: var(--admin-warn-border); }
 .admin-shell .ops-attention-strip > strong { color: var(--admin-warn-text); }
 .admin-shell .ops-attention-strip span { background: var(--admin-surface); border-color: var(--admin-warn-border); color: var(--admin-warn-text); }
 .admin-shell .attention-dot { background: var(--admin-warn-text); }
 
+/* ProcessStatusOverview is replaced by cockpit dots — keep rules for Legacy tab */
 .admin-shell .process-status-item { background: var(--admin-surface); border-color: var(--admin-border); border-radius: var(--admin-radius-md); }
 .admin-shell .process-status-title { color: var(--admin-text-muted); }
 
@@ -401,15 +623,15 @@
 
 /* ---- 9. Case detail tabs -------------------------------------------------- */
 
-/* Tab bar — utilitarian underline strip, control-panel density */
+/* Tab bar — clean underline strip */
 .admin-shell .case-tab-bar {
   display: flex;
   gap: 0;
   border-bottom: 2px solid var(--admin-border);
-  margin: 10px 0 14px;
+  margin: 12px 0 0;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  background: var(--admin-surface);
 }
 .admin-shell .case-tab-bar::-webkit-scrollbar { display: none; }
 
@@ -419,64 +641,54 @@
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
-  padding: 7px 14px;
-  font-size: var(--admin-font-size-small);
+  padding: 9px 16px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--admin-text-muted);
   cursor: pointer;
   white-space: nowrap;
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: .05em;
   transition: color .1s, border-color .1s;
 }
-.admin-shell .case-tab-bar button:hover {
-  color: var(--admin-text);
-}
+.admin-shell .case-tab-bar button:hover { color: var(--admin-text); }
 .admin-shell .case-tab-bar button[aria-selected="true"] {
   color: var(--admin-accent);
   border-bottom-color: var(--admin-accent);
 }
 
-/* Tab panel — plain flow, no extra wrapper chrome */
+/* Tab panel content area */
 .admin-shell .case-tab-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  padding: 14px 0;
 }
 
-/* Two-column layout for side-by-side step cards (Formation+BRC, Tax+UEZ) */
+/* Section divider pattern — replaces card chrome inside tabs */
+.admin-shell .tab-section {
+  border-left: 3px solid var(--admin-border);
+  padding-left: 14px;
+  margin-bottom: 4px;
+}
+.admin-shell .tab-section-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--admin-text-faint);
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* Two-column layout for side-by-side step cards */
 .admin-shell .case-tab-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 @media (max-width: 760px) {
   .admin-shell .case-tab-two-col { grid-template-columns: 1fr; }
-}
-
-/* Open PBS button in the cockpit header — styled as a compact accent chip */
-.admin-shell .cockpit-open-pbs-btn {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 11px;
-  border: 1px solid var(--admin-border-strong);
-  border-radius: var(--admin-radius-sm);
-  background: var(--admin-accent-soft);
-  color: var(--admin-accent);
-  font-size: var(--admin-font-size-small);
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background .12s;
-}
-.admin-shell .cockpit-open-pbs-btn:hover:not(:disabled) {
-  background: var(--admin-accent);
-  color: #fff;
-  border-color: var(--admin-accent);
-}
-.admin-shell .cockpit-open-pbs-btn:disabled {
-  opacity: .45;
-  cursor: not-allowed;
 }
 
 /* ---- 10. Email Settings page ----------------------------------------------- */

@@ -49,11 +49,24 @@ import {
   paymentStatusLabel,
   pbsAccountGateReason,
   PROCESS_STEP_TITLES,
+  PROCESS_STEP_KEYS,
   queueCounts,
   readyDocumentCount,
   resolveProcessStep,
   statusLabel
 } from './admin/caseLogic';
+
+// Maps each step to the tab that handles it — used by the cockpit pipeline dots
+const PIPELINE_STEPS = [
+  { key: 'formation',        tab: 'formation_brc',     short: 'CoF'   },
+  { key: 'brc',              tab: 'formation_brc',     short: 'BRC'   },
+  { key: 'pbs_mynj',        tab: 'pbs_mynj',           short: 'PBS'   },
+  { key: 'tax_clearance',   tab: 'uez_tax',            short: 'TC'    },
+  { key: 'uez_enrollment',  tab: 'uez_tax',            short: 'UEZ'   },
+  { key: 'ldc_application', tab: 'payment_ldc_grant',  short: 'LDC'   },
+  { key: 'payment',         tab: 'payment_ldc_grant',  short: 'Pay'   },
+  { key: 'grant_submission', tab: 'payment_ldc_grant', short: 'Grant' },
+];
 import ActivityPanel from './admin/ActivityPanel';
 import AdminSidebar from './admin/AdminSidebar';
 import BrcDetailsCard from './admin/BrcDetailsCard';
@@ -66,7 +79,6 @@ import NotesPanel from './admin/NotesPanel';
 import OwnersCard from './admin/OwnersCard';
 import PaymentCard from './admin/PaymentCard';
 import CaseDetailTabs from './admin/CaseDetailTabs';
-import ProcessStatusOverview from './admin/ProcessStatusOverview';
 import ProcessStepCard from './admin/ProcessStepCard';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
@@ -146,6 +158,7 @@ export default function AdminPage() {
   const [noteEditingId, setNoteEditingId] = useState(null);
   const [noteEditDraft, setNoteEditDraft] = useState('');
   const [emailComposer, setEmailComposer] = useState(null);
+  const [activeTab, setActiveTab] = useState('formation_brc');
 
   useEffect(() => {
     let active = true;
@@ -1003,6 +1016,7 @@ export default function AdminPage() {
 
   function selectApplication(id) {
     setMobileDetailOpen(true);
+    setActiveTab('formation_brc');  // reset to first tab on every new selection
     openApplication(id);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
@@ -1073,18 +1087,51 @@ export default function AdminPage() {
 
         {detail && <>
           <div className="admin-detail-header cockpit-header">
-            <div><span className="eyebrow">UEZ APPLICATION</span><h1>{detail.application.business_name_input}</h1><p>{detail.application.contact_email} · {detail.application.contact_phone || 'No phone'}{detail.owners?.[0] ? ` · ${detail.owners[0].firstName} ${detail.owners[0].lastName}` : ''}</p></div>
-            <div className="cockpit-header-chips">
-              <span className={`cockpit-chip ${detail.application.status === 'applied' ? 'good' : ''}`}>{statusLabel(detail.application.status)}</span>
-              <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
-              <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
-              <button
-                className="cockpit-open-pbs-btn"
-                onClick={runPbsLogin}
-                disabled={busy || !myNjCredentials}
-                title={!myNjCredentials ? 'MyNJ credentials required' : 'Open PBS and log in'}
-              >Open PBS</button>
+            {/* Identity row */}
+            <div className="cockpit-identity">
+              <div>
+                <span className="eyebrow">UEZ APPLICATION</span>
+                <h1>{detail.application.business_name_input}</h1>
+                <p className="cockpit-meta">
+                  {detail.application.contact_email}
+                  {detail.application.contact_phone ? ` · ${detail.application.contact_phone}` : ''}
+                  {detail.owners?.[0] ? ` · ${detail.owners[0].firstName} ${detail.owners[0].lastName}` : ''}
+                </p>
+              </div>
+              <div className="cockpit-chips-row">
+                <span className={`cockpit-chip ${detail.application.status === 'applied' ? 'good' : ''}`}>{statusLabel(detail.application.status)}</span>
+                <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
+                <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
+                <button
+                  className="cockpit-open-pbs-btn"
+                  onClick={runPbsLogin}
+                  disabled={busy || !myNjCredentials}
+                  title={!myNjCredentials ? 'MyNJ credentials required' : 'Open PBS and log in'}
+                >Open PBS</button>
+              </div>
             </div>
+            {/* Pipeline strip — 8 step dots, each clickable to navigate to its tab */}
+            <nav className="cockpit-pipeline" aria-label="Application pipeline">
+              {PIPELINE_STEPS.map(({ key, tab, short }) => {
+                const step = resolveProcessStep(key, detail);
+                const dotClass =
+                  step.state === 'complete'     ? 'dot-done'    :
+                  step.state === 'in_progress'  ? 'dot-active'  :
+                  step.state === 'waiting'      ? 'dot-waiting' :
+                  step.state === 'not_applicable' ? 'dot-na'    : '';
+                return (
+                  <button
+                    key={key}
+                    className={`cockpit-step-dot ${dotClass}`}
+                    onClick={() => setActiveTab(tab)}
+                    title={`${PROCESS_STEP_TITLES[key]}: ${step.state.replace(/_/g, ' ')}`}
+                  >
+                    <i aria-hidden="true" />
+                    <span>{short}</span>
+                  </button>
+                );
+              })}
+            </nav>
           </div>
 
           <div className="admin-edit-actions">
@@ -1094,8 +1141,6 @@ export default function AdminPage() {
             </> : <button className="secondary" onClick={startEditing} disabled={busy}>Edit application</button>}
             <button className="admin-delete-button" onClick={deleteApplication} disabled={busy}>Delete application</button>
           </div>
-
-          <ProcessStatusOverview detail={detail} />
 
           {/* attentionItems' checks are the same URGENT_REVIEW_ITEMS
               definition (caseLogic.js) that used to also drive the
@@ -1107,6 +1152,8 @@ export default function AdminPage() {
           </div>}
 
           <CaseDetailTabs
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
             detail={detail}
             busy={busy}
             myNjCredentials={myNjCredentials}

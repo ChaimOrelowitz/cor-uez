@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   docFor,
   formatTimestamp,
@@ -31,6 +31,8 @@ const TABS = [
 ];
 
 export default function CaseDetailTabs({
+  activeTab,
+  setActiveTab,
   detail,
   busy,
   myNjCredentials,
@@ -95,13 +97,6 @@ export default function CaseDetailTabs({
   resetProcessStep,
   sendGrantSubmittedEmail,
 }) {
-  const [activeTab, setActiveTab] = useState('formation_brc');
-
-  // Reset to first tab whenever the selected application changes
-  useEffect(() => {
-    setActiveTab('formation_brc');
-  }, [detail.application.id]);
-
   // ── shared factsContent helpers (inline JSX, same as AdminPage had them) ──
 
   function formationFacts() {
