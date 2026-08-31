@@ -56,6 +56,7 @@ export default function CaseDetailTabs({
   manualDocUploading,
   // handlers
   previewDocument,
+  reviewFormationDoc,
   sendFormationRejectedEmail,
   runBrcLookup,
   sendBrcProblemEmail,
@@ -138,6 +139,39 @@ export default function CaseDetailTabs({
           <small className="cof-fein-hint">
             💡 If the applicant uploaded something and it's missing here, they may have uploaded the FEIN letter (IRS SS-4) by mistake
           </small>
+        )}
+
+        {/* Inline action buttons — right here, no need to open the modal */}
+        {formation && (
+          <div className="cof-inline-actions">
+            {review !== 'approved' && (
+              <button
+                className="cof-action-btn cof-approve-btn"
+                onClick={() => reviewFormationDoc('approved')}
+                disabled={busy}
+              >
+                ✓ Approve
+              </button>
+            )}
+            {review !== 'rejected' && (
+              <button
+                className="cof-action-btn cof-reject-btn"
+                onClick={() => reviewFormationDoc('rejected')}
+                disabled={busy}
+              >
+                Wrong document
+              </button>
+            )}
+            {review === 'rejected' && (
+              <button
+                className="cof-action-btn cof-email-btn"
+                onClick={sendFormationRejectedEmail}
+                disabled={busy}
+              >
+                ✉ Send replacement request
+              </button>
+            )}
+          </div>
         )}
 
         {lastSent && (
@@ -338,7 +372,7 @@ export default function CaseDetailTabs({
     return (
       <div className="case-tab-panel">
         <div className="case-tab-two-col">
-          {/* Formation step */}
+          {/* Formation step — review buttons are inline in factsContent */}
           <ProcessStepCard
             stepKey="formation"
             title={PROCESS_STEP_TITLES.formation}
@@ -347,11 +381,7 @@ export default function CaseDetailTabs({
             onSaveOperational={saveProcessStep}
             onResetOperational={resetProcessStep}
             factsContent={formationFacts()}
-            actions={[{
-              label: 'Send replacement request email',
-              onClick: sendFormationRejectedEmail,
-              disabled: busy
-            }]}
+            actions={[]}
           />
 
           {/* BRC step — inline fields + all actions always shown */}

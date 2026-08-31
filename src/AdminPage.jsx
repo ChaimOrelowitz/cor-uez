@@ -324,6 +324,24 @@ export default function AdminPage() {
     }
   }
 
+  // Approve or reject the formation doc directly from the inline preview —
+  // same API call as reviewPreviewDoc but without requiring the modal.
+  async function reviewFormationDoc(decision) {
+    const formation = [...(detail?.documents || [])].reverse().find((d) => d.document_type === 'formation');
+    if (!formation) return;
+    setBusy(true);
+    setMessage(decision === 'approved' ? 'Approving formation document…' : 'Marking formation document as wrong…');
+    try {
+      await reviewAdminDocument(detail.application.id, formation.id, decision);
+      await refreshList(detail.application.id);
+      setMessage(decision === 'approved' ? '✓ Formation document approved.' : 'Marked wrong — send the replacement request email below.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openDoc(doc) {
     try {
       const result = await getDocumentUrl(detail.application.id, doc.id);
@@ -1245,6 +1263,7 @@ export default function AdminPage() {
             setManualDocFile={setManualDocFile}
             manualDocUploading={manualDocUploading}
             previewDocument={previewDocument}
+            reviewFormationDoc={reviewFormationDoc}
             sendFormationRejectedEmail={sendFormationRejectedEmail}
             runBrcLookup={runBrcLookup}
             sendBrcProblemEmail={sendBrcProblemEmail}

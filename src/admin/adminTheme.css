@@ -1272,6 +1272,46 @@
   line-height: 1.4;
 }
 
+/* Inline action buttons — Approve / Wrong document / Send replacement request */
+.admin-shell .cof-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.admin-shell .cof-action-btn {
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 0.15s;
+}
+.admin-shell .cof-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.admin-shell .cof-approve-btn {
+  background: var(--admin-success-bg, #dcfce7);
+  color: var(--admin-success-text, #15803d);
+  border-color: #bbf7d0;
+}
+.admin-shell .cof-approve-btn:hover:not(:disabled) { background: #bbf7d0; }
+.admin-shell .cof-reject-btn {
+  background: var(--admin-danger-bg, #fee2e2);
+  color: var(--admin-danger-text, #b91c1c);
+  border-color: #fecaca;
+}
+.admin-shell .cof-reject-btn:hover:not(:disabled) { background: #fecaca; }
+.admin-shell .cof-email-btn {
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text);
+  border-color: var(--admin-border);
+}
+.admin-shell .cof-email-btn:hover:not(:disabled) { background: var(--admin-border); }
+
 /* Dark-mode: the iframe/img backgrounds need explicit override */
 .admin-shell.dark .doc-inline-img { background: #1a1d24; }
+.admin-shell.dark .cof-approve-btn { background: #14532d; color: #86efac; border-color: #166534; }
+.admin-shell.dark .cof-approve-btn:hover:not(:disabled) { background: #166534; }
+.admin-shell.dark .cof-reject-btn { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+.admin-shell.dark .cof-reject-btn:hover:not(:disabled) { background: #7f1d1d; }
 
