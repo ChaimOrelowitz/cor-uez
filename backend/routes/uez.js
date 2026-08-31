@@ -1487,9 +1487,13 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
-    const overallStatus = ['grant_submitted', 'applied'].includes(status)
-      ? 'applied'
-      : application.status === 'applied' ? 'applied' : 'in_progress';
+    const overallStatus = status === 'cancelled'
+      ? 'cancelled'
+      : ['grant_submitted', 'applied', 'submitted'].includes(status)
+        ? 'applied'
+        : ['not_started'].includes(status)
+          ? 'not_started'
+          : application.status === 'applied' ? 'applied' : 'in_progress';
 
     const { data, error } = await supabase.from('uez_applications').update({
       status: overallStatus,
