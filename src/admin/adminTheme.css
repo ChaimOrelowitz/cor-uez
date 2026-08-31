@@ -1784,13 +1784,21 @@
   padding: 12px 16px;
   border-bottom: 1px solid var(--cw-line);
 }
-.admin-shell .cw-step-note-body {
+.admin-shell .cw-step-note-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  background: var(--cw-input);
+  border: 1px solid var(--cw-input-border);
+  border-radius: var(--cw-radius-sm);
+  color: var(--cw-text);
   font-size: 12px;
-  color: var(--cw-text-soft);
-  margin-top: 4px;
-  white-space: pre-wrap;
+  font-family: inherit;
+  padding: 7px 10px;
+  resize: vertical;
+  min-height: 58px;
 }
-.admin-shell .cw-step-note-empty { color: var(--cw-muted3); font-style: italic; }
+.admin-shell .cw-step-note-input::placeholder { color: var(--cw-muted3); }
 
 .admin-shell .cw-step-nav {
   display: flex;

@@ -558,6 +558,22 @@ function StepPanel({
   const docType = STEP_DOC_TYPE[stepKey];
   const doc = docType ? docFor(detail, docType) : null;
 
+  // Step-note local state — keep in sync when step or application changes
+  const [stepNoteDraft, setStepNoteDraft] = useState(step.manualNote || '');
+  useEffect(() => { setStepNoteDraft(step.manualNote || ''); }, [stepKey, detail.application.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveStepNote() {
+    const text = stepNoteDraft.trim() || null;
+    if (text === (step.manualNote || null)) return; // nothing changed
+    await saveProcessStep(stepKey, {
+      state: step.state,
+      waitingOn: step.waitingOn || null,
+      waitingSince: step.waitingSince || null,
+      waitingReason: step.waitingReason || null,
+      manualNote: text,
+    });
+  }
+
   // "Set by" line
   const setByLine = step.source === 'explicit'
     ? `Set by ${step.updatedByName || 'admin'} · ${step.updatedAt ? formatTimestamp(step.updatedAt) : ''}`
@@ -589,7 +605,7 @@ function StepPanel({
                 type="button"
                 className={`cw-state-chip${active ? ' cw-state-chip-active' : ''}`}
                 style={active ? { background: st.bg, border: `1px solid ${st.border}`, color: st.fg } : undefined}
-                onClick={() => saveProcessStep(stepKey, s, step.waitingOn)}
+                onClick={() => saveProcessStep(stepKey, { state: s, waitingOn: null, waitingSince: null, waitingReason: null, manualNote: step.manualNote || null })}
                 disabled={busy}
               >
                 {PROCESS_STEP_STATE_LABELS[s]}
@@ -695,12 +711,18 @@ function StepPanel({
         </div>
       </div>
 
-      {/* Step note */}
+      {/* Step note — editable (this panel only renders the currently selected step) */}
       <div className="cw-step-note-section">
-        <span className="cw-field-label cw-mono">STEP NOTES</span>
-        <div className="cw-step-note-body">
-          {step.manualNote || <span className="cw-step-note-empty">No note for this step.</span>}
-        </div>
+        <span className="cw-field-label cw-mono">STEP NOTE</span>
+        <textarea
+          className="cw-step-note-input"
+          value={stepNoteDraft}
+          onChange={(e) => setStepNoteDraft(e.target.value)}
+          onBlur={saveStepNote}
+          placeholder="Add a note for this step…"
+          rows={3}
+          disabled={busy}
+        />
       </div>
 
       {/* Prev / Next nav */}
