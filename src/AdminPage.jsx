@@ -65,6 +65,7 @@ import MyNjPbsCard from './admin/MyNjPbsCard';
 import NotesPanel from './admin/NotesPanel';
 import OwnersCard from './admin/OwnersCard';
 import PaymentCard from './admin/PaymentCard';
+import CaseDetailTabs from './admin/CaseDetailTabs';
 import ProcessStatusOverview from './admin/ProcessStatusOverview';
 import ProcessStepCard from './admin/ProcessStepCard';
 
@@ -1077,6 +1078,12 @@ export default function AdminPage() {
               <span className={`cockpit-chip ${detail.application.status === 'applied' ? 'good' : ''}`}>{statusLabel(detail.application.status)}</span>
               <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
               <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
+              <button
+                className="cockpit-open-pbs-btn"
+                onClick={runPbsLogin}
+                disabled={busy || !myNjCredentials}
+                title={!myNjCredentials ? 'MyNJ credentials required' : 'Open PBS and log in'}
+              >Open PBS</button>
             </div>
           </div>
 
@@ -1099,398 +1106,79 @@ export default function AdminPage() {
             <div>{attentionItems(detail).map((item) => <span key={item}>{item}</span>)}</div>
           </div>}
 
-          {/* The 8-card process redesign - one card per step, each an
-              operational verdict (not_started/in_progress/waiting/complete/
-              not_applicable/manual) layered over the facts below it. Card
-              order mirrors PROCESS_STEP_KEYS in caseLogic.js: confirm
-              Formation, fetch BRC, set up PBS/MyNJ, then work Tax Clearance
-              and UEZ Enrollment in parallel, fill out the LDC application
-              once both are good, collect Payment, submit the Grant last. */}
-          <div className="process-step-grid">
-            <ProcessStepCard
-              stepKey="formation"
-              title={PROCESS_STEP_TITLES.formation}
-              busy={busy}
-              operational={resolveProcessStep('formation', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                const formation = docFor(detail, 'formation');
-                const sole = detail.application.is_sole_proprietorship;
-                const review = detail.application.formation_review_status || 'not_reviewed';
-                return <div className="doc-preview-row">
-                  <DocThumbnail doc={formation} applicationId={detail.application.id} onClick={() => formation && previewDocument(formation)} />
-                  {sole && !formation
-                    ? <small>Not required (sole proprietorship)</small>
-                    : !formation
-                      ? <small>Missing</small>
-                      : <small>{review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'} — {formation.filename}</small>}
-                </div>;
-              })()}
-              actions={detail.application.formation_review_status === 'rejected' ? [{
-                label: 'Send replacement request email',
-                onClick: sendFormationRejectedEmail,
-                disabled: busy
-              }] : []}
-            />
+          <CaseDetailTabs
+            detail={detail}
+            busy={busy}
+            myNjCredentials={myNjCredentials}
+            brcForm={brcForm}
+            setBrcForm={setBrcForm}
+            paymentDraft={paymentDraft}
+            setPaymentDraft={setPaymentDraft}
+            pbsAnswerDraft={pbsAnswerDraft}
+            pbsLoginDraft={pbsLoginDraft}
+            setPbsLoginDraft={setPbsLoginDraft}
+            myNjEditMode={myNjEditMode}
+            myNjDraft={myNjDraft}
+            setMyNjDraft={setMyNjDraft}
+            showMyNjSecrets={showMyNjSecrets}
+            editMode={editMode}
+            applicationDraft={applicationDraft}
+            ownerDrafts={ownerDrafts}
+            noteDraft={noteDraft}
+            setNoteDraft={setNoteDraft}
+            noteBusy={noteBusy}
+            noteEditingId={noteEditingId}
+            noteEditDraft={noteEditDraft}
+            setNoteEditDraft={setNoteEditDraft}
+            manualDocType={manualDocType}
+            setManualDocType={setManualDocType}
+            manualDocFile={manualDocFile}
+            setManualDocFile={setManualDocFile}
+            manualDocUploading={manualDocUploading}
+            previewDocument={previewDocument}
+            sendFormationRejectedEmail={sendFormationRejectedEmail}
+            runBrcLookup={runBrcLookup}
+            sendBrcProblemEmail={sendBrcProblemEmail}
+            markPbsAccountCreated={markPbsAccountCreated}
+            setProcessFlag={setProcessFlag}
+            runPbsSignup={runPbsSignup}
+            sendPbsAccountCreatedEmail={sendPbsAccountCreatedEmail}
+            runTaxClearance={runTaxClearance}
+            sendTaxIssueEmail={sendTaxIssueEmail}
+            sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
+            runLdcJotform={runLdcJotform}
+            requestPayment={requestPayment}
+            confirmPayment={confirmPayment}
+            sendPaymentReceivedEmail={sendPaymentReceivedEmail}
+            runLakewoodGrantPortal={runLakewoodGrantPortal}
+            confirmGrantSubmitted={confirmGrantSubmitted}
+            sendGrantSubmittedEmail={sendGrantSubmittedEmail}
+            changePbsAnswerDraft={changePbsAnswerDraft}
+            saveExistingPbsAnswer={saveExistingPbsAnswer}
+            saveMyNjCredentials={saveMyNjCredentials}
+            startMyNjEdit={startMyNjEdit}
+            cancelMyNjEdit={cancelMyNjEdit}
+            toggleShowMyNjSecrets={toggleShowMyNjSecrets}
+            copyCredential={copyCredential}
+            createMyNjCredentials={createMyNjCredentials}
+            addCaseNote={addCaseNote}
+            startEditingNote={startEditingNote}
+            cancelEditingNote={cancelEditingNote}
+            saveCaseNoteEdit={saveCaseNoteEdit}
+            removeCaseNote={removeCaseNote}
+            openDoc={openDoc}
+            handleDeleteDoc={handleDeleteDoc}
+            uploadManualAdminDocument={uploadManualAdminDocument}
+            updateApplicationDraft={updateApplicationDraft}
+            updateOwnerDraft={updateOwnerDraft}
+            addOwner={addOwner}
+            removeOwner={removeOwner}
+            saveBrcFound={saveBrcFound}
+            saveBrcNotFound={saveBrcNotFound}
+            saveProcessStep={saveProcessStep}
+            resetProcessStep={resetProcessStep}
+          />
 
-            <ProcessStepCard
-              stepKey="brc"
-              title={PROCESS_STEP_TITLES.brc}
-              busy={busy}
-              operational={resolveProcessStep('brc', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                const brc = docFor(detail, 'brc');
-                const status = detail.application.brc_status;
-                const lastSent = lastEmailSent(detail, 'brc_not_found');
-                return <>
-                  <div className="doc-preview-row">
-                    <DocThumbnail doc={brc} applicationId={detail.application.id} onClick={() => brc && previewDocument(brc)} />
-                    {brc
-                      ? <small>✓ BRC on file — {brc.filename}</small>
-                      : status === 'not_found'
-                        ? <small>NJ did not find a matching BRC</small>
-                        : status && status !== 'pending'
-                          ? <small>{status.replace(/_/g, ' ')}</small>
-                          : <small>Not yet fetched</small>}
-                  </div>
-                  {lastSent && (
-                    <small className="email-sent-note">
-                      Email sent {formatTimestamp(lastSent.createdAt)}
-                      {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
-                    </small>
-                  )}
-                </>;
-              })()}
-              actions={[
-                {
-                  label: 'Fetch BRC',
-                  onClick: runBrcLookup,
-                  disabled: busy
-                },
-                ...(detail.application.brc_status === 'not_found' ? [{
-                  label: 'Send BRC Email',
-                  onClick: sendBrcProblemEmail,
-                  disabled: busy
-                }] : [])
-              ]}
-            />
-
-            <ProcessStepCard
-              stepKey="pbs_mynj"
-              title={PROCESS_STEP_TITLES.pbs_mynj}
-              busy={busy}
-              operational={resolveProcessStep('pbs_mynj', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                const hasExisting = detail.application.has_existing_pbs_account;
-                return <>
-                  <div className="process-step-inline-select">
-                    <label>PBS account created</label>
-                    <div className="tiny-toggle">
-                      {/* "Yes" goes through markPbsAccountCreated (not the generic
-                          setProcessFlag) so it's the one path that also fires the
-                          applicant's "PBS account created" email — MyNjPbsCard's
-                          old duplicate button used to call this same handler
-                          through a second UI, the process card is now the only
-                          place that does. Safe to click repeatedly: the backend
-                          dedupes the email by application id. */}
-                      <button className={detail.application.pbs_account_created ? 'active-good' : ''} onClick={markPbsAccountCreated} disabled={busy}>Yes</button>
-                      <button className={!detail.application.pbs_account_created ? 'active-neutral' : ''} onClick={() => setProcessFlag('pbsAccountCreated', false)} disabled={busy}>No</button>
-                    </div>
-                  </div>
-                  {myNjCredentials
-                    ? <small>MyNJ login on file</small>
-                    : <small>No MyNJ login yet{hasExisting == null ? ' — waiting on the applicant’s existing-account answer' : ''}</small>}
-                </>;
-              })()}
-              actions={[
-                {
-                  // Existing-PBS-account clients only need the business added,
-                  // not a whole new account — that branch stays manual (via
-                  // "Open PBS" below, done by hand in the visible NJ window),
-                  // no automated flow for it.
-                  label: 'Open PBS account',
-                  onClick: runPbsSignup,
-                  disabled: busy || Boolean(pbsAccountGateReason(detail, myNjCredentials))
-                },
-                {
-                  label: 'Open PBS',
-                  onClick: runPbsLogin,
-                  disabled: busy || !myNjCredentials
-                },
-                {
-                  label: 'Send PBS account email',
-                  onClick: sendPbsAccountCreatedEmail,
-                  disabled: busy || !myNjCredentials
-                }
-              ]}
-            />
-
-            <ProcessStepCard
-              stepKey="tax_clearance"
-              title={PROCESS_STEP_TITLES.tax_clearance}
-              busy={busy}
-              operational={resolveProcessStep('tax_clearance', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                const doc = docFor(detail, 'tax_clearance');
-                const issueDoc = docFor(detail, 'tax_clearance_issue');
-                const status = detail.application.tax_clearance_status || (detail.application.tax_clearance_good ? 'good' : 'no');
-                const shownDoc = doc || issueDoc;
-                const lastSent = lastEmailSent(detail, 'tax_issue');
-                return <>
-                  <div className="process-step-inline-select">
-                    <label>Tax clearance</label>
-                    <div className="tiny-toggle tax-tristate">
-                      <button className={status === 'no' ? 'active-neutral' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'no')} disabled={busy}>No</button>
-                      <button className={status === 'issue' ? 'active-warn' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'issue')} disabled={busy}>Issue</button>
-                      <button className={status === 'good' ? 'active-good' : ''} onClick={() => setProcessFlag('taxClearanceStatus', 'good')} disabled={busy}>Good</button>
-                    </div>
-                  </div>
-                  {detail.application.tax_clearance_recheck_requested_at && <small className="tax-recheck-note">Client says resolved</small>}
-                  {shownDoc
-                    ? <div className="doc-preview-row">
-                        <DocThumbnail doc={shownDoc} applicationId={detail.application.id} onClick={() => previewDocument(shownDoc)} />
-                        <small>{doc ? '✓ Tax clearance letter on file' : '⚠ Issue screenshot on file'} — {shownDoc.filename}</small>
-                      </div>
-                    : <small>No tax clearance document yet</small>}
-                  {lastSent && (
-                    <small className="email-sent-note">
-                      Email sent {formatTimestamp(lastSent.createdAt)}
-                      {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
-                    </small>
-                  )}
-                </>;
-              })()}
-              actions={[
-                {
-                  label: 'Fetch Tax Clearance',
-                  onClick: runTaxClearance,
-                  disabled: busy || !myNjCredentials
-                },
-                ...(detail.application.tax_clearance_status === 'issue' ? [{
-                  label: 'Send TC Email',
-                  onClick: sendTaxIssueEmail,
-                  disabled: busy
-                }] : [])
-              ]}
-            />
-
-            <ProcessStepCard
-              stepKey="uez_enrollment"
-              title={PROCESS_STEP_TITLES.uez_enrollment}
-              busy={busy}
-              operational={resolveProcessStep('uez_enrollment', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                const approval = docFor(detail, 'uez_approval_email');
-                const review = detail.application.uez_approval_review_status || 'not_reviewed';
-                return <>
-                  <div className="process-step-inline-select">
-                    <label>UEZ status</label>
-                    <select value={detail.application.uez_application_status || 'not_started'} onChange={(e) => setProcessFlag('uezApplicationStatus', e.target.value)} disabled={busy}>
-                      <option value="not_started">Not Started</option>
-                      <option value="applied">Applied</option>
-                      <option value="approved">Approved</option>
-                    </select>
-                  </div>
-                  <div className="doc-preview-row">
-                    <DocThumbnail doc={approval} applicationId={detail.application.id} onClick={() => approval && previewDocument(approval)} />
-                    {approval
-                      ? <small>{review === 'approved' ? '✓ Approval email approved' : review === 'rejected' ? '⚠ Approval email marked wrong' : '! Approval email needs review'} — {approval.filename}</small>
-                      : <small>No UEZ approval email yet</small>}
-                  </div>
-                </>;
-              })()}
-              actions={['applied', 'approved'].includes(detail.application.uez_application_status) ? [{
-                label: 'Send UEZ application submitted email',
-                onClick: sendUezApplicationSubmittedEmail,
-                disabled: busy
-              }] : []}
-            />
-
-            <ProcessStepCard
-              stepKey="ldc_application"
-              title={PROCESS_STEP_TITLES.ldc_application}
-              busy={busy}
-              operational={resolveProcessStep('ldc_application', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                const doc = docFor(detail, 'ldc_application');
-                return <div className="doc-preview-row">
-                  <DocThumbnail doc={doc} applicationId={detail.application.id} onClick={() => doc && previewDocument(doc)} />
-                  {doc ? <small>✓ Signed application on file — {doc.filename}</small> : <small>Not yet filled out</small>}
-                </div>;
-              })()}
-              actions={[{
-                label: 'Fill out LDC application',
-                onClick: runLdcJotform,
-                disabled: busy
-              }]}
-            />
-
-            <ProcessStepCard
-              stepKey="payment"
-              title={PROCESS_STEP_TITLES.payment}
-              busy={busy}
-              operational={resolveProcessStep('payment', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                const latest = detail.payments?.[detail.payments.length - 1];
-                const requestedAt = detail.application.payment_requested_at;
-                return <>
-                  <strong>{paymentStatusLabel(latest?.status)}</strong>
-                  {latest?.amount != null && <small>${Number(latest.amount).toLocaleString()}{latest.payment_method ? ` · ${latest.payment_method}` : ''}</small>}
-                  <small>{requestedAt ? `Requested ${formatTimestamp(requestedAt)}` : 'Not yet requested — client sees no payment ask yet'}</small>
-                </>;
-              })()}
-              actions={[
-                {
-                  label: detail.application.payment_requested_at ? 'Re-request Payment' : 'Request Payment',
-                  onClick: requestPayment,
-                  disabled: busy
-                },
-                {
-                  label: 'Confirm payment received',
-                  onClick: confirmPayment,
-                  disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
-                },
-                ...(detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? [{
-                  label: 'Send payment received email',
-                  onClick: sendPaymentReceivedEmail,
-                  disabled: busy
-                }] : [])
-              ]}
-            />
-
-            <ProcessStepCard
-              stepKey="grant_submission"
-              title={PROCESS_STEP_TITLES.grant_submission}
-              busy={busy}
-              operational={resolveProcessStep('grant_submission', detail)}
-              onSaveOperational={saveProcessStep}
-              onResetOperational={resetProcessStep}
-              factsContent={(() => {
-                if (detail.application.status === 'applied' || detail.application.status === 'grant_submitted') return <strong>✓ Submitted</strong>;
-                if (grantSubmissionLikelyDetected(detail)) return <strong>Looks submitted — needs confirmation</strong>;
-                if (packetReady(detail)) return <strong>Packet ready — not yet submitted</strong>;
-                return <strong>Waiting on required documents</strong>;
-              })()}
-              actions={[
-                {
-                  label: 'Submit Grant App',
-                  onClick: runLakewoodGrantPortal,
-                  disabled: busy || Boolean(grantSubmitGateReason(detail))
-                },
-                ...(grantSubmissionLikelyDetected(detail) ? [{
-                  label: 'Confirm grant submitted',
-                  onClick: confirmGrantSubmitted,
-                  disabled: busy
-                }] : []),
-                ...(detail.application.status === 'applied' || detail.application.status === 'grant_submitted' ? [{
-                  label: 'Send grant submitted email',
-                  onClick: sendGrantSubmittedEmail,
-                  disabled: busy
-                }] : [])
-              ]}
-            />
-          </div>
-
-          <div className="admin-card-grid case-workbench-grid">
-            <NotesPanel
-              notes={detail.notes}
-              draft={noteDraft}
-              busy={noteBusy}
-              editingId={noteEditingId}
-              editDraft={noteEditDraft}
-              onDraftChange={setNoteDraft}
-              onAdd={addCaseNote}
-              onStartEdit={startEditingNote}
-              onCancelEdit={cancelEditingNote}
-              onEditDraftChange={setNoteEditDraft}
-              onSaveEdit={saveCaseNoteEdit}
-              onDelete={removeCaseNote}
-            />
-            <ActivityPanel events={detail.statusEvents} />
-          </div>
-
-          <div className="admin-details-heading"><span>DETAILS</span><small>Reference information and manual overrides</small></div>
-
-          {/* Deliberate order (no CSS `order` involved — pure DOM order, same
-              approach as the process-step-grid above): identity first
-              (Business, Owners), then the manual-override cards in the same
-              sequence as the process steps they support (BRC, PBS/MyNJ,
-              Payment), Documents last as the full reference list. */}
-          <div className="admin-card-grid">
-            <BusinessDetailsCard
-              application={detail.application}
-              editMode={editMode}
-              draft={applicationDraft}
-              onChangeField={updateApplicationDraft}
-            />
-
-            <OwnersCard
-              owners={detail.owners}
-              editMode={editMode}
-              ownerDrafts={ownerDrafts}
-              onChangeOwnerField={updateOwnerDraft}
-              onAddOwner={addOwner}
-              onRemoveOwner={removeOwner}
-            />
-
-            <BrcDetailsCard
-              application={detail.application}
-              brcForm={brcForm}
-              busy={busy}
-              onChangeBrcForm={setBrcForm}
-              onBrcFound={saveBrcFound}
-              onBrcNotFound={saveBrcNotFound}
-            />
-
-            <MyNjPbsCard
-              application={detail.application}
-              myNjCredentials={myNjCredentials}
-              pbsAnswerDraft={pbsAnswerDraft}
-              pbsLoginDraft={pbsLoginDraft}
-              myNjEditMode={myNjEditMode}
-              myNjDraft={myNjDraft}
-              showMyNjSecrets={showMyNjSecrets}
-              busy={busy}
-              onChangePbsAnswer={changePbsAnswerDraft}
-              onChangePbsLoginDraft={setPbsLoginDraft}
-              onSavePbsAnswer={saveExistingPbsAnswer}
-              onChangeMyNjDraft={setMyNjDraft}
-              onSaveMyNjCredentials={saveMyNjCredentials}
-              onStartMyNjEdit={startMyNjEdit}
-              onCancelMyNjEdit={cancelMyNjEdit}
-              onToggleShowSecrets={toggleShowMyNjSecrets}
-              onCopyCredential={copyCredential}
-              onCreateMyNjCredentials={createMyNjCredentials}
-            />
-
-            <PaymentCard payments={detail.payments} draft={paymentDraft} busy={busy} onDraftChange={setPaymentDraft} onConfirm={confirmPayment} />
-
-            <DocumentsPanel
-              documents={detail.documents}
-              busy={busy}
-              onOpen={openDoc}
-              onDelete={handleDeleteDoc}
-              manualDocType={manualDocType}
-              onChangeManualDocType={setManualDocType}
-              manualDocFile={manualDocFile}
-              onChangeManualDocFile={setManualDocFile}
-              manualDocUploading={manualDocUploading}
-              onUploadManualDoc={uploadManualAdminDocument}
-            />
-          </div>
         </>}
         {pbsModalOpen && <div className="document-modal-backdrop pbs-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPbsModalOpen(false); }}>
           <div className="document-modal pbs-modal" role="dialog" aria-modal="true" aria-label="NJ Premier Business Services">

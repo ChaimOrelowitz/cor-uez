@@ -399,8 +399,89 @@
 .admin-shell .layout-span-toggle button.active { background: var(--admin-surface); color: var(--admin-accent); }
 .admin-shell .layout-row-actions button { border-color: var(--admin-border); background: var(--admin-surface-sunken); color: var(--admin-text-muted); }
 
-/* ---- 9. Email Settings page ----------------------------------------------- */
+/* ---- 9. Case detail tabs -------------------------------------------------- */
 
+/* Tab bar — utilitarian underline strip, control-panel density */
+.admin-shell .case-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--admin-border);
+  margin: 10px 0 14px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.admin-shell .case-tab-bar::-webkit-scrollbar { display: none; }
+
+.admin-shell .case-tab-bar button {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  padding: 7px 14px;
+  font-size: var(--admin-font-size-small);
+  font-weight: 700;
+  color: var(--admin-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  transition: color .1s, border-color .1s;
+}
+.admin-shell .case-tab-bar button:hover {
+  color: var(--admin-text);
+}
+.admin-shell .case-tab-bar button[aria-selected="true"] {
+  color: var(--admin-accent);
+  border-bottom-color: var(--admin-accent);
+}
+
+/* Tab panel — plain flow, no extra wrapper chrome */
+.admin-shell .case-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Two-column layout for side-by-side step cards (Formation+BRC, Tax+UEZ) */
+.admin-shell .case-tab-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 760px) {
+  .admin-shell .case-tab-two-col { grid-template-columns: 1fr; }
+}
+
+/* Open PBS button in the cockpit header — styled as a compact accent chip */
+.admin-shell .cockpit-open-pbs-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: var(--admin-radius-sm);
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
+  font-size: var(--admin-font-size-small);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s;
+}
+.admin-shell .cockpit-open-pbs-btn:hover:not(:disabled) {
+  background: var(--admin-accent);
+  color: #fff;
+  border-color: var(--admin-accent);
+}
+.admin-shell .cockpit-open-pbs-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* ---- 10. Email Settings page ----------------------------------------------- */
+
+/* ---- Email Settings page -------------------------------------------------- */
 .admin-shell .email-settings-intro h1 { font-size: var(--admin-font-size-h1); }
 .admin-shell .email-settings-intro p { color: var(--admin-text-muted); }
 .admin-shell .manual-recipient-card, .admin-shell .email-template-card { background: var(--admin-surface); border-color: var(--admin-border); border-radius: var(--admin-radius-md); box-shadow: var(--admin-shadow); }
