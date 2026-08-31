@@ -422,18 +422,41 @@
   border-bottom: none;
   padding: 14px 18px 0;
 }
-.admin-shell .cockpit-identity { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
-.admin-shell .admin-detail-header h1 {
+/* Two-column strip: identity takes remaining space, controls are fixed right */
+.admin-shell .cockpit-strip {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+}
+.admin-shell .cockpit-identity {
+  flex: 1;
+  min-width: 0; /* allows text to ellipsis instead of pushing controls out */
+}
+.admin-shell .cockpit-identity h1 {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -.01em;
-  line-height: 1.1;
+  line-height: 1.15;
   margin: 0;
   color: #e8ecf5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.admin-shell .admin-detail-header .cockpit-meta {
+.admin-shell .cockpit-identity .cockpit-meta {
   color: #6b7a9a;
   font-size: 11px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-shell .cockpit-ein {
+  color: #4b6a9b;
+  font-weight: 700;
+  margin-right: 8px;
 }
 .admin-shell .admin-detail-header .eyebrow {
   font-size: 9px;
@@ -442,7 +465,16 @@
   text-transform: uppercase;
   color: #3b82f6;
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
+}
+/* Controls column — status select on top, chips + PBS below */
+.admin-shell .cockpit-controls {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding-top: 2px;
 }
 
 /* Pipeline strip — 8 step dots, dark-bg version */
@@ -499,13 +531,12 @@
 .admin-shell .cockpit-step-dot.dot-active span  { color: #93c5fd; }
 .admin-shell .cockpit-step-dot.dot-waiting span { color: #fbbf24; }
 
-/* Cockpit status chips row */
+/* Cockpit chips row — sits below the status select inside cockpit-controls */
 .admin-shell .cockpit-chips-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 0 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .admin-shell .admin-header-status span { background: rgba(37,99,235,.18); color: #93c5fd; }
 .admin-shell .admin-header-status small { color: #6b7a9a; }

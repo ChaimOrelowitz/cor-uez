@@ -1134,18 +1134,19 @@ export default function AdminPage() {
 
         {detail && <>
           <div className="admin-detail-header cockpit-header">
-            {/* Identity row */}
-            <div className="cockpit-identity">
-              <div>
+            {/* Two-column control strip: identity left, controls right */}
+            <div className="cockpit-strip">
+              <div className="cockpit-identity">
                 <span className="eyebrow">UEZ APPLICATION</span>
-                <h1>{detail.application.business_name_input}</h1>
+                <h1 title={detail.application.business_name_input}>{detail.application.business_name_input}</h1>
                 <p className="cockpit-meta">
+                  {detail.application.ein ? <span className="cockpit-ein">EIN {detail.application.ein}</span> : null}
                   {detail.application.contact_email}
                   {detail.application.contact_phone ? ` · ${detail.application.contact_phone}` : ''}
                   {detail.owners?.[0] ? ` · ${detail.owners[0].firstName} ${detail.owners[0].lastName}` : ''}
                 </p>
               </div>
-              <div className="cockpit-chips-row">
+              <div className="cockpit-controls">
                 <select
                   className={`cockpit-status-select gs-${globalStatusValue(detail.application.status)}`}
                   value={globalStatusValue(detail.application.status)}
@@ -1159,14 +1160,16 @@ export default function AdminPage() {
                   <option value="applied">Submitted</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
-                <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
-                <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
-                <button
-                  className="cockpit-open-pbs-btn"
-                  onClick={runPbsLogin}
-                  disabled={busy || !myNjCredentials}
-                  title={!myNjCredentials ? 'MyNJ credentials required' : 'Open PBS and log in'}
-                >Open PBS</button>
+                <div className="cockpit-chips-row">
+                  <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
+                  <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
+                  <button
+                    className="cockpit-open-pbs-btn"
+                    onClick={runPbsLogin}
+                    disabled={busy || !myNjCredentials}
+                    title={!myNjCredentials ? 'MyNJ credentials required' : 'Open PBS and log in'}
+                  >Open PBS</button>
+                </div>
               </div>
             </div>
             {/* Pipeline strip — 8 step dots, each clickable to navigate to its tab */}
