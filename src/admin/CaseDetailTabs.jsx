@@ -27,6 +27,7 @@ const TABS = [
   { key: 'pbs_mynj',          label: 'MyNJ / PBS' },
   { key: 'uez_tax',           label: 'UEZ & Tax Clearance' },
   { key: 'payment_ldc_grant', label: 'Payment, LDC & Grant' },
+  { key: 'details',           label: 'Case File' },
   { key: 'legacy',            label: 'Legacy' },
 ];
 
@@ -58,6 +59,7 @@ export default function CaseDetailTabs({
   sendFormationRejectedEmail,
   runBrcLookup,
   sendBrcProblemEmail,
+  sendBrcWrongAddressEmail,
   markPbsAccountCreated,
   setProcessFlag,
   runPbsSignup,
@@ -103,22 +105,32 @@ export default function CaseDetailTabs({
     const formation = docFor(detail, 'formation');
     const sole = detail.application.is_sole_proprietorship;
     const review = detail.application.formation_review_status || 'not_reviewed';
+    const lastSent = lastEmailSent(detail, 'formation_rejected');
     return (
-      <div className="doc-preview-row">
-        <DocThumbnail doc={formation} applicationId={detail.application.id} onClick={() => formation && previewDocument(formation)} />
-        {sole && !formation
-          ? <small>Not required (sole proprietorship)</small>
-          : !formation
-            ? <small>Missing</small>
-            : <small>{review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'} — {formation.filename}</small>}
-      </div>
+      <>
+        <div className="doc-preview-row">
+          <DocThumbnail doc={formation} applicationId={detail.application.id} onClick={() => formation && previewDocument(formation)} />
+          {sole && !formation
+            ? <small>Not required (sole proprietorship)</small>
+            : !formation
+              ? <small>Missing</small>
+              : <small>{review === 'approved' ? '✓ Approved' : review === 'rejected' ? '⚠ Marked wrong — needs replacement' : '! Needs review'} — {formation.filename}</small>}
+        </div>
+        {lastSent && (
+          <small className="email-sent-note">
+            Replacement request sent {formatTimestamp(lastSent.createdAt)}
+            {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+          </small>
+        )}
+      </>
     );
   }
 
   function brcFacts() {
     const brc = docFor(detail, 'brc');
     const status = detail.application.brc_status;
-    const lastSent = lastEmailSent(detail, 'brc_not_found');
+    const lastSentNotFound = lastEmailSent(detail, 'brc_not_found');
+    const lastSentWrongAddress = lastEmailSent(detail, 'brc_wrong_address');
     return (
       <>
         <div className="doc-preview-row">
@@ -131,10 +143,27 @@ export default function CaseDetailTabs({
                 ? <small>{status.replace(/_/g, ' ')}</small>
                 : <small>Not yet fetched</small>}
         </div>
-        {lastSent && (
+
+        {/* BRC data fields — inline (replaces the old accordion card) */}
+        <div className="brc-inline-fields">
+          <label>Registered business name</label>
+          <input value={brcForm.registeredBusinessName} onChange={(e) => setBrcForm((f) => ({ ...f, registeredBusinessName: e.target.value }))} />
+          <label>DBA / trade name</label>
+          <input value={brcForm.tradeName} onChange={(e) => setBrcForm((f) => ({ ...f, tradeName: e.target.value }))} />
+          <label>Business address</label>
+          <input value={brcForm.address} onChange={(e) => setBrcForm((f) => ({ ...f, address: e.target.value }))} />
+        </div>
+
+        {lastSentNotFound && (
           <small className="email-sent-note">
-            Email sent {formatTimestamp(lastSent.createdAt)}
-            {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+            No-BRC email sent {formatTimestamp(lastSentNotFound.createdAt)}
+            {lastSentNotFound.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSentNotFound.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+          </small>
+        )}
+        {lastSentWrongAddress && (
+          <small className="email-sent-note">
+            Wrong-address email sent {formatTimestamp(lastSentWrongAddress.createdAt)}
+            {lastSentWrongAddress.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSentWrongAddress.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
           </small>
         )}
       </>
@@ -143,6 +172,7 @@ export default function CaseDetailTabs({
 
   function pbsFacts() {
     const hasExisting = detail.application.has_existing_pbs_account;
+    const lastSent = lastEmailSent(detail, 'pbs_account_created');
     return (
       <>
         <div className="process-step-inline-select">
@@ -154,7 +184,13 @@ export default function CaseDetailTabs({
         </div>
         {myNjCredentials
           ? <small>MyNJ login on file</small>
-          : <small>No MyNJ login yet{hasExisting == null ? " — waiting on the applicant’s existing-account answer" : ''}</small>}
+          : <small>No MyNJ login yet{hasExisting == null ? " — waiting on the applicant's existing-account answer" : ''}</small>}
+        {lastSent && (
+          <small className="email-sent-note">
+            PBS email sent {formatTimestamp(lastSent.createdAt)}
+            {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+          </small>
+        )}
       </>
     );
   }
@@ -195,6 +231,7 @@ export default function CaseDetailTabs({
   function uezFacts() {
     const approval = docFor(detail, 'uez_approval_email');
     const review = detail.application.uez_approval_review_status || 'not_reviewed';
+    const lastSent = lastEmailSent(detail, 'uez_application_submitted');
     return (
       <>
         <div className="process-step-inline-select">
@@ -211,6 +248,12 @@ export default function CaseDetailTabs({
             ? <small>{review === 'approved' ? '✓ Approval email approved' : review === 'rejected' ? '⚠ Approval email marked wrong' : '! Approval email needs review'} — {approval.filename}</small>
             : <small>No UEZ approval email yet</small>}
         </div>
+        {lastSent && (
+          <small className="email-sent-note">
+            UEZ submitted email sent {formatTimestamp(lastSent.createdAt)}
+            {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+          </small>
+        )}
       </>
     );
   }
@@ -228,20 +271,41 @@ export default function CaseDetailTabs({
   function paymentFacts() {
     const latest = detail.payments?.[detail.payments.length - 1];
     const requestedAt = detail.application.payment_requested_at;
+    const lastSent = lastEmailSent(detail, 'payment_received');
     return (
       <>
         <strong>{paymentStatusLabel(latest?.status)}</strong>
         {latest?.amount != null && <small>${Number(latest.amount).toLocaleString()}{latest.payment_method ? ` · ${latest.payment_method}` : ''}</small>}
         <small>{requestedAt ? `Requested ${formatTimestamp(requestedAt)}` : 'Not yet requested — client sees no payment ask yet'}</small>
+        {lastSent && (
+          <small className="email-sent-note">
+            Payment received email sent {formatTimestamp(lastSent.createdAt)}
+            {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+          </small>
+        )}
       </>
     );
   }
 
   function grantFacts() {
-    if (detail.application.status === 'applied' || detail.application.status === 'grant_submitted') return <strong>✓ Submitted</strong>;
-    if (grantSubmissionLikelyDetected(detail)) return <strong>Looks submitted — needs confirmation</strong>;
-    if (packetReady(detail)) return <strong>Packet ready — not yet submitted</strong>;
-    return <strong>Waiting on required documents</strong>;
+    const lastSent = lastEmailSent(detail, 'grant_submitted');
+    return (
+      <>
+        {(detail.application.status === 'applied' || detail.application.status === 'grant_submitted')
+          ? <strong>✓ Submitted</strong>
+          : grantSubmissionLikelyDetected(detail)
+            ? <strong>Looks submitted — needs confirmation</strong>
+            : packetReady(detail)
+              ? <strong>Packet ready — not yet submitted</strong>
+              : <strong>Waiting on required documents</strong>}
+        {lastSent && (
+          <small className="email-sent-note">
+            Grant submitted email sent {formatTimestamp(lastSent.createdAt)}
+            {lastSent.providerMessageId && <> · <a href={`https://resend.com/emails/${lastSent.providerMessageId}`} target="_blank" rel="noreferrer">View on Resend</a></>}
+          </small>
+        )}
+      </>
+    );
   }
 
   // ── tab panels ─────────────────────────────────────────────────────────────
@@ -259,14 +323,14 @@ export default function CaseDetailTabs({
             onSaveOperational={saveProcessStep}
             onResetOperational={resetProcessStep}
             factsContent={formationFacts()}
-            actions={detail.application.formation_review_status === 'rejected' ? [{
+            actions={[{
               label: 'Send replacement request email',
               onClick: sendFormationRejectedEmail,
               disabled: busy
-            }] : []}
+            }]}
           />
 
-          {/* BRC step */}
+          {/* BRC step — inline fields + all actions always shown */}
           <ProcessStepCard
             stepKey="brc"
             title={PROCESS_STEP_TITLES.brc}
@@ -276,25 +340,14 @@ export default function CaseDetailTabs({
             onResetOperational={resetProcessStep}
             factsContent={brcFacts()}
             actions={[
-              { label: 'Fetch BRC', onClick: runBrcLookup, disabled: busy },
-              ...(detail.application.brc_status === 'not_found' ? [{
-                label: 'Send BRC Email',
-                onClick: sendBrcProblemEmail,
-                disabled: busy
-              }] : [])
+              { label: 'Fetch BRC',              onClick: runBrcLookup,             disabled: busy },
+              { label: '✓ BRC found',            onClick: saveBrcFound,             disabled: busy },
+              { label: 'No BRC found',            onClick: saveBrcNotFound,          disabled: busy },
+              { label: 'Email: no BRC',           onClick: sendBrcProblemEmail,      disabled: busy },
+              { label: 'Email: wrong address',    onClick: sendBrcWrongAddressEmail, disabled: busy },
             ]}
           />
         </div>
-
-        {/* BRC details — official name, address, DBA */}
-        <BrcDetailsCard
-          application={detail.application}
-          brcForm={brcForm}
-          busy={busy}
-          onChangeBrcForm={setBrcForm}
-          onBrcFound={saveBrcFound}
-          onBrcNotFound={saveBrcNotFound}
-        />
       </div>
     );
   }
@@ -361,16 +414,8 @@ export default function CaseDetailTabs({
             onResetOperational={resetProcessStep}
             factsContent={taxFacts()}
             actions={[
-              {
-                label: 'Fetch Tax Clearance',
-                onClick: runTaxClearance,
-                disabled: busy || !myNjCredentials
-              },
-              ...(detail.application.tax_clearance_status === 'issue' ? [{
-                label: 'Send TC Email',
-                onClick: sendTaxIssueEmail,
-                disabled: busy
-              }] : [])
+              { label: 'Fetch Tax Clearance', onClick: runTaxClearance, disabled: busy || !myNjCredentials },
+              { label: 'Send TC Email',        onClick: sendTaxIssueEmail, disabled: busy },
             ]}
           />
 
@@ -382,11 +427,11 @@ export default function CaseDetailTabs({
             onSaveOperational={saveProcessStep}
             onResetOperational={resetProcessStep}
             factsContent={uezFacts()}
-            actions={['applied', 'approved'].includes(detail.application.uez_application_status) ? [{
-              label: 'Send UEZ application submitted email',
+            actions={[{
+              label: 'Send UEZ submitted email',
               onClick: sendUezApplicationSubmittedEmail,
               disabled: busy
-            }] : []}
+            }]}
           />
         </div>
       </div>
@@ -406,21 +451,9 @@ export default function CaseDetailTabs({
           onResetOperational={resetProcessStep}
           factsContent={paymentFacts()}
           actions={[
-            {
-              label: detail.application.payment_requested_at ? 'Re-request Payment' : 'Request Payment',
-              onClick: requestPayment,
-              disabled: busy
-            },
-            {
-              label: 'Confirm payment received',
-              onClick: confirmPayment,
-              disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid'
-            },
-            ...(detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? [{
-              label: 'Send payment received email',
-              onClick: sendPaymentReceivedEmail,
-              disabled: busy
-            }] : [])
+            { label: detail.application.payment_requested_at ? 'Re-request Payment' : 'Request Payment', onClick: requestPayment, disabled: busy },
+            { label: 'Confirm payment received',  onClick: confirmPayment,          disabled: busy || detail.payments?.[detail.payments.length - 1]?.status === 'paid' },
+            { label: 'Send payment received email', onClick: sendPaymentReceivedEmail, disabled: busy },
           ]}
         />
 
@@ -458,22 +491,67 @@ export default function CaseDetailTabs({
           onResetOperational={resetProcessStep}
           factsContent={grantFacts()}
           actions={[
-            {
-              label: 'Submit Grant App',
-              onClick: runLakewoodGrantPortal,
-              disabled: busy || Boolean(grantSubmitGateReason(detail))
-            },
-            ...(grantSubmissionLikelyDetected(detail) ? [{
-              label: 'Confirm grant submitted',
-              onClick: confirmGrantSubmitted,
-              disabled: busy
-            }] : []),
-            ...(detail.application.status === 'applied' || detail.application.status === 'grant_submitted' ? [{
-              label: 'Send grant submitted email',
-              onClick: sendGrantSubmittedEmail,
-              disabled: busy
-            }] : [])
+            { label: 'Submit Grant App',          onClick: runLakewoodGrantPortal, disabled: busy || Boolean(grantSubmitGateReason(detail)) },
+            { label: 'Confirm grant submitted',   onClick: confirmGrantSubmitted,  disabled: busy || !grantSubmissionLikelyDetected(detail) },
+            { label: 'Send grant submitted email', onClick: sendGrantSubmittedEmail, disabled: busy },
           ]}
+        />
+      </div>
+    );
+  }
+
+  function renderDetails() {
+    return (
+      <div className="case-tab-panel">
+        {/* Notes + Activity across the top — most-used reference during a session */}
+        <div className="case-details-top-row">
+          <NotesPanel
+            notes={detail.notes}
+            draft={noteDraft}
+            busy={noteBusy}
+            editingId={noteEditingId}
+            editDraft={noteEditDraft}
+            onDraftChange={setNoteDraft}
+            onAdd={addCaseNote}
+            onStartEdit={startEditingNote}
+            onCancelEdit={cancelEditingNote}
+            onEditDraftChange={setNoteEditDraft}
+            onSaveEdit={saveCaseNoteEdit}
+            onDelete={removeCaseNote}
+          />
+          <ActivityPanel events={detail.statusEvents} />
+        </div>
+
+        {/* Business + Owners side by side */}
+        <div className="case-details-two-col">
+          <BusinessDetailsCard
+            application={detail.application}
+            editMode={editMode}
+            draft={applicationDraft}
+            onChangeField={updateApplicationDraft}
+          />
+          <OwnersCard
+            owners={detail.owners}
+            editMode={editMode}
+            ownerDrafts={ownerDrafts}
+            onChangeOwnerField={updateOwnerDraft}
+            onAddOwner={addOwner}
+            onRemoveOwner={removeOwner}
+          />
+        </div>
+
+        {/* Documents — full width */}
+        <DocumentsPanel
+          documents={detail.documents}
+          busy={busy}
+          onOpen={openDoc}
+          onDelete={handleDeleteDoc}
+          manualDocType={manualDocType}
+          onChangeManualDocType={setManualDocType}
+          manualDocFile={manualDocFile}
+          onChangeManualDocFile={setManualDocFile}
+          manualDocUploading={manualDocUploading}
+          onUploadManualDoc={uploadManualAdminDocument}
         />
       </div>
     );
@@ -697,6 +775,7 @@ export default function CaseDetailTabs({
       {activeTab === 'pbs_mynj'           && renderPbsMyNj()}
       {activeTab === 'uez_tax'            && renderUezTax()}
       {activeTab === 'payment_ldc_grant'  && renderPaymentLdcGrant()}
+      {activeTab === 'details'            && renderDetails()}
       {activeTab === 'legacy'             && renderLegacy()}
     </div>
   );

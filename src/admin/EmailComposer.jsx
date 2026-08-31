@@ -5,13 +5,14 @@ import { formatTimestamp } from './caseLogic';
 // for any template not in this list (e.g. one added later straight in the
 // Email Settings page), so a new template never breaks the composer.
 const TEMPLATE_LABELS = {
-  brc_not_found: 'BRC problem',
-  formation_rejected: 'Formation replacement request',
-  pbs_account_created: 'PBS account created',
-  tax_issue: 'Tax clearance issue',
-  uez_application_submitted: 'UEZ application submitted',
-  payment_received: 'Payment received',
-  grant_submitted: 'Grant submitted'
+  brc_not_found:              'BRC not found',
+  brc_wrong_address:          'BRC address not in UEZ',
+  formation_rejected:         'Formation replacement request',
+  pbs_account_created:        'PBS account created',
+  tax_issue:                  'Tax clearance issue',
+  uez_application_submitted:  'UEZ application submitted',
+  payment_received:           'Payment received',
+  grant_submitted:            'Grant submitted',
 };
 
 // The "show me the actual email before it goes out" flow: preview loads,

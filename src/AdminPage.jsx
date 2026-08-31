@@ -805,6 +805,10 @@ export default function AdminPage() {
     openEmailComposer('brc_not_found');
   }
 
+  function sendBrcWrongAddressEmail() {
+    openEmailComposer('brc_wrong_address');
+  }
+
   function sendFormationRejectedEmail() {
     openEmailComposer('formation_rejected');
   }
@@ -1215,6 +1219,7 @@ export default function AdminPage() {
             sendFormationRejectedEmail={sendFormationRejectedEmail}
             runBrcLookup={runBrcLookup}
             sendBrcProblemEmail={sendBrcProblemEmail}
+            sendBrcWrongAddressEmail={sendBrcWrongAddressEmail}
             markPbsAccountCreated={markPbsAccountCreated}
             setProcessFlag={setProcessFlag}
             runPbsSignup={runPbsSignup}

@@ -659,6 +659,71 @@
 .admin-shell .process-step-facts small { color: var(--admin-text-faint); }
 .admin-shell .process-step-operational { border-top-color: var(--admin-border); }
 .admin-shell .process-step-byline { color: var(--admin-text-faint); }
+
+/* Email sent confirmation — shown below factsContent when an email was sent */
+.admin-shell .email-sent-note {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 3px 7px;
+  background: rgba(34, 197, 94, .08);
+  border: 1px solid rgba(34, 197, 94, .2);
+  border-radius: var(--admin-radius-sm);
+  color: #4ade80;
+  font-size: var(--admin-font-size-micro);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.admin-shell .email-sent-note a {
+  color: #86efac;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* BRC inline field group — replaces the old accordion BrcDetailsCard */
+.admin-shell .brc-inline-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--admin-border);
+}
+.admin-shell .brc-inline-fields label {
+  font-size: var(--admin-font-size-small);
+  color: var(--admin-text-faint);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.admin-shell .brc-inline-fields input {
+  font-size: var(--admin-font-size-small);
+  padding: 3px 6px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-sm);
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text);
+  width: 100%;
+}
+
+/* Case File tab layout */
+.admin-shell .case-details-top-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.admin-shell .case-details-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (max-width: 900px) {
+  .admin-shell .case-details-top-row,
+  .admin-shell .case-details-two-col { grid-template-columns: 1fr; }
+}
 .admin-shell .process-step-inline-select label { color: var(--admin-text-faint); }
 .admin-shell .process-step-inline-select select { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
 .admin-shell .ops-panel-head span { color: var(--admin-text-faint); }
