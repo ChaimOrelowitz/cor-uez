@@ -962,9 +962,9 @@ export default function AdminPage() {
       : prev);
   }
 
-  async function addCaseNote() {
+  async function addCaseNote(bodyArg) {
     const applicationId = detail?.application?.id;
-    const body = noteDraft.trim();
+    const body = (bodyArg !== undefined ? bodyArg : noteDraft).trim();
     if (!applicationId || !body) return;
     setNoteBusy(true);
     try {
@@ -972,9 +972,10 @@ export default function AdminPage() {
       setDetail((prev) => (prev && prev.application.id === applicationId)
         ? { ...prev, notes: [note, ...(prev.notes || [])] }
         : prev);
-      setNoteDraft('');
+      if (bodyArg === undefined) setNoteDraft(''); // only clear parent draft when called without arg
     } catch (err) {
       setMessage(err.message);
+      throw err; // re-throw so the caller (CaseDetailTabs) can keep its draft on failure
     } finally {
       setNoteBusy(false);
     }

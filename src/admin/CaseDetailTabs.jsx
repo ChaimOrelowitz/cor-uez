@@ -208,6 +208,7 @@ export default function CaseDetailTabs({
   const [noteDraftLocal, setNoteDraftLocal] = useState('');
   const [pinnedNoteId, setPinnedNoteId] = useState(null);
   const stepPanelRef = useRef(null);
+  const savingNoteRef = useRef(false);
 
   // Reset when application changes
   useEffect(() => {
@@ -225,10 +226,18 @@ export default function CaseDetailTabs({
   const stream = buildStream(detail);
   const pinnedItem = stream.find((s) => s.noteId === pinnedNoteId || s.id === `note-${pinnedNoteId}`);
 
-  function handleAddNote() {
-    if (!noteDraftLocal.trim()) return;
-    addCaseNote(noteDraftLocal.trim());
-    setNoteDraftLocal('');
+  async function saveNote() {
+    const body = noteDraftLocal.trim();
+    if (!body || savingNoteRef.current) return;
+    savingNoteRef.current = true;
+    try {
+      await addCaseNote(body);
+      setNoteDraftLocal(''); // clear only on success
+    } catch {
+      // error already surfaced by addCaseNote via the global message banner
+    } finally {
+      savingNoteRef.current = false;
+    }
   }
 
   const stepIdx = PROCESS_STEP_KEYS.indexOf(selectedStep);
@@ -329,16 +338,26 @@ export default function CaseDetailTabs({
               className="cw-composer-input"
               value={noteDraftLocal}
               onChange={(e) => setNoteDraftLocal(e.target.value)}
+              onBlur={saveNote}
               placeholder="Add a note…"
               rows={2}
               disabled={busy}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) e.stopPropagation(); }}
             />
             {noteDraftLocal.trim() && (
               <div className="cw-composer-actions">
-                <button className="cw-btn cw-btn-ok" onClick={handleAddNote} disabled={busy}>Save note</button>
-                <button className="cw-btn-ghost" onClick={() => setNoteDraftLocal('')}>Discard</button>
-                <span className="cw-composer-hint">saves on click-out</span>
+                {/* onMouseDown+preventDefault keeps focus on the textarea so blur doesn't fire
+                    before the click lands — then onClick triggers the actual save */}
+                <button
+                  className="cw-btn cw-btn-ok"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={saveNote}
+                  disabled={busy}
+                >Save note</button>
+                {/* Discard: clear the draft on mousedown so the blur handler sees an empty body */}
+                <button
+                  className="cw-btn-ghost"
+                  onMouseDown={(e) => { e.preventDefault(); setNoteDraftLocal(''); }}
+                >Discard</button>
               </div>
             )}
           </div>
