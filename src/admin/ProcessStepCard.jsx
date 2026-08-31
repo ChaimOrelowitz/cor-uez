@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PROCESS_STEP_STATES, PROCESS_STEP_STATE_LABELS as STATE_LABELS, formatTimestamp } from './caseLogic';
 
 // One component, driven by props, reused for all 8 steps — not 8 bespoke
@@ -26,6 +26,28 @@ const RESET_VALUE = '__reset__';
 
 export default function ProcessStepCard({ stepKey, title, factsContent, operational, busy, onSaveOperational, onResetOperational, actions }) {
   const [saving, setSaving] = useState(false);
+  const [note, setNote] = useState(operational.manualNote || '');
+  const [noteSaving, setNoteSaving] = useState(false);
+
+  useEffect(() => {
+    setNote(operational.manualNote || '');
+  }, [operational.manualNote]);
+
+  async function saveNote() {
+    if (note.trim() === (operational.manualNote || '').trim()) return;
+    setNoteSaving(true);
+    try {
+      await onSaveOperational(stepKey, {
+        state: operational.state,
+        waitingOn: operational.waitingOn || null,
+        waitingSince: operational.waitingSince || null,
+        waitingReason: operational.waitingReason || null,
+        manualNote: note.trim() || null,
+      });
+    } finally {
+      setNoteSaving(false);
+    }
+  }
 
   async function changeState(newValue) {
     if (newValue === operational.state) return;
@@ -69,6 +91,18 @@ export default function ProcessStepCard({ stepKey, title, factsContent, operatio
       {operational.source === 'explicit' && <div className="process-step-operational">
         <small className="process-step-byline">Set by {operational.updatedByName || 'admin'} · {formatTimestamp(operational.updatedAt)}{operational.state === 'waiting' && operational.waitingOn ? ` · ${WAITING_ON_LABELS[operational.waitingOn]}` : ''}{operational.waitingReason ? ` — ${operational.waitingReason}` : ''}</small>
       </div>}
+
+      <div className="process-step-note">
+        <textarea
+          placeholder="Step notes…"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onBlur={saveNote}
+          disabled={noteSaving}
+          rows={2}
+        />
+        {noteSaving && <span className="process-step-note-saving">Saving…</span>}
+      </div>
 
       {actions?.length > 0 && <div className="process-step-actions">
         {actions.map((action) => (

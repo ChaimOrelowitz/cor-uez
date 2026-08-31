@@ -728,6 +728,41 @@
 .admin-shell .process-step-inline-select select { border-color: var(--admin-border); border-radius: var(--admin-radius-sm); }
 .admin-shell .ops-panel-head span { color: var(--admin-text-faint); }
 
+/* Per-step notes textarea — autosaves on blur */
+.admin-shell .process-step-note {
+  position: relative;
+  padding: 8px 14px 6px;
+  border-top: 1px solid var(--admin-border);
+}
+.admin-shell .process-step-note textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  background: var(--admin-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-sm);
+  color: var(--admin-text);
+  font-family: inherit;
+  font-size: var(--admin-font-size-sm);
+  line-height: 1.45;
+  padding: 5px 8px;
+  min-height: 44px;
+}
+.admin-shell .process-step-note textarea::placeholder { color: var(--admin-text-faint); }
+.admin-shell .process-step-note textarea:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+}
+.admin-shell .process-step-note textarea:disabled { opacity: 0.55; }
+.admin-shell .process-step-note-saving {
+  position: absolute;
+  bottom: 10px;
+  right: 18px;
+  font-size: var(--admin-font-size-micro);
+  color: var(--admin-text-faint);
+  pointer-events: none;
+}
+
 /* Small, uniform action buttons — no more oversized single-line boxes. */
 .admin-shell .ops-action {
   border-radius: var(--admin-radius-sm);
