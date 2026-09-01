@@ -1018,9 +1018,10 @@ function StepActions({
 
     case 'payment': {
       const latest = [...(detail.payments || [])].reverse()[0];
+      const paymentEmailSent = lastEmailSent(detail, 'payment_requested');
       return (
         <>
-          {!latest && <Btn label="Request payment" onClick={requestPayment} />}
+          <Btn label={`✉ Request payment${paymentEmailSent ? ' (resend)' : ''}`} onClick={requestPayment} />
           {latest?.status !== 'paid' && <Btn label="Confirm payment received" onClick={confirmPayment} variant="ok" />}
           {latest?.status === 'paid' && <Btn label="✉ Send payment received email" onClick={sendPaymentReceivedEmail} />}
         </>
