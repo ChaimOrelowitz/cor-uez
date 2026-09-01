@@ -1670,7 +1670,10 @@
   background: var(--cw-chip-bg);
 }
 
-.admin-shell .cw-doc-tile-thumb { width: 100%; height: 100%; }
+.admin-shell .cw-doc-tile-thumb { width: 100%; height: 100%; display: flex; }
+/* Make the DocThumbnail button fill the tile instead of its default 84×84 */
+.admin-shell .cw-doc-tile-thumb .doc-thumb { width: 100%; height: 100%; border-radius: 0; border: none; flex: 1; }
+.admin-shell .cw-doc-tile-thumb .doc-thumb-img { width: 100%; height: 100%; object-fit: cover; }
 .admin-shell .cw-doc-tile-info {
   display: flex;
   flex-direction: column;
