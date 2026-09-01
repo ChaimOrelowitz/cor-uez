@@ -110,6 +110,7 @@ function buildStream(detail) {
     when: formatTimestamp(e.created_at),
     ts: new Date(e.created_at).getTime(),
     dot: '#6f7883',
+    providerMessageId: e.metadata?.providerMessageId || null,
   }));
 
   const all = [...notes, ...stepNotes, ...events].sort((a, b) => b.ts - a.ts);
@@ -413,7 +414,12 @@ export default function CaseDetailTabs({
                       <div className="cw-event-row">
                         <span className="cw-event-title">{item.title}</span>
                         {item.body && <span className="cw-event-body">{item.body}</span>}
-                        <span className="cw-mono cw-faint3">{item.when}</span>
+                        <span className="cw-mono cw-faint3">
+                          {item.when}
+                          {item.providerMessageId && (
+                            <> · <a href={`https://resend.com/emails/${item.providerMessageId}`} target="_blank" rel="noreferrer">View email ↗</a></>
+                          )}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1012,16 +1018,9 @@ function StepActions({
 
     case 'payment': {
       const latest = [...(detail.payments || [])].reverse()[0];
-      const paymentEmailSent = lastEmailSent(detail, 'payment_requested');
       return (
         <>
           {!latest && <Btn label="Request payment" onClick={requestPayment} />}
-          {latest && latest?.status !== 'paid' && (
-            <Btn
-              label={paymentEmailSent ? `✉ Resend payment request (sent ${formatTimestamp(paymentEmailSent.createdAt)})` : '✉ Send payment request email'}
-              onClick={sendPaymentRequestedEmail}
-            />
-          )}
           {latest?.status !== 'paid' && <Btn label="Confirm payment received" onClick={confirmPayment} variant="ok" />}
           {latest?.status === 'paid' && <Btn label="✉ Send payment received email" onClick={sendPaymentReceivedEmail} />}
         </>
