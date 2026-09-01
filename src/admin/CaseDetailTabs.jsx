@@ -642,28 +642,7 @@ function StepPanel({
         {docType && (
           <div className="cw-doc-col">
             <span className="cw-field-label cw-mono">DOCUMENT</span>
-            <div
-              className={`cw-doc-tile-main${doc ? '' : ' cw-doc-tile-empty'}`}
-              onClick={() => doc && previewDocument(doc)}
-              title={doc ? doc.filename : 'Nothing on file'}
-            >
-              {doc ? (
-                <>
-                  <div className="cw-doc-tile-thumb">
-                    <DocThumbnail doc={doc} applicationId={app.id} onClick={() => previewDocument(doc)} />
-                  </div>
-                  <div className="cw-doc-tile-info">
-                    <span className="cw-doc-tile-name">{doc.filename}</span>
-                    <button className="cw-doc-open-btn" onClick={(e) => { e.stopPropagation(); previewDocument(doc); }}>Open ↗</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span className="cw-doc-tile-dashed-icon">📄</span>
-                  <span className="cw-doc-tile-empty-label">nothing on file</span>
-                </>
-              )}
-            </div>
+            <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
           </div>
         )}
 
