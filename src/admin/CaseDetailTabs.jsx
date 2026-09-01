@@ -1021,7 +1021,12 @@ function StepActions({
       const paymentEmailSent = lastEmailSent(detail, 'payment_requested');
       return (
         <>
-          <Btn label={`✉ Request payment${paymentEmailSent ? ' (resend)' : ''}`} onClick={requestPayment} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Btn label={`✉ Request payment${paymentEmailSent ? ' (resend)' : ''}`} onClick={requestPayment} />
+            {paymentEmailSent?.providerMessageId && (
+              <a href={`https://resend.com/emails/${paymentEmailSent.providerMessageId}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>View email ↗</a>
+            )}
+          </div>
           {latest?.status !== 'paid' && <Btn label="Confirm payment received" onClick={confirmPayment} variant="ok" />}
           {latest?.status === 'paid' && <Btn label="✉ Send payment received email" onClick={sendPaymentReceivedEmail} />}
         </>
