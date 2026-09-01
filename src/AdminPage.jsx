@@ -449,12 +449,14 @@ export default function AdminPage() {
       });
       await refreshList(detail.application.id);
 
-      if (outcome.status === 'complete') {
-        setMessage('BRC confirmed. The PDF and certificate details were added directly to this applicant’s UEZ file.');
-      } else if (outcome.status === 'not_found') {
-        setMessage('NJ did not find a matching BRC.');
+      if (outcome.status === ‘complete’) {
+        setMessage(‘BRC confirmed. The PDF and certificate details were added directly to this applicant’s UEZ file.’);
+      } else if (outcome.status === ‘not_found’) {
+        await markAdminBrcNotFound(detail.application.id);
+        await refreshList(detail.application.id);
+        setMessage(‘NJ did not find a matching BRC — marked as not found automatically.’);
       } else {
-        throw new Error(outcome.error || 'The BRC check did not finish.');
+        throw new Error(outcome.error || ‘The BRC check did not finish.’);
       }
     } catch (err) {
       setMessage(err.message);
