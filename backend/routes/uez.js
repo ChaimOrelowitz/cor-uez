@@ -1064,6 +1064,10 @@ router.post('/admin/applications/:id/request-payment', requireUezAdmin, async (r
 
     await addStatusEvent(application.id, 'payment_requested', 'Payment requested', 'COR requested the $500 service fee.', req.user.id, true);
 
+    // Email is NOT sent here — the frontend opens the email composer so
+    // the admin can preview and edit before sending (same UX as every other
+    // email in the system). ensureTemplateExists still runs so the template
+    // row exists in time for the preview fetch.
     await ensureTemplateExists('payment_requested', {
       display_name: 'Payment requested',
       description: 'Sent when an admin asks the client to pay the $500 service fee.',
@@ -1072,11 +1076,7 @@ router.post('/admin/applications/:id/request-payment', requireUezAdmin, async (r
       body: 'Hi {{first_name}},\n\nCongratulations! COR Solutions has successfully enrolled your business in the UEZ program — you\'re officially a member!\n\nWe now have everything we need to submit your grant application to the LDC. To move forward, please Zelle $500 to 216-315-9824.\n\nYour payment will be held until your application is approved by the LDC. If the LDC rejects the application for any reason, your payment will be fully refunded. Once the LDC approves your application, the $500 service fee is no longer refundable.\n\nAfter sending the payment, please visit your account at UEZ.corsolutions.io and click "I sent my payment".\n\nIf you have any questions, don\'t hesitate to reach out. We\'re excited to get your grant submitted!\n\nThank you,\nCOR Solutions'
     });
 
-    const emailResult = await safeSendApplicationEmail(data, 'payment_requested', {
-      dedupeKey: `payment_requested:${application.id}`
-    });
-
-    res.json({ application: data, email: emailResult });
+    res.json({ application: data });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 

@@ -943,9 +943,11 @@ export default function AdminPage() {
     try {
       await requestAdminPayment(detail.application.id);
       await refreshList(detail.application.id);
-      setMessage('Payment requested — the client can now see the payment ask in their portal.');
-    } catch (err) { setMessage(err.message); }
+      setMessage('');
+    } catch (err) { setMessage(err.message); return; }
     finally { setBusy(false); }
+    // Open the email composer so admin can preview/edit before sending
+    openEmailComposer('payment_requested');
   }
 
   async function saveProcessStep(stepKey, patch) {
