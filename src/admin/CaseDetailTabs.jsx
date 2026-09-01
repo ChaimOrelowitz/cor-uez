@@ -170,6 +170,7 @@ export default function CaseDetailTabs({
   runLdcJotform,
   requestPayment,
   confirmPayment,
+  sendPaymentRequestedEmail,
   sendPaymentReceivedEmail,
   runLakewoodGrantPortal,
   confirmGrantSubmitted,
@@ -302,6 +303,7 @@ export default function CaseDetailTabs({
             runLdcJotform={runLdcJotform}
             requestPayment={requestPayment}
             confirmPayment={confirmPayment}
+            sendPaymentRequestedEmail={sendPaymentRequestedEmail}
             sendPaymentReceivedEmail={sendPaymentReceivedEmail}
             runLakewoodGrantPortal={runLakewoodGrantPortal}
             confirmGrantSubmitted={confirmGrantSubmitted}
@@ -504,6 +506,7 @@ export default function CaseDetailTabs({
                         runLdcJotform={runLdcJotform}
                         requestPayment={requestPayment}
                         confirmPayment={confirmPayment}
+                        sendPaymentRequestedEmail={sendPaymentRequestedEmail}
                         sendPaymentReceivedEmail={sendPaymentReceivedEmail}
                         runLakewoodGrantPortal={runLakewoodGrantPortal}
                         confirmGrantSubmitted={confirmGrantSubmitted}
@@ -546,7 +549,7 @@ function StepPanel({
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
   markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail,
   runTaxClearance, sendTaxIssueEmail, sendUezApplicationSubmittedEmail,
-  runLdcJotform, requestPayment, confirmPayment, sendPaymentReceivedEmail,
+  runLdcJotform, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
   runLakewoodGrantPortal, confirmGrantSubmitted, sendGrantSubmittedEmail,
   changePbsAnswerDraft, saveExistingPbsAnswer, saveMyNjCredentials,
   startMyNjEdit, cancelMyNjEdit, toggleShowMyNjSecrets, copyCredential, createMyNjCredentials,
@@ -695,6 +698,7 @@ function StepPanel({
             runLdcJotform={runLdcJotform}
             requestPayment={requestPayment}
             confirmPayment={confirmPayment}
+            sendPaymentRequestedEmail={sendPaymentRequestedEmail}
             sendPaymentReceivedEmail={sendPaymentReceivedEmail}
             runLakewoodGrantPortal={runLakewoodGrantPortal}
             confirmGrantSubmitted={confirmGrantSubmitted}
@@ -931,7 +935,7 @@ function StepActions({
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
   markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail,
   runTaxClearance, sendTaxIssueEmail, sendUezApplicationSubmittedEmail,
-  runLdcJotform, requestPayment, confirmPayment, sendPaymentReceivedEmail,
+  runLdcJotform, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
   runLakewoodGrantPortal, confirmGrantSubmitted, sendGrantSubmittedEmail,
   changePbsAnswerDraft, saveExistingPbsAnswer, saveMyNjCredentials,
   startMyNjEdit, cancelMyNjEdit, createMyNjCredentials,
@@ -1008,9 +1012,16 @@ function StepActions({
 
     case 'payment': {
       const latest = [...(detail.payments || [])].reverse()[0];
+      const paymentEmailSent = lastEmailSent(detail, 'payment_requested');
       return (
         <>
           {!latest && <Btn label="Request payment" onClick={requestPayment} />}
+          {latest && latest?.status !== 'paid' && (
+            <Btn
+              label={paymentEmailSent ? `✉ Resend payment request (sent ${formatTimestamp(paymentEmailSent.createdAt)})` : '✉ Send payment request email'}
+              onClick={sendPaymentRequestedEmail}
+            />
+          )}
           {latest?.status !== 'paid' && <Btn label="Confirm payment received" onClick={confirmPayment} variant="ok" />}
           {latest?.status === 'paid' && <Btn label="✉ Send payment received email" onClick={sendPaymentReceivedEmail} />}
         </>

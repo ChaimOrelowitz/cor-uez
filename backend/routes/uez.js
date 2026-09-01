@@ -1068,8 +1068,8 @@ router.post('/admin/applications/:id/request-payment', requireUezAdmin, async (r
       display_name: 'Payment requested',
       description: 'Sent when an admin asks the client to pay the $500 service fee.',
       sort_order: 90,
-      subject: 'Your $500 payment is due — COR UEZ Application',
-      body: 'Hi {{first_name}},\n\nWe have finished everything needed to move forward with {{business_name}}\'s UEZ enrollment and Lakewood UEZ Technology Grant application - the last step before we submit is collecting the $500 service fee.\n\nPlease send $500 via Zelle to 216-315-9824.\n\nOnce you have sent it, log in to your account and click "I sent my payment":\n{{account_url}}\n\nThank you,\nCOR Solutions'
+      subject: 'Grant Application Ready — Please Pay Your Balance',
+      body: 'Hi {{first_name}},\n\nCongratulations! COR Solutions has successfully enrolled your business in the UEZ program — you\'re officially a member!\n\nWe now have everything we need to submit your grant application to the LDC. To move forward, please Zelle $500 to 216-315-9824.\n\nYour payment will be held until your application is approved by the LDC. If the LDC rejects the application for any reason, your payment will be fully refunded. Once the LDC approves your application, the $500 service fee is no longer refundable.\n\nAfter sending the payment, please visit your account at UEZ.corsolutions.io and click "I sent my payment".\n\nIf you have any questions, don\'t hesitate to reach out. We\'re excited to get your grant submitted!\n\nThank you,\nCOR Solutions'
     });
 
     const emailResult = await safeSendApplicationEmail(data, 'payment_requested', {

@@ -864,6 +864,10 @@ export default function AdminPage() {
     openEmailComposer('uez_application_submitted');
   }
 
+  function sendPaymentRequestedEmail() {
+    openEmailComposer('payment_requested');
+  }
+
   function sendPaymentReceivedEmail() {
     openEmailComposer('payment_received');
   }
@@ -1253,6 +1257,7 @@ export default function AdminPage() {
             runLdcJotform={runLdcJotform}
             requestPayment={requestPayment}
             confirmPayment={confirmPayment}
+            sendPaymentRequestedEmail={sendPaymentRequestedEmail}
             sendPaymentReceivedEmail={sendPaymentReceivedEmail}
             runLakewoodGrantPortal={runLakewoodGrantPortal}
             confirmGrantSubmitted={confirmGrantSubmitted}
