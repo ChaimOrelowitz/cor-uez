@@ -458,8 +458,9 @@ export function deriveDefaultProcessStep(stepKey, detail) {
       if (!formation) return app.is_sole_proprietorship ? { state: 'not_applicable', waitingOn: null } : { state: 'not_started', waitingOn: null };
       const review = app.formation_review_status || 'not_reviewed';
       if (review === 'approved') return { state: 'complete', waitingOn: null };
-      if (review === 'rejected') return { state: 'waiting', waitingOn: 'document' };
-      return { state: 'in_progress', waitingOn: null };
+      if (review === 'rejected') return { state: 'cancelled', waitingOn: null };
+      // doc uploaded, not yet reviewed — stay not_started; alert fires "Needs review"
+      return { state: 'not_started', waitingOn: null };
     }
 
     case 'brc': {

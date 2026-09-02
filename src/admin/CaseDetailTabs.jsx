@@ -680,7 +680,9 @@ function StepPanel({
             : stepKey === 'tax_clearance' && (step.state === 'in_progress' || step.state === 'waiting') ? step.state
             : step.state
           )}>
-            {stepKey === 'uez_enrollment'
+            {stepKey === 'formation'
+              ? ({ cancelled: 'Not approved', waiting: 'Waiting on applicant', manual: 'Re-uploaded — needs review', complete: 'Approved' }[step.state] || 'Not started')
+              : stepKey === 'uez_enrollment'
               ? (step.state === 'complete' ? 'State approved' : step.state === 'not_started' ? 'Not started' : 'Applied - Waiting for state approval')
               : stepKey === 'tax_clearance'
               ? (step.state === 'complete' ? 'Cleared' : step.state === 'not_started' ? 'Not started' : step.state === 'waiting' ? 'Issue - applicant says resolved' : 'Issue - emailed applicant')
@@ -695,7 +697,15 @@ function StepPanel({
         </div>
         {/* State selector chips */}
         <div className="cw-state-chips">
-          {(stepKey === 'uez_enrollment'
+          {(stepKey === 'formation'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'cancelled',   label: 'Not approved' },
+                { state: 'waiting',     label: 'Waiting on applicant' },
+                { state: 'manual',      label: 'Re-uploaded — needs review' },
+                { state: 'complete',    label: 'Approved' },
+              ]
+            : stepKey === 'uez_enrollment'
             ? [
                 { state: 'not_started', label: 'Not started' },
                 { state: 'in_progress', label: 'Applied - Waiting for state approval' },
@@ -720,7 +730,7 @@ function StepPanel({
               ? (s === 'complete' ? step.state === 'complete' : s === 'not_started' ? step.state === 'not_started' : step.state !== 'complete' && step.state !== 'not_started')
               : stepKey === 'ldc_application'
               ? (s === 'complete' ? step.state === 'complete' : step.state !== 'complete')
-              : step.state === s;
+              : step.state === s; // formation, tax_clearance, and others: exact match
             return (
               <button
                 key={s}
@@ -797,6 +807,7 @@ function StepPanel({
           <StepActions
             stepKey={stepKey} detail={detail} busy={busy}
             myNjCredentials={myNjCredentials} step={step}
+            saveProcessStep={saveProcessStep}
             reviewFormationDoc={reviewFormationDoc}
             sendFormationRejectedEmail={sendFormationRejectedEmail}
             runBrcLookup={runBrcLookup}
@@ -1045,6 +1056,7 @@ function FieldPair({ label, value, onChange, disabled }) {
 // ── Step-specific action buttons ──────────────────────────────────────────────
 function StepActions({
   stepKey, detail, busy, myNjCredentials, myNjEditMode, step,
+  saveProcessStep,
   reviewFormationDoc, sendFormationRejectedEmail,
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
   markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail,
@@ -1069,11 +1081,20 @@ function StepActions({
   switch (stepKey) {
     case 'formation': {
       const lastSent = lastEmailSent(detail, 'formation_rejected');
+      const cofState = step?.state;
+      const saveStep = (state) => saveProcessStep('formation', { state, waitingOn: null, waitingSince: null, waitingReason: null, manualNote: step?.manualNote || null });
       return (
         <>
-          <Btn label="✓ Approve CoF" onClick={() => reviewFormationDoc('approved')} variant="ok" />
-          <Btn label="Wrong document" onClick={() => reviewFormationDoc('rejected')} variant="danger" />
-          <Btn label={`✉ Send replacement request${lastSent ? ' (resend)' : ''}`} onClick={sendFormationRejectedEmail} />
+          <Btn label="✓ Approve CoF" variant="ok"
+            onClick={() => { reviewFormationDoc('approved'); saveStep('complete'); }} />
+          <Btn label="✗ Not approved" variant="danger"
+            onClick={() => { reviewFormationDoc('rejected'); saveStep('cancelled'); }} />
+          {(cofState === 'cancelled' || cofState === 'manual') && (
+            <Btn
+              label={`✉ Send replacement request${lastSent ? ' (resend)' : ''}`}
+              onClick={() => { sendFormationRejectedEmail(); saveStep('waiting'); }}
+            />
+          )}
         </>
       );
     }
