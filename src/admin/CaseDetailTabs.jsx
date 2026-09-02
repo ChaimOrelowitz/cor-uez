@@ -675,9 +675,9 @@ function StepPanel({
       <div className="cw-step-header">
         <div className="cw-step-title-row">
           <h2 className="cw-step-title">{PROCESS_STEP_TITLES[stepKey]}</h2>
-          <span className="cw-step-pill" style={pillStyle(step.state)}>
-            {stepKey === 'uez_enrollment' && step.state === 'in_progress' ? 'Applied - Waiting for state approval'
-              : stepKey === 'uez_enrollment' && step.state === 'complete' ? 'State approved'
+          <span className="cw-step-pill" style={pillStyle(stepKey === 'uez_enrollment' && (step.state === 'in_progress' || step.state === 'waiting') ? 'in_progress' : step.state)}>
+            {stepKey === 'uez_enrollment'
+              ? (step.state === 'complete' ? 'State approved' : step.state === 'not_started' ? 'Not started' : 'Applied - Waiting for state approval')
               : PROCESS_STEP_STATE_LABELS[step.state]}
           </span>
         </div>
@@ -687,9 +687,18 @@ function StepPanel({
         </div>
         {/* State selector chips */}
         <div className="cw-state-chips">
-          {PROCESS_STEP_STATES.map((s) => {
+          {(stepKey === 'uez_enrollment'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'in_progress', label: 'Applied - Waiting for state approval' },
+                { state: 'complete',    label: 'State approved' },
+              ]
+            : PROCESS_STEP_STATES.map((s) => ({ state: s, label: PROCESS_STEP_STATE_LABELS[s] }))
+          ).map(({ state: s, label }) => {
             const st = stateStyle(s);
-            const active = step.state === s;
+            const active = stepKey === 'uez_enrollment'
+              ? (s === 'complete' ? step.state === 'complete' : s === 'not_started' ? step.state === 'not_started' : step.state !== 'complete' && step.state !== 'not_started')
+              : step.state === s;
             return (
               <button
                 key={s}
@@ -699,7 +708,7 @@ function StepPanel({
                 onClick={() => saveProcessStep(stepKey, { state: s, waitingOn: null, waitingSince: null, waitingReason: null, manualNote: step.manualNote || null })}
                 disabled={busy}
               >
-                {PROCESS_STEP_STATE_LABELS[s]}
+                {label}
               </button>
             );
           })}
