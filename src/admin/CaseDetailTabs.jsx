@@ -682,6 +682,8 @@ function StepPanel({
           )}>
             {stepKey === 'formation'
               ? ({ cancelled: 'Not approved', waiting: 'Waiting on applicant', manual: 'Re-uploaded — needs review', complete: 'Approved' }[step.state] || 'Not started')
+              : stepKey === 'brc'
+              ? ({ waiting: 'Issue — emailed applicant', manual: 'Client says resolved — check again', complete: 'Complete' }[step.state] || 'Not started')
               : stepKey === 'uez_enrollment'
               ? (step.state === 'complete' ? 'State approved' : step.state === 'not_started' ? 'Not started' : 'Applied - Waiting for state approval')
               : stepKey === 'tax_clearance'
@@ -704,6 +706,13 @@ function StepPanel({
                 { state: 'waiting',     label: 'Waiting on applicant' },
                 { state: 'manual',      label: 'Re-uploaded — needs review' },
                 { state: 'complete',    label: 'Approved' },
+              ]
+            : stepKey === 'brc'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'waiting',     label: 'Issue — emailed applicant' },
+                { state: 'manual',      label: 'Client says resolved — check again' },
+                { state: 'complete',    label: 'Complete' },
               ]
             : stepKey === 'uez_enrollment'
             ? [
@@ -1099,16 +1108,30 @@ function StepActions({
       );
     }
 
-    case 'brc':
+    case 'brc': {
+      const brcState = step?.state;
+      const saveStep = (state) => saveProcessStep('brc', { state, waitingOn: null, waitingSince: null, waitingReason: null, manualNote: step?.manualNote || null });
       return (
         <>
           <Btn label="🔍 Fetch BRC" onClick={runBrcLookup} />
-          <Btn label="Save BRC found" onClick={saveBrcFound} disabled={!brcFormHasData(detail)} />
-          <Btn label="Mark not found" onClick={saveBrcNotFound} />
-          <Btn label="✉ Send BRC problem email" onClick={sendBrcProblemEmail} />
-          <Btn label="✉ Send wrong address email" onClick={sendBrcWrongAddressEmail} />
+          <Btn label="✓ Save BRC found" variant="ok"
+            onClick={() => { saveBrcFound(); saveStep('complete'); }}
+            disabled={!brcFormHasData(detail)} />
+          {brcState !== 'complete' && (
+            <Btn label="Mark not found"
+              onClick={() => { saveBrcNotFound(); saveStep('waiting'); }} />
+          )}
+          {brcState !== 'complete' && (
+            <Btn label="✉ Send BRC problem email"
+              onClick={() => { sendBrcProblemEmail(); saveStep('waiting'); }} />
+          )}
+          {brcState !== 'complete' && (
+            <Btn label="✉ Send wrong address email"
+              onClick={() => { sendBrcWrongAddressEmail(); saveStep('waiting'); }} />
+          )}
         </>
       );
+    }
 
     case 'pbs_mynj':
       return (

@@ -465,10 +465,10 @@ export function deriveDefaultProcessStep(stepKey, detail) {
 
     case 'brc': {
       if (app.brc_status === 'found') return { state: 'complete', waitingOn: null };
-      if (app.brc_status === 'not_found') return { state: 'waiting', waitingOn: 'nj_state' };
-      if (!app.brc_status || app.brc_status === 'pending') return { state: 'not_started', waitingOn: null };
-      // checking / uploaded / client_created / manual_verification_required / lookup_error / recheck_requested
-      return { state: 'in_progress', waitingOn: null };
+      if (app.brc_status === 'client_created') return { state: 'manual', waitingOn: null };
+      if (app.brc_status === 'not_found') return { state: 'waiting', waitingOn: null };
+      // pending / null / checking / recheck_requested / lookup_error / uploaded / manual_verification_required
+      return { state: 'not_started', waitingOn: null };
     }
 
     case 'pbs_mynj': {
