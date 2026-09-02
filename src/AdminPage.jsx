@@ -371,14 +371,14 @@ export default function AdminPage() {
       nj_page_open: 'The COR extension is active on the New Jersey page…',
       opening_brc: 'Opening the New Jersey BRC lookup…',
       waiting_for_verification: 'Complete the NJ verification in the checker window. UEZ will import the result automatically.',
-      saving_brc: 'BRC found. Creating and saving the applicant’s PDF…',
+      saving_brc: "BRC found. Creating and saving the applicant's PDF…",
       opening_pbs: 'Opening New Jersey PBS…',
       opening_mynj_login: 'Opening the MyNJ login…',
       signing_in_to_pbs: 'Signing into PBS with the stored MyNJ login…',
       opening_tax_revenue_center: 'Opening Tax & Revenue Center…',
-      waiting_for_human_verification: 'Complete New Jersey’s verification in the visible PBS window.',
+      waiting_for_human_verification: "Complete New Jersey's verification in the visible PBS window.",
       requesting_tax_clearance_pdf: 'Selecting the Department of Community Affairs and requesting the letter…',
-      uploading_tax_clearance: 'Tax clearance received. Adding it directly to the applicant’s UEZ file…',
+      uploading_tax_clearance: "Tax clearance received. Adding it directly to the applicant's UEZ file…",
       capturing_tax_issue: 'NJ reported a tax-clearance problem. Capturing the error screenshot…',
       sending_tax_issue_email: 'Saving the screenshot and emailing the client the tax-clearance instructions…',
       opening_ldc_form: 'Opening the Lakewood LDC incentive application…',
@@ -387,7 +387,7 @@ export default function AdminPage() {
       waiting_for_signature: 'Application filled. Add the required signature in the JotForm popup.',
       generating_ldc_preview: 'Signature received. Generating the JotForm PDF preview…',
       waiting_for_final_submit: 'Review the generated application and click the final Submit button in JotForm.',
-      downloading_ldc_pdf: 'Application submitted. Downloading JotForm’s signed PDF…',
+      downloading_ldc_pdf: "Application submitted. Downloading JotForm's signed PDF…",
       uploading_ldc_application: 'Saving the signed LDC application PDF to this UEZ file…',
       opening_lakewood_portal: 'Opening the Lakewood UEZ grant application…',
       filling_lakewood_portal: 'COR is filling the Lakewood grant application…',
@@ -396,11 +396,11 @@ export default function AdminPage() {
       opening_pbs_signup: 'Opening New Jersey Premier Business Services…',
       pbs_opening_identification: 'Starting the PBS account setup…',
       pbs_filling_contact: 'COR is filling the PBS contact information…',
-      pbs_creating_mynj: 'Creating the applicant’s myNewJersey login…',
+      pbs_creating_mynj: "Creating the applicant's myNewJersey login…",
       pbs_account_opened: 'PBS account opened. Moving to Add a Business…',
       pbs_opening_business_information: 'Opening PBS Business Information…',
       waiting_for_pbs_business_type: 'COR filled the PBS business information. Select Business Type in the NJ window, then click Continue.',
-      waiting_for_pbs_verification: 'Complete New Jersey’s security verification in the visible PBS window.',
+      waiting_for_pbs_verification: "Complete New Jersey's security verification in the visible PBS window.",
       waiting_for_pbs_human_step: 'COR reached a PBS step that was not completed in the HAR. Review and continue manually.',
       waiting_for_pbs_page: 'Waiting for the next PBS page…',
       pbs_needs_attention: 'PBS needs your attention in the visible NJ window.'
@@ -449,14 +449,14 @@ export default function AdminPage() {
       });
       await refreshList(detail.application.id);
 
-      if (outcome.status === ‘complete’) {
-        setMessage(‘BRC confirmed. The PDF and certificate details were added directly to this applicant’s UEZ file.’);
-      } else if (outcome.status === ‘not_found’) {
+      if (outcome.status === 'complete') {
+        setMessage("BRC confirmed. The PDF and certificate details were added directly to this applicant's UEZ file.");
+      } else if (outcome.status === 'not_found') {
         await markAdminBrcNotFound(detail.application.id);
         await refreshList(detail.application.id);
-        setMessage(‘NJ did not find a matching BRC — marked as not found automatically.’);
+        setMessage('NJ did not find a matching BRC — marked as not found automatically.');
       } else {
-        throw new Error(outcome.error || ‘The BRC check did not finish.’);
+        throw new Error(outcome.error || 'The BRC check did not finish.');
       }
     } catch (err) {
       setMessage(err.message);
@@ -531,7 +531,7 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage(outcome.taxIssue
         ? 'NJ could not issue the tax clearance. The error screenshot was saved and the client was emailed the follow-up instructions.'
-        : 'Tax-clearance letter downloaded and added directly to this applicant’s UEZ file.');
+        : "Tax-clearance letter downloaded and added directly to this applicant's UEZ file.");
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -569,7 +569,7 @@ export default function AdminPage() {
       });
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The LDC application workflow did not finish.');
       await refreshList(detail.application.id);
-      setMessage('LDC application submitted. The signed JotForm PDF is saved in this applicant’s Documents.');
+      setMessage("LDC application submitted. The signed JotForm PDF is saved in this applicant's Documents.");
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -712,7 +712,7 @@ export default function AdminPage() {
       setMobileDetailOpen(false);
       setEditMode(false);
       if (rows?.[0]?.id) await openApplication(rows[0].id);
-      setMessage('The UEZ application and its documents were permanently deleted. The person’s login was not deleted.');
+      setMessage("The UEZ application and its documents were permanently deleted. The person's login was not deleted.");
     } catch (err) {
       setMessage(err.message);
     } finally {
