@@ -675,7 +675,11 @@ function StepPanel({
       <div className="cw-step-header">
         <div className="cw-step-title-row">
           <h2 className="cw-step-title">{PROCESS_STEP_TITLES[stepKey]}</h2>
-          <span className="cw-step-pill" style={pillStyle(step.state)}>{PROCESS_STEP_STATE_LABELS[step.state]}</span>
+          <span className="cw-step-pill" style={pillStyle(step.state)}>
+            {stepKey === 'uez_enrollment' && step.state === 'in_progress' ? 'Applied - Waiting for state approval'
+              : stepKey === 'uez_enrollment' && step.state === 'complete' ? 'State approved'
+              : PROCESS_STEP_STATE_LABELS[step.state]}
+          </span>
         </div>
         <div className="cw-step-meta">
           <span className="cw-mono cw-faint3">STEP {stepIdx + 1} OF 8 · </span>
@@ -717,7 +721,23 @@ function StepPanel({
 
       {/* Doc tile + fields */}
       <div className="cw-doc-fields-grid">
-        {docType && (
+        {stepKey === 'uez_enrollment' ? (
+          <>
+            <div className="cw-doc-col">
+              <span className="cw-field-label cw-mono">UEZ PENDING CERT</span>
+              <DocThumbnail
+                doc={docFor(detail, 'uez_pending_certification')}
+                applicationId={app.id}
+                onClick={() => { const d = docFor(detail, 'uez_pending_certification'); if (d) previewDocument(d); }}
+                variant="inline"
+              />
+            </div>
+            <div className="cw-doc-col">
+              <span className="cw-field-label cw-mono">UEZ APPROVAL EMAIL</span>
+              <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
+            </div>
+          </>
+        ) : docType && (
           <div className="cw-doc-col">
             <span className="cw-field-label cw-mono">DOCUMENT</span>
             <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />

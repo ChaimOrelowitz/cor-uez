@@ -12,6 +12,7 @@ export const REQUIRED_GRANT_DOCUMENTS = [
   ['formation', 'Certificate of Formation'],
   ['brc', 'Business Registration Certificate'],
   ['tax_clearance', 'Tax Clearance Letter'],
+  ['uez_pending_certification', 'UEZ Pending Certification'],
   ['uez_approval_email', 'UEZ Approval Email'],
   ['ldc_application', 'Signed LDC Application']
 ];
