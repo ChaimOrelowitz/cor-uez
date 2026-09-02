@@ -684,6 +684,8 @@ function StepPanel({
               ? (step.state === 'complete' ? 'State approved' : step.state === 'not_started' ? 'Not started' : 'Applied - Waiting for state approval')
               : stepKey === 'tax_clearance'
               ? (step.state === 'complete' ? 'Cleared' : step.state === 'not_started' ? 'Not started' : step.state === 'waiting' ? 'Issue - applicant says resolved' : 'Issue - emailed applicant')
+              : stepKey === 'ldc_application'
+              ? (step.state === 'complete' ? 'Completed' : 'Not started')
               : PROCESS_STEP_STATE_LABELS[step.state]}
           </span>
         </div>
@@ -706,13 +708,18 @@ function StepPanel({
                 { state: 'waiting',     label: 'Issue - applicant says resolved' },
                 { state: 'complete',    label: 'Cleared' },
               ]
+            : stepKey === 'ldc_application'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'complete',    label: 'Completed' },
+              ]
             : PROCESS_STEP_STATES.map((s) => ({ state: s, label: PROCESS_STEP_STATE_LABELS[s] }))
           ).map(({ state: s, label }) => {
             const st = stateStyle(s);
             const active = stepKey === 'uez_enrollment'
               ? (s === 'complete' ? step.state === 'complete' : s === 'not_started' ? step.state === 'not_started' : step.state !== 'complete' && step.state !== 'not_started')
-              : stepKey === 'tax_clearance'
-              ? step.state === s
+              : stepKey === 'ldc_application'
+              ? (s === 'complete' ? step.state === 'complete' : step.state !== 'complete')
               : step.state === s;
             return (
               <button
