@@ -675,9 +675,15 @@ function StepPanel({
       <div className="cw-step-header">
         <div className="cw-step-title-row">
           <h2 className="cw-step-title">{PROCESS_STEP_TITLES[stepKey]}</h2>
-          <span className="cw-step-pill" style={pillStyle(stepKey === 'uez_enrollment' && (step.state === 'in_progress' || step.state === 'waiting') ? 'in_progress' : step.state)}>
+          <span className="cw-step-pill" style={pillStyle(
+            stepKey === 'uez_enrollment' && (step.state === 'in_progress' || step.state === 'waiting') ? 'in_progress'
+            : stepKey === 'tax_clearance' && (step.state === 'in_progress' || step.state === 'waiting') ? step.state
+            : step.state
+          )}>
             {stepKey === 'uez_enrollment'
               ? (step.state === 'complete' ? 'State approved' : step.state === 'not_started' ? 'Not started' : 'Applied - Waiting for state approval')
+              : stepKey === 'tax_clearance'
+              ? (step.state === 'complete' ? 'Cleared' : step.state === 'not_started' ? 'Not started' : step.state === 'waiting' ? 'Issue - applicant says resolved' : 'Issue - emailed applicant')
               : PROCESS_STEP_STATE_LABELS[step.state]}
           </span>
         </div>
@@ -693,11 +699,20 @@ function StepPanel({
                 { state: 'in_progress', label: 'Applied - Waiting for state approval' },
                 { state: 'complete',    label: 'State approved' },
               ]
+            : stepKey === 'tax_clearance'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'in_progress', label: 'Issue - emailed applicant' },
+                { state: 'waiting',     label: 'Issue - applicant says resolved' },
+                { state: 'complete',    label: 'Cleared' },
+              ]
             : PROCESS_STEP_STATES.map((s) => ({ state: s, label: PROCESS_STEP_STATE_LABELS[s] }))
           ).map(({ state: s, label }) => {
             const st = stateStyle(s);
             const active = stepKey === 'uez_enrollment'
               ? (s === 'complete' ? step.state === 'complete' : s === 'not_started' ? step.state === 'not_started' : step.state !== 'complete' && step.state !== 'not_started')
+              : stepKey === 'tax_clearance'
+              ? step.state === s
               : step.state === s;
             return (
               <button
