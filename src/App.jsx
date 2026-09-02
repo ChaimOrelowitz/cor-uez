@@ -387,7 +387,21 @@ export default function App({ demoMode = false }) {
 
   useEffect(() => {
     let active = true;
-    getSignupLayout().then((layout) => { if (active && layout) setSignupLayout(layout); }).catch(() => {});
+    getSignupLayout().then((layout) => {
+      if (active && layout) {
+        // Merge with DEFAULT so fields added after a layout was first saved still appear.
+        const merged = { ...DEFAULT_SIGNUP_LAYOUT, ...layout };
+        // For array fields, ensure every key from DEFAULT is present (order: DB order first, then any new defaults appended).
+        for (const section of ['account', 'business', 'ownerCore', 'ownerAddress', 'documents']) {
+          if (Array.isArray(merged[section]) && Array.isArray(DEFAULT_SIGNUP_LAYOUT[section])) {
+            const existing = new Set(merged[section]);
+            const extra = DEFAULT_SIGNUP_LAYOUT[section].filter((k) => !existing.has(k));
+            if (extra.length) merged[section] = [...merged[section], ...extra];
+          }
+        }
+        setSignupLayout(merged);
+      }
+    }).catch(() => {});
     return () => { active = false; };
   }, []);
 

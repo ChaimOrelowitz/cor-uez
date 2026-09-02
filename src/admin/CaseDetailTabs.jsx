@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   adminQueueInfo,
   docFor,
+  formatDob,
+  formatSsn,
   formatTimestamp,
   grantSubmissionLikelyDetected,
   grantSubmitGateReason,
@@ -9,6 +11,7 @@ import {
   packetReady,
   paymentStatusLabel,
   pbsAccountGateReason,
+  programLabel,
   PROCESS_STEP_KEYS,
   PROCESS_STEP_STATE_LABELS,
   PROCESS_STEP_STATES,
@@ -445,13 +448,13 @@ export default function CaseDetailTabs({
         {footerOpen && (
           <div className="cw-footer-body">
             <div className="cw-footer-tabs">
-              {['docs', 'legacy'].map((t) => (
+              {['docs', 'applicant', 'legacy'].map((t) => (
                 <button
                   key={t}
                   className={`cw-footer-tab${footerTab === t ? ' cw-footer-tab-active' : ''}`}
                   onClick={() => setFooterTab(t)}
                 >
-                  {t === 'docs' ? 'Documents' : 'Legacy view'}
+                  {t === 'docs' ? 'Documents' : t === 'applicant' ? 'Applicant' : 'Legacy view'}
                 </button>
               ))}
             </div>
@@ -474,6 +477,53 @@ export default function CaseDetailTabs({
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {footerTab === 'applicant' && (
+                <div className="cw-applicant-view">
+                  {/* ── Business ── */}
+                  <section className="cw-applicant-section">
+                    <div className="cw-applicant-section-head">
+                      <strong>Business</strong>
+                      {app.program_code && <span className="cw-applicant-tag">{programLabel(app.program_code)}</span>}
+                    </div>
+                    <dl className="cw-applicant-grid">
+                      <div><dt>Business name</dt><dd>{app.business_name_input || '—'}</dd></div>
+                      <div><dt>Registered name</dt><dd>{app.registered_business_name || '—'}</dd></div>
+                      <div><dt>EIN</dt><dd>{app.ein || '—'}</dd></div>
+                      <div><dt>Contact email</dt><dd>{app.contact_email || '—'}</dd></div>
+                      <div><dt>Contact phone</dt><dd>{app.contact_phone || '—'}</dd></div>
+                      <div><dt>UEZ zone</dt><dd>{app.zone_name || '—'}</dd></div>
+                      <div><dt>Founded</dt><dd>{app.year_founded || '—'}</dd></div>
+                      <div><dt>Employees</dt><dd>{app.full_time_employees ?? 0} FT · {app.part_time_employees ?? 0} PT</dd></div>
+                      <div><dt>Business type</dt><dd>{app.is_sole_proprietorship ? 'Sole proprietorship' : 'Entity'}</dd></div>
+                      <div><dt>DBA</dt><dd>{app.has_dba == null ? '—' : app.has_dba ? (app.dba_name || 'Yes') : 'No'}</dd></div>
+                      <div><dt>Grant amount</dt><dd>{app.grant_amount_requested == null ? '—' : `$${Number(app.grant_amount_requested).toLocaleString()}`}</dd></div>
+                      <div className="cw-applicant-wide"><dt>Address</dt><dd>{[app.address_line1, app.address_line2, app.city, app.state, app.zip].filter(Boolean).join(', ') || '—'}</dd></div>
+                      {app.business_description && <div className="cw-applicant-wide"><dt>Description</dt><dd>{app.business_description}</dd></div>}
+                    </dl>
+                  </section>
+
+                  {/* ── Owners ── */}
+                  {(detail.owners || []).map((owner, i) => (
+                    <section key={owner.id || i} className="cw-applicant-section">
+                      <div className="cw-applicant-section-head">
+                        <strong>{i === 0 ? 'Primary owner' : `Owner ${i + 1}`} — {owner.firstName} {owner.lastName}</strong>
+                        <span className="cw-applicant-tag">{owner.ownershipPercent}%</span>
+                      </div>
+                      <dl className="cw-applicant-grid">
+                        <div><dt>Title</dt><dd>{owner.title || '—'}</dd></div>
+                        <div><dt>Position</dt><dd>{owner.positionTitle || (detail.owners.length === 1 ? 'Owner' : 'Partner')}</dd></div>
+                        <div><dt>Email</dt><dd>{owner.email || '—'}</dd></div>
+                        <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>
+                        <div><dt>DOB</dt><dd>{formatDob(owner.dob) || '—'}</dd></div>
+                        <div><dt>SSN</dt><dd>{formatSsn(owner.ssn)}</dd></div>
+                        <div className="cw-applicant-wide"><dt>Home address</dt><dd>{[owner.addressLine1, owner.addressLine2, owner.city, owner.state, owner.zip].filter(Boolean).join(', ') || '—'}</dd></div>
+                      </dl>
+                    </section>
+                  ))}
+                  {!detail.owners?.length && <p className="cw-applicant-empty">No owners on file.</p>}
                 </div>
               )}
 
