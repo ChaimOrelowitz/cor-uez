@@ -2207,6 +2207,50 @@
 .admin-shell .cw-doc-status.ok     { color: var(--cw-ok); }
 .admin-shell .cw-doc-status.missing { color: var(--cw-danger); }
 
+/* ---- Footer upload strip ------------------------------------------------- */
+
+.admin-shell .cw-docs-tab-body { display: flex; flex-direction: column; gap: 12px; }
+
+.admin-shell .cw-footer-upload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--cw-surface2);
+  border: 1px solid var(--cw-border);
+  border-radius: 6px;
+  flex-wrap: wrap;
+}
+.admin-shell .cw-footer-upload select {
+  font-size: 12px;
+  padding: 4px 6px;
+  background: var(--cw-surface3);
+  border: 1px solid var(--cw-border);
+  border-radius: 4px;
+  color: var(--cw-text);
+  flex: 1;
+  min-width: 160px;
+}
+.admin-shell .cw-footer-file-label {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--cw-surface3);
+  border: 1px solid var(--cw-border);
+  border-radius: 4px;
+  color: var(--cw-muted2);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.admin-shell .cw-footer-file-label:hover { border-color: var(--cw-accent); color: var(--cw-text); }
+.admin-shell .cw-footer-upload .secondary {
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
 /* ---- Legacy footer grid -------------------------------------------------- */
 
 .admin-shell .cw-legacy-grid {

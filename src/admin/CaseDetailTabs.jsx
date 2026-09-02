@@ -461,22 +461,50 @@ export default function CaseDetailTabs({
 
             <div className="cw-footer-panel">
               {footerTab === 'docs' && (
-                <div className="cw-docs-grid">
-                  {REQUIRED_GRANT_DOCUMENTS.map(([type, label]) => {
-                    const doc = docFor(detail, type);
-                    return (
-                      <div key={type} className="cw-doc-tile" onClick={() => doc && previewDocument(doc)}>
-                        <div className="cw-doc-thumb">
-                          {doc ? <DocThumbnail doc={doc} applicationId={app.id} onClick={() => previewDocument(doc)} /> : <span className="cw-doc-missing">—</span>}
+                <div className="cw-docs-tab-body">
+                  <div className="cw-docs-grid">
+                    {REQUIRED_GRANT_DOCUMENTS.map(([type, label]) => {
+                      const doc = docFor(detail, type);
+                      return (
+                        <div key={type} className="cw-doc-tile" onClick={() => doc && previewDocument(doc)}>
+                          <div className="cw-doc-thumb">
+                            {doc ? <DocThumbnail doc={doc} applicationId={app.id} onClick={() => previewDocument(doc)} /> : <span className="cw-doc-missing">—</span>}
+                          </div>
+                          <div className="cw-doc-info">
+                            <span className="cw-doc-label">{label}</span>
+                            <span className="cw-mono cw-faint2">{doc ? doc.filename : 'nothing on file'}</span>
+                            <span className={`cw-doc-status ${doc ? 'ok' : 'missing'}`}>{doc ? 'ON FILE' : 'MISSING'}</span>
+                          </div>
                         </div>
-                        <div className="cw-doc-info">
-                          <span className="cw-doc-label">{label}</span>
-                          <span className="cw-mono cw-faint2">{doc ? doc.filename : 'nothing on file'}</span>
-                          <span className={`cw-doc-status ${doc ? 'ok' : 'missing'}`}>{doc ? 'ON FILE' : 'MISSING'}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+
+                  {/* ── Upload ── */}
+                  <div className="cw-footer-upload">
+                    <span className="cw-rail-label">UPLOAD</span>
+                    <select value={manualDocType} onChange={(e) => setManualDocType(e.target.value)}>
+                      <option value="formation">Certificate of Formation</option>
+                      <option value="brc">Business Registration Certificate</option>
+                      <option value="uez_pending_certification">UEZ Pending Certification</option>
+                      <option value="uez_approval_email">UEZ Approval Email</option>
+                      <option value="tax_clearance">Tax Clearance Letter</option>
+                      <option value="tax_clearance_issue">Tax Clearance Issue Screenshot</option>
+                      <option value="ldc_application">Signed LDC Application</option>
+                      <option value="supporting">Other / Supporting</option>
+                    </select>
+                    <label className="cw-footer-file-label">
+                      {manualDocFile ? manualDocFile.name : 'Choose file…'}
+                      <input type="file" accept=".pdf,.eml,image/*" style={{ display: 'none' }} onChange={(e) => setManualDocFile(e.target.files?.[0] || null)} />
+                    </label>
+                    <button
+                      className="secondary"
+                      onClick={uploadManualAdminDocument}
+                      disabled={manualDocUploading || !manualDocFile}
+                    >
+                      {manualDocUploading ? 'Uploading…' : 'Upload'}
+                    </button>
+                  </div>
                 </div>
               )}
 
