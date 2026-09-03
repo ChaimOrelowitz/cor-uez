@@ -684,7 +684,8 @@ function StepPanel({
         <div className="cw-step-title-row">
           <h2 className="cw-step-title">{PROCESS_STEP_TITLES[stepKey]}</h2>
           <span className="cw-step-pill" style={pillStyle(
-            stepKey === 'uez_enrollment' && (step.state === 'in_progress' || step.state === 'waiting') ? 'in_progress'
+            stepKey === 'uez_enrollment' && step.state === 'complete' ? 'complete'
+            : stepKey === 'uez_enrollment' && (step.state === 'in_progress' || step.state === 'waiting' || (step.state === 'not_started' && docFor(detail, 'uez_pending_certification'))) ? 'in_progress'
             : stepKey === 'tax_clearance' && (step.state === 'in_progress' || step.state === 'waiting') ? step.state
             : step.state
           )}>
@@ -693,7 +694,7 @@ function StepPanel({
               : stepKey === 'brc'
               ? ({ waiting: 'Issue — emailed applicant', manual: 'Client says resolved — check again', complete: 'Complete' }[step.state] || 'Not started')
               : stepKey === 'uez_enrollment'
-              ? (step.state === 'complete' ? 'State approved' : step.state === 'not_started' ? 'Not started' : 'Applied - Waiting for state approval')
+              ? (step.state === 'complete' ? 'State approved' : (step.state === 'not_started' && !docFor(detail, 'uez_pending_certification')) ? 'Not started' : 'Applied - Waiting for state approval')
               : stepKey === 'tax_clearance'
               ? (step.state === 'complete' ? 'Cleared' : step.state === 'not_started' ? 'Not started' : step.state === 'waiting' ? 'Issue - applicant says resolved' : 'Issue - emailed applicant')
               : stepKey === 'ldc_application'

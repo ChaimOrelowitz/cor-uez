@@ -6,6 +6,7 @@ import AdminVisitCounter from './AdminVisitCounter';
 import EmailSettingsPage from './EmailSettingsPage';
 import AccountRecoveryPage from './AccountRecoveryPage';
 import SignupLayoutPage from './SignupLayoutPage';
+import AccountsPage from './AccountsPage';
 import { trackPublicVisit } from './analytics';
 import './styles.css';
 import './workflow.css';
@@ -25,6 +26,7 @@ if (path === '/admin') Root = AdminWithAnalytics;
 else if (path === '/admin/demo-client') Root = () => <App demoMode />;
 else if (path === '/admin/signup-layout') Root = SignupLayoutPage;
 else if (path === '/admin/email-settings') Root = EmailSettingsPage;
+else if (path === '/admin/accounts') Root = AccountsPage;
 else if (path === '/forgot-password') Root = () => <AccountRecoveryPage mode="forgot" />;
 else if (path === '/reset-password') Root = () => <AccountRecoveryPage mode="reset" />;
 else {

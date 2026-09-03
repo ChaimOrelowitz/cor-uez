@@ -1132,12 +1132,13 @@ export default function AdminPage() {
   return <div className={`admin-shell${darkMode ? ' dark' : ''}`} data-theme={darkMode ? undefined : 'light'}>
     <header className="admin-topbar">
       <div className="admin-brand"><div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div></div>
-      <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button><button onClick={handleSignOut}>Log out</button></div>
+      <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/accounts">ACCOUNTS</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button><button onClick={handleSignOut}>Log out</button></div>
       <details className="admin-mobile-menu">
         <summary aria-label="Open admin menu">•••</summary>
         <div className="admin-mobile-menu-popover">
           <a href="/admin/email-settings">Email settings</a>
           <a href="/admin/signup-layout">Signup layout</a>
+          <a href="/admin/accounts">Accounts</a>
           <a href="/admin/demo-client" target="_blank" rel="noreferrer">Demo client</a>
           <a href="/" target="_blank" rel="noreferrer">Applicant site</a>
           <button onClick={handleSignOut}>Log out</button>
