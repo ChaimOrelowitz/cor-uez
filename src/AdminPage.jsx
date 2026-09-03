@@ -858,6 +858,11 @@ export default function AdminPage() {
     openEmailComposer('pbs_account_created');
   }
 
+  function sendPbsExistingAccountEmail() {
+    setProcessFlag('pbsStatus', 'creds_requested');
+    openEmailComposer('pbs_existing_account');
+  }
+
   function sendTaxIssueEmail() {
     openEmailComposer('tax_issue');
   }
@@ -1255,6 +1260,7 @@ export default function AdminPage() {
             setProcessFlag={setProcessFlag}
             runPbsSignup={runPbsSignup}
             sendPbsAccountCreatedEmail={sendPbsAccountCreatedEmail}
+            sendPbsExistingAccountEmail={sendPbsExistingAccountEmail}
             runTaxClearance={runTaxClearance}
             sendTaxIssueEmail={sendTaxIssueEmail}
             sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}

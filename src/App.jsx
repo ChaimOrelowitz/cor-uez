@@ -92,6 +92,9 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const [myNjCredentials, setMyNjCredentials] = useState(null);
   const [showMyNjSecrets, setShowMyNjSecrets] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
+  const [pbsCredsBusy, setPbsCredsBusy] = useState(false);
+  const [pbsCredsForm, setPbsCredsForm] = useState({ username: '', password: '' });
+  const [pbsCredsMessage, setPbsCredsMessage] = useState('');
   const [brcBusy, setBrcBusy] = useState(false);
   const [taxBusy, setTaxBusy] = useState(false);
   const app = bundle.application;
@@ -172,6 +175,20 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
     } finally {
       setUploading(false);
     }
+  }
+
+  async function submitPbsCreds() {
+    if (!pbsCredsForm.username.trim() || !pbsCredsForm.password.trim()) {
+      setPbsCredsMessage('Please enter both your MyNJ username and password.');
+      return;
+    }
+    setPbsCredsBusy(true); setPbsCredsMessage('');
+    try {
+      await savePbsAccountInfo(app.id, { hasExistingPbsAccount: true, username: pbsCredsForm.username.trim(), password: pbsCredsForm.password });
+      await onRefresh();
+      setPbsCredsMessage('Credentials submitted. Thank you!');
+    } catch (err) { setPbsCredsMessage(err.message); }
+    finally { setPbsCredsBusy(false); }
   }
 
   async function reportPaymentSent() {
@@ -317,6 +334,24 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
           {latestPayment?.status === 'paid' ? <div className="action-panel good-panel"><h3>✓ Payment received</h3></div>
             : latestPayment?.status === 'client_reported' ? <div className="action-panel"><h3>Payment reported</h3><p>You told COR the payment was sent. We are verifying it.</p></div>
             : <><p className="muted">After you send the $500 payment, click below.</p><button className="primary admin-full-button" onClick={reportPaymentSent} disabled={paymentBusy}>{paymentBusy ? 'Saving…' : 'I sent my payment'}</button></>}
+        </section>}
+
+        {app.pbs_status === 'creds_requested' && !app.pbs_account_created && <section className="wizard-card portal-card portal-wide">
+          <div className="portal-section-head"><h3>MyNJ / PBS login credentials</h3></div>
+          <p>We need your MyNJ / PBS account login to continue your UEZ application. If your browser may remember your credentials, you can check here:</p>
+          <p><a href="https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login" target="_blank" rel="noopener noreferrer">Check your PBS account login →</a></p>
+          <div className="pbs-creds-form">
+            <label>
+              MyNJ username
+              <input type="text" value={pbsCredsForm.username} onChange={(e) => setPbsCredsForm((f) => ({ ...f, username: e.target.value }))} disabled={pbsCredsBusy} autoComplete="username" />
+            </label>
+            <label>
+              MyNJ password
+              <input type="password" value={pbsCredsForm.password} onChange={(e) => setPbsCredsForm((f) => ({ ...f, password: e.target.value }))} disabled={pbsCredsBusy} autoComplete="current-password" />
+            </label>
+            {pbsCredsMessage && <div className="form-message portal-message">{pbsCredsMessage}</div>}
+            <button className="primary admin-full-button" onClick={submitPbsCreds} disabled={pbsCredsBusy}>{pbsCredsBusy ? 'Saving…' : 'Submit credentials'}</button>
+          </div>
         </section>}
 
         {paid && myNjCredentials && <section className="wizard-card portal-card portal-wide mynj-card">

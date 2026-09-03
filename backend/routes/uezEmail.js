@@ -14,6 +14,40 @@ const {
 // ensureTemplateExists inserts only when the row is missing — after first use
 // the row is editable via Email Settings like any other template.
 const TEMPLATE_DEFAULTS = {
+  submission_received: {
+    display_name: 'Application received',
+    subject: 'We received your UEZ application',
+    body: `Hi {{first_name}},
+
+Great news — we've received your UEZ application and created your account.
+
+You can log in to your applicant portal at any time to check your application status and respond to any requests from our team.
+
+Our team will review your application and be in touch with next steps. If you have any questions in the meantime, feel free to reach out.
+
+Best,
+The COR UEZ Team`,
+    sort_order: 1
+  },
+  pbs_existing_account: {
+    display_name: 'Existing PBS/MyNJ account — submit credentials',
+    subject: 'Action needed: submit your MyNJ/PBS login credentials',
+    body: `Hi {{first_name}},
+
+We're moving forward with your UEZ application and need your MyNJ/PBS login credentials to proceed.
+
+It looks like you may already have a PBS account. Please click the link below to check whether your browser remembers your login:
+
+https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login
+
+Once you've confirmed your username and password, please enter them in your applicant portal so we can continue processing your application.
+
+If you have any trouble, feel free to reach out and we'll help you get sorted.
+
+Best,
+The COR UEZ Team`,
+    sort_order: 15
+  },
   brc_wrong_address: {
     display_name: 'BRC address not in UEZ',
     subject: 'Action needed: update your registered business address',

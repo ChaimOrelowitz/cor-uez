@@ -168,6 +168,7 @@ export default function CaseDetailTabs({
   setProcessFlag,
   runPbsSignup,
   sendPbsAccountCreatedEmail,
+  sendPbsExistingAccountEmail,
   runTaxClearance,
   sendTaxIssueEmail,
   sendUezApplicationSubmittedEmail,
@@ -301,6 +302,7 @@ export default function CaseDetailTabs({
             setProcessFlag={setProcessFlag}
             runPbsSignup={runPbsSignup}
             sendPbsAccountCreatedEmail={sendPbsAccountCreatedEmail}
+            sendPbsExistingAccountEmail={sendPbsExistingAccountEmail}
             runTaxClearance={runTaxClearance}
             sendTaxIssueEmail={sendTaxIssueEmail}
             sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
@@ -584,6 +586,7 @@ export default function CaseDetailTabs({
                         setProcessFlag={setProcessFlag}
                         runPbsSignup={runPbsSignup}
                         sendPbsAccountCreatedEmail={sendPbsAccountCreatedEmail}
+                        sendPbsExistingAccountEmail={sendPbsExistingAccountEmail}
                         runTaxClearance={runTaxClearance}
                         sendTaxIssueEmail={sendTaxIssueEmail}
                         sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
@@ -631,7 +634,7 @@ function StepPanel({
   myNjEditMode, myNjDraft, setMyNjDraft, showMyNjSecrets,
   previewDocument, reviewFormationDoc, sendFormationRejectedEmail,
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
-  markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail,
+  markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail, sendPbsExistingAccountEmail,
   runTaxClearance, sendTaxIssueEmail, sendUezApplicationSubmittedEmail,
   runLdcJotform, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
   runLakewoodGrantPortal, confirmGrantSubmitted, sendGrantSubmittedEmail,
@@ -692,6 +695,8 @@ function StepPanel({
               ? (step.state === 'complete' ? 'Completed' : 'Not started')
               : stepKey === 'pbs_mynj'
               ? ({ waiting: 'Waiting on credentials from applicant', manual: 'PBS creds provided — confirm business added', complete: 'Complete' }[step.state] || 'Not started')
+              : stepKey === 'payment'
+              ? ({ waiting: 'Payment requested', in_progress: 'Client reported — verify', complete: 'Paid ✓' }[step.state] || 'Not started')
               : PROCESS_STEP_STATE_LABELS[step.state]}
           </span>
         </div>
@@ -741,6 +746,13 @@ function StepPanel({
                 { state: 'manual',      label: 'Creds provided — confirm' },
                 { state: 'complete',    label: 'Complete' },
               ]
+            : stepKey === 'payment'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'waiting',     label: 'Payment requested' },
+                { state: 'in_progress', label: 'Client reported' },
+                { state: 'complete',    label: 'Paid ✓' },
+              ]
             : PROCESS_STEP_STATES.map((s) => ({ state: s, label: PROCESS_STEP_STATE_LABELS[s] }))
           ).map(({ state: s, label }) => {
             const st = stateStyle(s);
@@ -748,7 +760,7 @@ function StepPanel({
               ? (s === 'complete' ? step.state === 'complete' : s === 'not_started' ? step.state === 'not_started' : step.state !== 'complete' && step.state !== 'not_started')
               : stepKey === 'ldc_application'
               ? (s === 'complete' ? step.state === 'complete' : step.state !== 'complete')
-              : step.state === s; // formation, brc, tax_clearance, pbs_mynj: exact match
+              : step.state === s; // formation, brc, tax_clearance, pbs_mynj, payment: exact match
             return (
               <button
                 key={s}
@@ -835,6 +847,7 @@ function StepPanel({
             setProcessFlag={setProcessFlag}
             runPbsSignup={runPbsSignup}
             sendPbsAccountCreatedEmail={sendPbsAccountCreatedEmail}
+            sendPbsExistingAccountEmail={sendPbsExistingAccountEmail}
             runTaxClearance={runTaxClearance}
             sendTaxIssueEmail={sendTaxIssueEmail}
             sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
@@ -1097,7 +1110,7 @@ function StepActions({
   saveProcessStep,
   reviewFormationDoc, sendFormationRejectedEmail,
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
-  markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail,
+  markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail, sendPbsExistingAccountEmail,
   runTaxClearance, sendTaxIssueEmail, sendUezApplicationSubmittedEmail,
   runLdcJotform, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
   runLakewoodGrantPortal, confirmGrantSubmitted, sendGrantSubmittedEmail,
@@ -1181,8 +1194,8 @@ function StepActions({
 
           {/* Existing account path: mark waiting + manually email applicant for creds */}
           {pbsState !== 'complete' && (
-            <Btn label={pbsState === 'waiting' ? '✉ Email applicant for creds (resend)' : '✉ Email applicant for PBS creds'}
-              onClick={() => saveStep('waiting')} />
+            <Btn label={pbsState === 'waiting' ? '✉ Email: already has PBS account (resend)' : '✉ Email: already has PBS account'}
+              onClick={() => { saveStep('waiting'); sendPbsExistingAccountEmail(); }} />
           )}
 
           {/* Applicant provided creds — confirm business added */}

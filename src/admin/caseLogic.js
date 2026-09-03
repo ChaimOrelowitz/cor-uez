@@ -509,6 +509,7 @@ export function deriveDefaultProcessStep(stepKey, detail) {
       const latest = detail?.payments?.[detail.payments.length - 1];
       if (latest?.status === 'paid') return { state: 'complete', waitingOn: null };
       if (latest?.status === 'client_reported') return { state: 'in_progress', waitingOn: null };
+      if (app.payment_requested_at) return { state: 'waiting', waitingOn: 'applicant' };
       return { state: 'not_started', waitingOn: null };
     }
 

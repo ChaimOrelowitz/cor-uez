@@ -667,6 +667,12 @@ router.post('/applications/:id/submit', async (req, res) => {
       req.user.id,
       true
     );
+    await ensureTemplateExists('submission_received', {
+      display_name: 'Application received',
+      subject: 'We received your UEZ application',
+      body: `Hi {{first_name}},\n\nGreat news — we've received your UEZ application and created your account.\n\nYou can log in to your applicant portal at any time to check your application status and respond to any requests from our team.\n\nOur team will review your application and be in touch with next steps. If you have any questions in the meantime, feel free to reach out.\n\nBest,\nThe COR UEZ Team`,
+      sort_order: 1
+    });
     await safeSendApplicationEmail(data, 'submission_received', {
       dedupeKey: `submission_received:${application.id}`
     });
@@ -945,6 +951,9 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
     if (typeof body.pbsAccountCreated === 'boolean') {
       patch.pbs_account_created = body.pbsAccountCreated;
       patch.pbs_status = body.pbsAccountCreated ? 'account_created' : null;
+    }
+    if (body.pbsStatus === 'creds_requested') {
+      patch.pbs_status = 'creds_requested';
     }
     if (typeof body.taxClearanceGood === 'boolean') {
       patch.tax_clearance_good = body.taxClearanceGood;
