@@ -1145,7 +1145,7 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
     if (!ids.length) return res.json([]);
 
     const [ownersResult, docsResult, paymentsResult] = await Promise.all([
-      supabase.from('uez_owners').select('application_id').in('application_id', ids),
+      supabase.from('uez_owners').select('application_id, first_name, last_name, phone').in('application_id', ids),
       supabase.from('uez_documents').select('application_id, document_type, created_at').in('application_id', ids),
       supabase.from('uez_payments').select('application_id, status, amount, payment_date, created_at').in('application_id', ids).order('created_at')
     ]);
@@ -1154,10 +1154,15 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
     if (paymentsResult.error) throw paymentsResult.error;
 
     const ownerCounts = {};
+    const ownerNames = {};
     const docCounts = {};
     const docTypes = {};
     const latestPayments = {};
-    for (const row of ownersResult.data || []) ownerCounts[row.application_id] = (ownerCounts[row.application_id] || 0) + 1;
+    for (const row of ownersResult.data || []) {
+      ownerCounts[row.application_id] = (ownerCounts[row.application_id] || 0) + 1;
+      if (!ownerNames[row.application_id]) ownerNames[row.application_id] = [];
+      ownerNames[row.application_id].push({ first_name: row.first_name, last_name: row.last_name, phone: row.phone });
+    }
     for (const row of docsResult.data || []) {
       docCounts[row.application_id] = (docCounts[row.application_id] || 0) + 1;
       if (!docTypes[row.application_id]) docTypes[row.application_id] = new Set();
@@ -1176,6 +1181,7 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
       return {
         ...row,
         owner_count: ownerCounts[row.id] || 0,
+        owners_search: ownerNames[row.id] || [],
         document_count: docCounts[row.id] || 0,
         document_types: [...types],
         required_document_ready_count: readyCount,

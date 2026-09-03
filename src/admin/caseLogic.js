@@ -370,8 +370,13 @@ export function filterAndSortApplications(applications, filter, search) {
   const q = String(search || '').trim().toLowerCase();
   return (applications || [])
     .filter((app) => {
-      const matchesSearch = !q || [app.business_name_input, app.registered_business_name, app.contact_email, app.ein]
-        .some((value) => String(value || '').toLowerCase().includes(q));
+      const ownerTokens = (app.owners_search || []).flatMap((o) => [
+        o.first_name, o.last_name, `${o.first_name || ''} ${o.last_name || ''}`.trim(), o.phone
+      ]);
+      const matchesSearch = !q || [
+        app.business_name_input, app.registered_business_name, app.contact_email, app.ein,
+        ...ownerTokens
+      ].some((value) => String(value || '').toLowerCase().includes(q));
       if (!matchesSearch) return false;
       if (filter === 'all') return true;
       return adminQueueInfo(app).bucket === filter;
