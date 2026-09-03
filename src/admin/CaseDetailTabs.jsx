@@ -972,19 +972,39 @@ function StepFields({
       );
 
     case 'pbs_mynj':
+      if (myNjEditMode && myNjDraft) {
+        return (
+          <div className="cw-fields cw-fields-col1">
+            <FieldPair label="MyNJ username" value={myNjDraft.username || ''}
+              onChange={(v) => setMyNjDraft((d) => ({ ...d, username: v }))} disabled={busy} />
+            <FieldPair label="MyNJ password" value={myNjDraft.password || ''}
+              onChange={(v) => setMyNjDraft((d) => ({ ...d, password: v }))} disabled={busy} />
+          </div>
+        );
+      }
       return (
         <div className="cw-fields cw-fields-col1">
-          <span className="cw-field-label">PBS account exists?</span>
-          <span className="cw-field-value">{app.has_existing_pbs_account == null ? '—' : app.has_existing_pbs_account ? 'Yes' : 'No'}</span>
           <span className="cw-field-label">PBS account created</span>
           <span className="cw-field-value">{app.pbs_account_created ? '✓ Yes' : 'Not yet'}</span>
-          {myNjCredentials && <>
-            <span className="cw-field-label">MyNJ username</span>
-            <span className="cw-field-value cw-mono">
-              {myNjCredentials.username}
-              <button className="cw-copy-btn" onClick={() => copyCredential(myNjCredentials.username, 'Username')}>Copy</button>
-            </span>
-          </>}
+          {myNjCredentials ? (
+            <>
+              <span className="cw-field-label">MyNJ username</span>
+              <span className="cw-field-value cw-mono">
+                {myNjCredentials.username}
+                <button className="cw-copy-btn" onClick={() => copyCredential(myNjCredentials.username, 'Username')}>Copy</button>
+              </span>
+              <span className="cw-field-label">MyNJ password</span>
+              <span className="cw-field-value cw-mono">
+                {myNjCredentials.password}
+                <button className="cw-copy-btn" onClick={() => copyCredential(myNjCredentials.password, 'Password')}>Copy</button>
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="cw-field-label">MyNJ credentials</span>
+              <span className="cw-field-value">— not generated yet</span>
+            </>
+          )}
         </div>
       );
 
@@ -1159,9 +1179,9 @@ function StepActions({
               disabled={!!pbsAccountGateReason(detail, myNjCredentials)} />
           )}
 
-          {/* Existing account path: email applicant for their creds */}
-          {pbsState !== 'complete' && pbsState !== 'waiting' && (
-            <Btn label="✉ Email applicant for PBS creds"
+          {/* Existing account path: mark waiting + manually email applicant for creds */}
+          {pbsState !== 'complete' && (
+            <Btn label={pbsState === 'waiting' ? '✉ Email applicant for creds (resend)' : '✉ Email applicant for PBS creds'}
               onClick={() => saveStep('waiting')} />
           )}
 
