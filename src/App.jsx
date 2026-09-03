@@ -338,18 +338,19 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
 
         {app.pbs_status === 'creds_requested' && !app.pbs_account_created && <section className="wizard-card portal-card portal-wide">
           <div className="portal-section-head"><h3>MyNJ / PBS login credentials</h3></div>
-          <p>We need your MyNJ / PBS account login to continue your UEZ application. If your browser may remember your credentials, you can check here:</p>
-          <p><a href="https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login" target="_blank" rel="noopener noreferrer">Check your PBS account login →</a></p>
           <div className="pbs-creds-form">
-            <label>
-              MyNJ username
-              <input type="text" value={pbsCredsForm.username} onChange={(e) => setPbsCredsForm((f) => ({ ...f, username: e.target.value }))} disabled={pbsCredsBusy} autoComplete="username" />
-            </label>
-            <label>
-              MyNJ password
-              <input type="password" value={pbsCredsForm.password} onChange={(e) => setPbsCredsForm((f) => ({ ...f, password: e.target.value }))} disabled={pbsCredsBusy} autoComplete="current-password" />
-            </label>
-            {pbsCredsMessage && <div className="form-message portal-message">{pbsCredsMessage}</div>}
+            <p style={{margin:'0 0 2px',fontSize:13,lineHeight:1.5}}>We need your MyNJ / PBS account login to continue. <a href="https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login" target="_blank" rel="noopener noreferrer">Check if your browser remembers your login →</a></p>
+            <div className="fields-row">
+              <label>
+                MyNJ username
+                <input type="text" value={pbsCredsForm.username} onChange={(e) => setPbsCredsForm((f) => ({ ...f, username: e.target.value }))} disabled={pbsCredsBusy} autoComplete="username" />
+              </label>
+              <label>
+                MyNJ password
+                <input type="password" value={pbsCredsForm.password} onChange={(e) => setPbsCredsForm((f) => ({ ...f, password: e.target.value }))} disabled={pbsCredsBusy} autoComplete="current-password" />
+              </label>
+            </div>
+            {pbsCredsMessage && <div className="form-message portal-message" style={{margin:0}}>{pbsCredsMessage}</div>}
             <button className="primary admin-full-button" onClick={submitPbsCreds} disabled={pbsCredsBusy}>{pbsCredsBusy ? 'Saving…' : 'Submit credentials'}</button>
           </div>
         </section>}
