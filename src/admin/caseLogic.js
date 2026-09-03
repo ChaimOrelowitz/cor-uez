@@ -473,8 +473,8 @@ export function deriveDefaultProcessStep(stepKey, detail) {
 
     case 'pbs_mynj': {
       if (app.pbs_account_created) return { state: 'complete', waitingOn: null };
-      if (app.has_existing_pbs_account == null) return { state: 'waiting', waitingOn: 'applicant' };
-      return { state: 'in_progress', waitingOn: null };
+      // Admin advances chip manually after running PBS setup
+      return { state: 'not_started', waitingOn: null };
     }
 
     case 'tax_clearance': {

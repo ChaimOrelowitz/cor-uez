@@ -690,6 +690,8 @@ function StepPanel({
               ? (step.state === 'complete' ? 'Cleared' : step.state === 'not_started' ? 'Not started' : step.state === 'waiting' ? 'Issue - applicant says resolved' : 'Issue - emailed applicant')
               : stepKey === 'ldc_application'
               ? (step.state === 'complete' ? 'Completed' : 'Not started')
+              : stepKey === 'pbs_mynj'
+              ? ({ waiting: 'Waiting on credentials from applicant', manual: 'PBS creds provided — confirm business added', complete: 'Complete' }[step.state] || 'Not started')
               : PROCESS_STEP_STATE_LABELS[step.state]}
           </span>
         </div>
@@ -732,6 +734,13 @@ function StepPanel({
                 { state: 'not_started', label: 'Not started' },
                 { state: 'complete',    label: 'Completed' },
               ]
+            : stepKey === 'pbs_mynj'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'waiting',     label: 'Waiting on creds' },
+                { state: 'manual',      label: 'Creds provided — confirm' },
+                { state: 'complete',    label: 'Complete' },
+              ]
             : PROCESS_STEP_STATES.map((s) => ({ state: s, label: PROCESS_STEP_STATE_LABELS[s] }))
           ).map(({ state: s, label }) => {
             const st = stateStyle(s);
@@ -739,7 +748,7 @@ function StepPanel({
               ? (s === 'complete' ? step.state === 'complete' : s === 'not_started' ? step.state === 'not_started' : step.state !== 'complete' && step.state !== 'not_started')
               : stepKey === 'ldc_application'
               ? (s === 'complete' ? step.state === 'complete' : step.state !== 'complete')
-              : step.state === s; // formation, tax_clearance, and others: exact match
+              : step.state === s; // formation, brc, tax_clearance, pbs_mynj: exact match
             return (
               <button
                 key={s}
@@ -1133,18 +1142,54 @@ function StepActions({
       );
     }
 
-    case 'pbs_mynj':
+    case 'pbs_mynj': {
+      const pbsState = step?.state;
+      const saveStep = (state) => saveProcessStep('pbs_mynj', { state, waitingOn: null, waitingSince: null, waitingReason: null, manualNote: step?.manualNote || null });
       return (
         <>
+          {/* MyNJ credentials — always available */}
           {!myNjCredentials && <Btn label="Generate MyNJ credentials" onClick={createMyNjCredentials} variant="ok" />}
           {myNjCredentials && !myNjEditMode && <Btn label="Edit MyNJ credentials" onClick={startMyNjEdit} />}
-          {myNjEditMode && <Btn label="Save credentials" onClick={saveMyNjCredentials} variant="ok" />}
+          {myNjEditMode && <Btn label="💾 Save credentials" onClick={saveMyNjCredentials} variant="ok" />}
           {myNjEditMode && <Btn label="Cancel" onClick={cancelMyNjEdit} />}
-          {!app.pbs_account_created && <Btn label="Mark PBS account created" onClick={markPbsAccountCreated} />}
-          {!app.pbs_account_created && <Btn label="Run PBS signup" onClick={runPbsSignup} disabled={!!pbsAccountGateReason(detail, myNjCredentials)} />}
-          {app.pbs_account_created && <Btn label="✉ Send PBS account created email" onClick={sendPbsAccountCreatedEmail} />}
+
+          {/* PBS setup — available when not complete */}
+          {pbsState !== 'complete' && (
+            <Btn label="▶ Run PBS setup" onClick={runPbsSignup}
+              disabled={!!pbsAccountGateReason(detail, myNjCredentials)} />
+          )}
+
+          {/* Existing account path: email applicant for their creds */}
+          {pbsState !== 'complete' && pbsState !== 'waiting' && (
+            <Btn label="✉ Email applicant for PBS creds"
+              onClick={() => saveStep('waiting')} />
+          )}
+
+          {/* Applicant provided creds — confirm business added */}
+          {pbsState === 'waiting' && (
+            <Btn label="✓ Creds received — confirm business added" variant="ok"
+              onClick={() => saveStep('manual')} />
+          )}
+
+          {/* Final confirmation */}
+          {pbsState === 'manual' && (
+            <Btn label="✓ Business added — Mark complete" variant="ok"
+              onClick={() => { markPbsAccountCreated(); saveStep('complete'); }} />
+          )}
+
+          {/* New PBS account path: direct complete */}
+          {pbsState !== 'complete' && pbsState !== 'waiting' && pbsState !== 'manual' && (
+            <Btn label="✓ PBS created — Mark complete" variant="ok"
+              onClick={() => { markPbsAccountCreated(); saveStep('complete'); }} />
+          )}
+
+          {/* Post-complete */}
+          {pbsState === 'complete' && (
+            <Btn label="✉ Send PBS account created email" onClick={sendPbsAccountCreatedEmail} />
+          )}
         </>
       );
+    }
 
     case 'tax_clearance':
       return (
