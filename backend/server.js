@@ -13,9 +13,13 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173'
 ].filter(Boolean);
-// CardDAV — mounted BEFORE cors() and express.json().
+
+// CardDAV must be mounted before cors() so its OPTIONS response reaches the
+// DAV handler, and before express.json() so PROPFIND/REPORT XML bodies remain
+// untouched for the DAV route's own body reader.
 app.use('/dav', uezDavRoutes);
 app.all('/.well-known/carddav', (_req, res) => res.redirect(301, '/dav/'));
+
 app.use(cors({
   origin(origin, callback) {
     if (
@@ -29,12 +33,6 @@ app.use(cors({
     return callback(new Error('Origin not allowed by CORS'));
   }
 }));
-
-// CardDAV — mounted BEFORE express.json() so the body stream is untouched
-// for PROPFIND/REPORT requests that carry XML (not JSON) bodies.
-app.use('/dav', uezDavRoutes);
-// iOS well-known redirect — redirects to the DAV root so auto-discovery works
-app.all('/.well-known/carddav', (_req, res) => res.redirect(301, '/dav/'));
 
 app.use(express.json({ limit: '5mb' }));
 
