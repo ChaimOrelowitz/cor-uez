@@ -14,23 +14,24 @@ router.post('/', async (req, res) => {
 
   const signature = req.headers['x-dav-signature'];
   const authorization = req.headers['x-dav-authorization'] || '';
-  const verified = verifyEnvelope({
-    envelope: req.body,
-    signature,
-    authorization,
-    secret,
-    nonceCache,
-  });
-
+  const verified = verifyEnvelope({ envelope: req.body, signature, authorization, secret, nonceCache });
   if (!verified.ok) return res.status(verified.status).type('text/plain').send('Bridge rejected');
 
   const { method, path, query, davHeaders, body } = verified.envelope;
-  if (WRITE_METHODS.has(method)) return res.status(403).type('text/plain').send('Bridge rejected');
-  if (!READ_METHODS.has(method)) return res.status(405).type('text/plain').send('Bridge rejected');
-  if (!(path === '/dav' || path === '/dav/' || path.startsWith('/dav/') || path === '/.well-known/carddav' || path === '/.well-known/carddav/')) {
+  const upper = String(method || '').toUpperCase();
+  if (WRITE_METHODS.has(upper)) return res.status(403).type('text/plain').send('Bridge rejected');
+  if (!READ_METHODS.has(upper)) return res.status(405).type('text/plain').send('Bridge rejected');
+
+  const allowedPath =
+    path === '/' ||
+    path === '/.well-known/carddav' || path === '/.well-known/carddav/' ||
+    path === '/carddav' || path === '/carddav/' || path.startsWith('/carddav/');
+  if (!allowedPath || path.includes('..') || path.includes('//') || path.includes('\\')) {
     return res.status(403).type('text/plain').send('Bridge rejected');
   }
-  if (Buffer.byteLength(body || '', 'utf8') > MAX_BODY_BYTES) return res.status(413).type('text/plain').send('Bridge rejected');
+  if (Buffer.byteLength(body || '', 'utf8') > MAX_BODY_BYTES) {
+    return res.status(413).type('text/plain').send('Bridge rejected');
+  }
 
   const port = process.env.PORT || 4000;
   const qs = query ? `?${query}` : '';
@@ -38,14 +39,16 @@ router.post('/', async (req, res) => {
   if (body) headers['content-length'] = Buffer.byteLength(body, 'utf8').toString();
 
   try {
+    // Relay to localhost so the original DAV verb reaches Express without
+    // crossing Render's edge a second time.
     const upstream = await fetch(`http://127.0.0.1:${port}${path}${qs}`, {
-      method,
+      method: upper,
       headers,
-      body: method === 'PROPFIND' || method === 'REPORT' ? body : undefined,
+      body: upper === 'PROPFIND' || upper === 'REPORT' ? body : undefined,
       redirect: 'manual',
     });
 
-    const arrayBuffer = await upstream.arrayBuffer();
+    const bytes = Buffer.from(await upstream.arrayBuffer());
     const outHeaders = {};
     for (const [k, v] of upstream.headers.entries()) {
       if (['connection', 'keep-alive', 'transfer-encoding', 'content-encoding'].includes(k.toLowerCase())) continue;
@@ -55,9 +58,9 @@ router.post('/', async (req, res) => {
     return res.status(200).json({
       status: upstream.status,
       headers: outHeaders,
-      body_b64: Buffer.from(arrayBuffer).toString('base64'),
+      body_b64: bytes.toString('base64'),
     });
-  } catch (err) {
+  } catch {
     console.error('[dav-bridge] internal relay failed');
     return res.status(502).type('text/plain').send('Bridge unavailable');
   }
