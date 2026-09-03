@@ -504,7 +504,7 @@ export function deriveDefaultProcessStep(stepKey, detail) {
       return docFor(detail, 'ldc_application') ? { state: 'complete', waitingOn: null } : { state: 'not_started', waitingOn: null };
 
     case 'grant_submission': {
-      if (app.status === 'applied' || app.status === 'grant_submitted') return { state: 'complete', waitingOn: null };
+      if (app.status === 'applied' || app.status === 'grant_submitted') return { state: 'in_progress', waitingOn: null };
       if (grantSubmissionLikelyDetected(detail)) return { state: 'waiting', waitingOn: 'cor_follow_up' };
       if (packetReady(detail)) return { state: 'not_started', waitingOn: null };
       return { state: 'waiting', waitingOn: 'document' };

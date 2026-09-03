@@ -699,6 +699,8 @@ function StepPanel({
               ? (step.state === 'complete' ? 'Cleared' : step.state === 'not_started' ? 'Not started' : step.state === 'waiting' ? 'Issue - applicant says resolved' : 'Issue - emailed applicant')
               : stepKey === 'ldc_application'
               ? (step.state === 'complete' ? 'Completed' : 'Not started')
+              : stepKey === 'grant_submission'
+              ? (step.state === 'complete' ? 'Approved ✓' : step.state === 'in_progress' ? 'Submitted — awaiting LDC' : 'Not started')
               : stepKey === 'pbs_mynj'
               ? ({ waiting: 'Waiting on credentials from applicant', manual: 'PBS creds provided — confirm business added', complete: 'Complete' }[step.state] || 'Not started')
               : stepKey === 'payment'
@@ -744,6 +746,12 @@ function StepPanel({
             ? [
                 { state: 'not_started', label: 'Not started' },
                 { state: 'complete',    label: 'Completed' },
+              ]
+            : stepKey === 'grant_submission'
+            ? [
+                { state: 'not_started', label: 'Not started' },
+                { state: 'in_progress', label: 'Submitted — awaiting LDC' },
+                { state: 'complete',    label: 'Approved ✓' },
               ]
             : stepKey === 'pbs_mynj'
             ? [
