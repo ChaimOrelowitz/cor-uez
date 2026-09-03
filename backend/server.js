@@ -5,6 +5,7 @@ const uezRoutes = require('./routes/uez');
 const uezAccountsRoutes = require('./routes/uezAccounts');
 const uezAnalyticsRoutes = require('./routes/uezAnalytics');
 const uezDavRoutes = require('./routes/uezDav');
+const davBridgeRoutes = require('./routes/davBridge');
 
 const app = express();
 const allowedOrigins = [
@@ -14,23 +15,19 @@ const allowedOrigins = [
   'http://127.0.0.1:5173'
 ].filter(Boolean);
 
-// iOS probes CardDAV capabilities with OPTIONS before it has necessarily sent
-// Basic Auth credentials. Advertise DAV support here, before the /dav router's
-// auth middleware and before cors(), while keeping every data-bearing DAV
-// request authenticated inside uezDav.js.
-app.options(['/dav', '/dav/*'], (_req, res) => {
-  res.set({
-    DAV: '1, 2, addressbook',
-    Allow: 'OPTIONS, GET, HEAD, PROPFIND, REPORT',
-    'Content-Length': '0'
-  }).status(200).end();
-});
+// Proven CardDAV shape used by the working DSC contacts setup.
+// The Cloudflare Worker sends OPTIONS/PROPFIND/REPORT here as signed POSTs,
+// because Render's edge blocks those DAV verbs before Express sees them.
+app.use('/internal/dav-bridge', davBridgeRoutes);
 
-// CardDAV must be mounted before cors() so DAV methods are not intercepted,
-// and before express.json() so PROPFIND/REPORT XML bodies remain untouched for
-// the DAV route's own body reader.
+// Direct CardDAV discovery/collection routes. No redirects: authenticated
+// CardDAV clients can handle redirects poorly. Keep /dav as a legacy browser
+// health alias, but the iPhone/Worker uses /carddav.
+app.use('/.well-known/carddav', uezDavRoutes);
+app.use('/carddav', uezDavRoutes);
 app.use('/dav', uezDavRoutes);
-app.all('/.well-known/carddav', (_req, res) => res.redirect(301, '/dav/'));
+app.options('/', uezDavRoutes);
+app.propfind('/', uezDavRoutes);
 
 app.use(cors({
   origin(origin, callback) {
