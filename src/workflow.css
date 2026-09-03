@@ -327,7 +327,9 @@
 
   .admin-layout {
     display: block;
+    height: auto;
     min-height: calc(100dvh - 60px);
+    overflow: visible;
   }
 
   /* App-style list/detail navigation: one surface at a time. */
