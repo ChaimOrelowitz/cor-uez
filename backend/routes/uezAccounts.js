@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../db/supabase');
-const { requireUezAdmin } = require('../middleware/uezAuth');
+const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 
 const DOCUMENT_BUCKET = 'uez-documents';
 
+const auth = [requireUezAuth, requireUezAdmin];
+
 // GET /api/uez/admin/accounts — list all auth users
-router.get('/admin/accounts', requireUezAdmin, async (_req, res) => {
+router.get('/admin/accounts', auth, async (_req, res) => {
   try {
     const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 });
     if (error) throw error;
@@ -35,7 +37,7 @@ router.get('/admin/accounts', requireUezAdmin, async (_req, res) => {
 });
 
 // DELETE /api/uez/admin/accounts/:userId — wipe everything: docs, storage, application, auth account
-router.delete('/admin/accounts/:userId', requireUezAdmin, async (req, res) => {
+router.delete('/admin/accounts/:userId', auth, async (req, res) => {
   const userId = req.params.userId;
   try {
     // 1. Find their application(s)
@@ -71,7 +73,7 @@ router.delete('/admin/accounts/:userId', requireUezAdmin, async (req, res) => {
 });
 
 // POST /api/uez/admin/accounts/:userId/lock
-router.post('/admin/accounts/:userId/lock', requireUezAdmin, async (req, res) => {
+router.post('/admin/accounts/:userId/lock', auth, async (req, res) => {
   try {
     const { error } = await supabase.auth.admin.updateUserById(req.params.userId, {
       ban_duration: '876000h', // ~100 years
@@ -84,7 +86,7 @@ router.post('/admin/accounts/:userId/lock', requireUezAdmin, async (req, res) =>
 });
 
 // POST /api/uez/admin/accounts/:userId/unlock
-router.post('/admin/accounts/:userId/unlock', requireUezAdmin, async (req, res) => {
+router.post('/admin/accounts/:userId/unlock', auth, async (req, res) => {
   try {
     const { error } = await supabase.auth.admin.updateUserById(req.params.userId, {
       ban_duration: 'none',
@@ -97,7 +99,7 @@ router.post('/admin/accounts/:userId/unlock', requireUezAdmin, async (req, res) 
 });
 
 // POST /api/uez/admin/accounts/:userId/reset-password
-router.post('/admin/accounts/:userId/reset-password', requireUezAdmin, async (req, res) => {
+router.post('/admin/accounts/:userId/reset-password', auth, async (req, res) => {
   try {
     const { data: user, error: userErr } = await supabase.auth.admin.getUserById(req.params.userId);
     if (userErr || !user?.user?.email) throw userErr || new Error('User not found');
