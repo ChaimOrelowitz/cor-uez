@@ -13,7 +13,9 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173'
 ].filter(Boolean);
-
+// CardDAV — mounted BEFORE cors() and express.json().
+app.use('/dav', uezDavRoutes);
+app.all('/.well-known/carddav', (_req, res) => res.redirect(301, '/dav/'));
 app.use(cors({
   origin(origin, callback) {
     if (
