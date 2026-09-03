@@ -14,9 +14,21 @@ const allowedOrigins = [
   'http://127.0.0.1:5173'
 ].filter(Boolean);
 
-// CardDAV must be mounted before cors() so its OPTIONS response reaches the
-// DAV handler, and before express.json() so PROPFIND/REPORT XML bodies remain
-// untouched for the DAV route's own body reader.
+// iOS probes CardDAV capabilities with OPTIONS before it has necessarily sent
+// Basic Auth credentials. Advertise DAV support here, before the /dav router's
+// auth middleware and before cors(), while keeping every data-bearing DAV
+// request authenticated inside uezDav.js.
+app.options(['/dav', '/dav/*'], (_req, res) => {
+  res.set({
+    DAV: '1, 2, addressbook',
+    Allow: 'OPTIONS, GET, HEAD, PROPFIND, REPORT',
+    'Content-Length': '0'
+  }).status(200).end();
+});
+
+// CardDAV must be mounted before cors() so DAV methods are not intercepted,
+// and before express.json() so PROPFIND/REPORT XML bodies remain untouched for
+// the DAV route's own body reader.
 app.use('/dav', uezDavRoutes);
 app.all('/.well-known/carddav', (_req, res) => res.redirect(301, '/dav/'));
 
