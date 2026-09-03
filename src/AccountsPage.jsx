@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import supabase from './supabaseClient';
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000') + '/api/uez';
 
 function timeAgo(dateStr) {
@@ -34,21 +35,18 @@ export default function AccountsPage() {
   const [flash, setFlash] = useState({});
 
   useEffect(() => {
-    import('@supabase/supabase-js').then(({ createClient }) => {
-      const sb = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_ANON_KEY,
-      );
-      sb.auth.getSession().then(({ data }) => {
-        const tok = data?.session?.access_token;
-        if (!tok) { setError('Not logged in'); setLoading(false); return; }
-        setToken(tok);
-        fetch(`${API_BASE}/admin/accounts`, { headers: { Authorization: `Bearer ${tok}` } })
-
-          .then((r) => r.json())
-          .then((d) => { setUsers(d); setLoading(false); })
-          .catch((e) => { setError(e.message); setLoading(false); });
-      });
+    supabase.auth.getSession().then(({ data }) => {
+      const tok = data?.session?.access_token;
+      if (!tok) { setError('Not logged in — go back to /admin and sign in first.'); setLoading(false); return; }
+      setToken(tok);
+      fetch(`${API_BASE}/admin/accounts`, { headers: { Authorization: `Bearer ${tok}` } })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.error) throw new Error(d.error);
+          setUsers(d);
+          setLoading(false);
+        })
+        .catch((e) => { setError(e.message); setLoading(false); });
     });
   }, []);
 
