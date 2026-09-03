@@ -1204,14 +1204,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="admin-edit-actions">
-            {editMode ? <>
-              <button className="primary" onClick={saveAdminEdits} disabled={busy}>{busy ? 'Saving…' : 'Save all changes'}</button>
-              <button className="secondary" onClick={cancelEditing} disabled={busy}>Cancel</button>
-            </> : <button className="secondary" onClick={startEditing} disabled={busy}>Edit application</button>}
-            <button className="admin-delete-button" onClick={deleteApplication} disabled={busy}>Delete application</button>
-          </div>
-
           {/* attentionItems' checks are the same URGENT_REVIEW_ITEMS
               definition (caseLogic.js) that used to also drive the
               recommended-action banner before it was replaced above — this
@@ -1296,6 +1288,10 @@ export default function AdminPage() {
             saveBrcNotFound={saveBrcNotFound}
             saveProcessStep={saveProcessStep}
             resetProcessStep={resetProcessStep}
+            startEditing={startEditing}
+            saveAdminEdits={saveAdminEdits}
+            cancelEditing={cancelEditing}
+            deleteApplication={deleteApplication}
           />
 
         </>}

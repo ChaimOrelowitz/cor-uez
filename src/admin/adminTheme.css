@@ -2328,3 +2328,23 @@
   font-style: italic;
 }
 
+
+/* Application tab edit bar */
+.admin-shell .cw-app-edit-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--cw-border);
+  background: var(--cw-surface);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.admin-shell .cw-app-edit-bar .admin-delete-button {
+  margin-left: auto;
+}
+.admin-shell .cw-applicant-view {
+  display: flex;
+  flex-direction: column;
+}
