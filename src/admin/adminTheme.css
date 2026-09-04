@@ -24,40 +24,40 @@
 .admin-shell,
 .app-shell.admin-login-shell,
 .app-shell.auth-loading-shell.admin-loading {
-  --admin-bg: #f3f4f6;              /* neutral cool gray page bg — no lavender tint */
-  --admin-surface: #ffffff;
-  --admin-surface-sunken: #f8f9fb;  /* hover rows, inset wells */
-  --admin-border: #dcdfe4;
-  --admin-border-strong: #c7cbd3;
+  --admin-bg: #fbf3e3;              /* vanilla cream page bg */
+  --admin-surface: #fffdf8;         /* card surface — slightly whiter than the page for lift */
+  --admin-surface-sunken: #f3e7cf;  /* hover rows, inset wells — deeper cream */
+  --admin-border: #e6d7b8;
+  --admin-border-strong: #d9c69a;
 
   --admin-text: #1c1f26;
-  --admin-text-muted: #6b7280;
-  --admin-text-faint: #9096a1;
+  --admin-text-muted: #6b6255;
+  --admin-text-faint: #948a7a;
 
-  /* sidebar — dark navy panel, its own independent palette */
-  --admin-sidebar-bg:           #151c2c;
-  --admin-sidebar-surface:      #1d2640;
-  --admin-sidebar-text:         #dde2ee;
-  --admin-sidebar-text-muted:   #8a91a8;
+  /* sidebar — deep forest panel, its own independent palette */
+  --admin-sidebar-bg:           #15241b;
+  --admin-sidebar-surface:      #1d3226;
+  --admin-sidebar-text:         #e3ece5;
+  --admin-sidebar-text-muted:   #8ea795;
   --admin-sidebar-border:       rgba(255,255,255,.07);
   --admin-sidebar-hover:        rgba(255,255,255,.05);
-  --admin-sidebar-active-bg:    rgba(59, 130, 246, .18);
-  --admin-sidebar-active-bar:   #3b82f6;
+  --admin-sidebar-active-bg:    rgba(79, 157, 105, .22);
+  --admin-sidebar-active-bar:   #4f9d69;
 
-  /* accent — vivid blue replaces the old graphite; admin ≠ client indigo */
-  --admin-accent: #2563eb;
-  --admin-accent-hover: #1d4ed8;
-  --admin-accent-soft: #eff6ff;
-  --admin-accent-ring: rgba(37, 99, 235, .22);
+  /* accent — sage green, unified with the success/"done" scale below */
+  --admin-accent: #4f9d69;
+  --admin-accent-hover: #3a7a4e;
+  --admin-accent-soft: #e9f4ec;
+  --admin-accent-ring: rgba(79, 157, 105, .25);
 
   /* step pipeline dots — four semantic states */
-  --dot-done:       #22c55e;
+  --dot-done:       #4f9d69;
   --dot-active:     #2563eb;
   --dot-waiting:    #f59e0b;
   --dot-idle:       #d1d5db;
   --dot-na:         #e5e7eb;
 
-  --admin-good-bg: #eef3ee;   --admin-good-text: #3c6b49;  --admin-good-border: #cddccf;
+  --admin-good-bg: #e3f0e8;   --admin-good-text: #2f7d52;  --admin-good-border: #b9d9c5;
   --admin-warn-bg: #f5efe4;   --admin-warn-text: #8a6a2e;  --admin-warn-border: #e6d9bd;
   --admin-danger-bg: #f6ecea; --admin-danger-text: #9c4a3f; --admin-danger-border: #e3cac5;
 
@@ -241,12 +241,12 @@
 }
 .admin-shell .admin-filter-row button:hover { color: var(--admin-sidebar-text); }
 .admin-shell .admin-filter-row button.active {
-  background: rgba(59, 130, 246, .14);
-  color: #93c5fd;
+  background: rgba(79, 157, 105, .18);
+  color: #8fd6ab;
 }
 .admin-shell .admin-filter-row button.active span {
-  background: rgba(59, 130, 246, .3);
-  color: #bfdbfe;
+  background: rgba(79, 157, 105, .32);
+  color: #c8ecd6;
 }
 
 /* ── Application list rows ────────────────────────────────────────────────── */
@@ -359,8 +359,11 @@
 .admin-shell .sidebar-group-submitted .sidebar-group-count    { background: rgba(34,197,94,.15); color: #86efac; }
 .admin-shell .sidebar-group-cancelled .sidebar-group-label    { color: #9ca3af; opacity: .6; }
 
-/* Sidebar row internals */
-.admin-shell .application-list-item { width: 100%; cursor: pointer; border: none; }
+/* Sidebar row internals — a real <a href="/admin/businesses/:id"> now, so
+   ctrl/cmd/middle-click "open in new tab" and "copy link" work like any
+   other page; display:block + no underline makes it read like the button it
+   replaced. */
+.admin-shell .application-list-item { display: block; width: 100%; cursor: pointer; border: none; text-decoration: none; }
 .admin-shell .sidebar-row-name {
   font-size: 12px;
   font-weight: 600;
@@ -397,6 +400,14 @@
   background: rgba(245,158,11,.2);
   color: #fcd34d;
 }
+/* Global-status badge — same 5 groups as the section headers above, shown on
+   every row too so the status reads at a glance without tracking which
+   section you're scrolled into. */
+.admin-shell .sidebar-badge.status-not_started { background: rgba(255,255,255,.08); color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-badge.status-in_progress { background: rgba(59,130,246,.2);  color: #93c5fd; }
+.admin-shell .sidebar-badge.status-ready       { background: rgba(245,158,11,.22); color: #fde68a; }
+.admin-shell .sidebar-badge.status-submitted   { background: rgba(79,157,105,.22); color: #8fd6ab; }
+.admin-shell .sidebar-badge.status-cancelled   { background: rgba(156,163,175,.15); color: #9ca3af; }
 /* Aging badges — only on in_progress rows */
 .admin-shell .sidebar-badge.aging { font-variant-numeric: tabular-nums; }
 .admin-shell .sidebar-badge.age-warn   { background: rgba(245,158,11,.18); color: #fcd34d; }
@@ -463,7 +474,7 @@
   font-weight: 800;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: #3b82f6;
+  color: #5fbf82;
   display: block;
   margin-bottom: 3px;
 }
@@ -1014,10 +1025,10 @@
   --admin-text-muted:     #8b949e;
   --admin-text-faint:     #6e7681;
 
-  --admin-accent:         #58a6ff;
-  --admin-accent-hover:   #79b8ff;
-  --admin-accent-soft:    rgba(88,166,255,.10);
-  --admin-accent-ring:    rgba(88,166,255,.25);
+  --admin-accent:         #5fbf82;
+  --admin-accent-hover:   #7ed6a0;
+  --admin-accent-soft:    rgba(95,191,130,.10);
+  --admin-accent-ring:    rgba(95,191,130,.25);
 
   --admin-good-bg:        rgba(46,160,67,.15);
   --admin-good-text:      #3fb950;
@@ -1382,21 +1393,21 @@
 
 .admin-shell[data-theme="light"] .cw-shell,
 .admin-shell[data-theme="light"] {
-  --cw-app-bg:       #eef0f2;
-  --cw-rail-bg:      #e5e8ec;
-  --cw-panel:        #ffffff;
-  --cw-card:         #f7f8fa;
-  --cw-input:        #ffffff;
-  --cw-tile:         #ffffff;
-  --cw-frame-border: #d3d8de;
-  --cw-line:         #e1e5ea;
-  --cw-panel-border: #dee3e9;
-  --cw-input-border: #d6dbe1;
-  --cw-border-strong:#c9d0d8;
-  --cw-border-soft:  #e2e6eb;
-  --cw-chip-bg:      #eef1f5;
-  --cw-divider:      #e8ecf0;
-  --cw-bar-empty:    #d6dbe1;
+  --cw-app-bg:       #fbf3e3;
+  --cw-rail-bg:      #f3e7cf;
+  --cw-panel:        #fffdf8;
+  --cw-card:         #f8efdc;
+  --cw-input:        #fffdf8;
+  --cw-tile:         #fffdf8;
+  --cw-frame-border: #e2d3ae;
+  --cw-line:         #ecdfc2;
+  --cw-panel-border: #e6d7b8;
+  --cw-input-border: #ddc99e;
+  --cw-border-strong:#d9c69a;
+  --cw-border-soft:  #efe3c9;
+  --cw-chip-bg:      #f3e7cf;
+  --cw-divider:      #eee0c4;
+  --cw-bar-empty:    #e3d4b0;
 
   --cw-text:         #16191d;
   --cw-text-soft:    #282d34;
@@ -1418,8 +1429,8 @@
   --cw-danger-bg:    #f7e4e1;
 
   --cw-info:         #3a6ea8;
-  --cw-thumb-a:      #eaedf1;
-  --cw-thumb-b:      #f3f5f8;
+  --cw-thumb-a:      #f1e6cf;
+  --cw-thumb-b:      #f8efdc;
 
   --cw-state-complete:    #2f7d52;
   --cw-state-in-progress: #2563eb;
@@ -1776,8 +1787,8 @@
   transition: opacity 0.1s;
 }
 .admin-shell .cw-action-btn:disabled { opacity: .45; cursor: default; }
-.admin-shell .cw-action-primary   { background: #2563eb; color: #fff; }
-.admin-shell .cw-action-primary:hover:not(:disabled)   { background: #1d4ed8; }
+.admin-shell .cw-action-primary   { background: var(--admin-accent); color: #fff; }
+.admin-shell .cw-action-primary:hover:not(:disabled)   { background: var(--admin-accent-hover); }
 .admin-shell .cw-action-secondary { background: var(--cw-chip-bg); color: var(--cw-text-soft); border-color: var(--cw-border-soft); }
 .admin-shell .cw-action-secondary:hover:not(:disabled) { background: var(--cw-border-soft); }
 .admin-shell .cw-action-danger    { background: var(--cw-danger-bg); color: var(--cw-danger); border-color: var(--cw-danger); }
@@ -1893,8 +1904,8 @@
   border: 1px solid transparent;
   cursor: pointer;
 }
-.admin-shell .cw-btn-ok { background: #2563eb; color: #fff; }
-.admin-shell .cw-btn-ok:hover:not(:disabled) { background: #1d4ed8; }
+.admin-shell .cw-btn-ok { background: var(--admin-accent); color: #fff; }
+.admin-shell .cw-btn-ok:hover:not(:disabled) { background: var(--admin-accent-hover); }
 .admin-shell .cw-btn-ghost {
   background: none;
   border: none;
@@ -2003,7 +2014,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #2563eb;
+  background: var(--admin-accent);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -2155,7 +2166,7 @@
 .admin-shell .cw-footer-tab:hover { color: var(--cw-text-soft); }
 .admin-shell .cw-footer-tab-active {
   color: var(--cw-text);
-  border-bottom-color: #2563eb;
+  border-bottom-color: var(--admin-accent);
 }
 
 .admin-shell .cw-footer-panel { padding: 12px 14px; max-height: 340px; overflow-y: auto; }

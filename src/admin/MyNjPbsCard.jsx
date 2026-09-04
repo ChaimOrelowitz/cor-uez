@@ -47,7 +47,7 @@ export default function MyNjPbsCard({
             <label>Existing MyNJ username<input value={pbsLoginDraft.username || myNjCredentials?.username || ''} onChange={(e) => onChangePbsLoginDraft((old) => ({ ...old, username: e.target.value }))} /></label>
             <label>Existing MyNJ password<input type="password" value={pbsLoginDraft.password || myNjCredentials?.password || ''} onChange={(e) => onChangePbsLoginDraft((old) => ({ ...old, password: e.target.value }))} /></label>
           </div>}
-          <button className="secondary admin-full-button" onClick={onSavePbsAnswer} disabled={busy}>Save PBS answer</button>
+          <button className="secondary admin-full-button" onClick={onSavePbsAnswer}>Save PBS answer</button>
         </div>
         {myNjCredentials ? <>
           {myNjEditMode ? <div className="credential-edit-grid">
@@ -56,8 +56,8 @@ export default function MyNjPbsCard({
             <label>Challenge question <span className="required-star">*</span><input value={myNjDraft?.challengeQuestion || ''} onChange={(e) => onChangeMyNjDraft((old) => ({ ...old, challengeQuestion: e.target.value }))} /></label>
             <label>Challenge answer <span className="required-star">*</span><input value={myNjDraft?.challengeAnswer || ''} onChange={(e) => onChangeMyNjDraft((old) => ({ ...old, challengeAnswer: e.target.value }))} /></label>
             <div className="admin-action-row">
-              <button className="primary" onClick={onSaveMyNjCredentials} disabled={busy}>Save login information</button>
-              <button className="secondary" onClick={onCancelMyNjEdit} disabled={busy}>Cancel</button>
+              <button className="primary" onClick={onSaveMyNjCredentials}>Save login information</button>
+              <button className="secondary" onClick={onCancelMyNjEdit}>Cancel</button>
             </div>
           </div> : <>
             <div className="credential-grid">
@@ -81,7 +81,7 @@ export default function MyNjPbsCard({
           <button
             className="primary admin-full-button"
             onClick={onCreateMyNjCredentials}
-            disabled={busy || application.brc_status !== 'found'}
+            disabled={application.brc_status !== 'found'}
           >Generate missing MyNJ login</button>
           {application.brc_status !== 'found' && <p className="admin-help">The BRC must be confirmed first.</p>}
         </>}

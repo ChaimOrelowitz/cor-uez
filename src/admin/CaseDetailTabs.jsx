@@ -353,7 +353,7 @@ export default function CaseDetailTabs({
               onBlur={saveNote}
               placeholder="Add a note…"
               rows={2}
-              disabled={busy}
+             
             />
             {noteDraftLocal.trim() && (
               <div className="cw-composer-actions">
@@ -363,7 +363,7 @@ export default function CaseDetailTabs({
                   className="cw-btn cw-btn-ok"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={saveNote}
-                  disabled={busy}
+                 
                 >Save note</button>
                 {/* Discard: clear the draft on mousedown so the blur handler sees an empty body */}
                 <button
@@ -533,13 +533,13 @@ export default function CaseDetailTabs({
                   <div className="cw-app-edit-bar">
                     {editMode ? (
                       <>
-                        <button className="primary" onClick={saveAdminEdits} disabled={busy}>{busy ? 'Saving…' : 'Save all changes'}</button>
-                        <button className="secondary" onClick={cancelEditing} disabled={busy}>Cancel</button>
+                        <button className="primary" onClick={saveAdminEdits}>{busy ? 'Saving…' : 'Save all changes'}</button>
+                        <button className="secondary" onClick={cancelEditing}>Cancel</button>
                       </>
                     ) : (
-                      <button className="secondary" onClick={() => { startEditing(); setFooterOpen(true); setFooterTab('applicant'); }} disabled={busy}>Edit application</button>
+                      <button className="secondary" onClick={() => { startEditing(); setFooterOpen(true); setFooterTab('applicant'); }}>Edit application</button>
                     )}
-                    <button className="admin-delete-button" onClick={deleteApplication} disabled={busy}>Delete application</button>
+                    <button className="admin-delete-button" onClick={deleteApplication}>Delete application</button>
                   </div>
 
                   {/* ── Business (reuses the existing editable card) ── */}
@@ -782,14 +782,14 @@ function StepPanel({
                 className={`cw-state-chip${active ? ' cw-state-chip-active' : ''}`}
                 style={active ? { background: st.bg, border: `1px solid ${st.border}`, color: st.fg } : undefined}
                 onClick={() => saveProcessStep(stepKey, { state: s, waitingOn: null, waitingSince: null, waitingReason: null, manualNote: step.manualNote || null })}
-                disabled={busy}
+               
               >
                 {label}
               </button>
             );
           })}
           {step.source === 'explicit' && (
-            <button className="cw-state-chip cw-reset-chip" onClick={() => resetProcessStep(stepKey)} disabled={busy}>
+            <button className="cw-state-chip cw-reset-chip" onClick={() => resetProcessStep(stepKey)}>
               Reset to auto
             </button>
           )}
@@ -895,7 +895,7 @@ function StepPanel({
           onBlur={saveStepNote}
           placeholder="Add a note for this step…"
           rows={3}
-          disabled={busy}
+         
         />
       </div>
 
@@ -988,11 +988,11 @@ function StepFields({
       return (
         <div className="cw-fields cw-fields-col1">
           <FieldPair label="Registered business name" value={brcForm.registeredBusinessName}
-            onChange={(v) => setBrcForm((f) => ({ ...f, registeredBusinessName: v }))} disabled={busy} />
+            onChange={(v) => setBrcForm((f) => ({ ...f, registeredBusinessName: v }))} />
           <FieldPair label="Trade name / DBA" value={brcForm.tradeName}
-            onChange={(v) => setBrcForm((f) => ({ ...f, tradeName: v }))} disabled={busy} />
+            onChange={(v) => setBrcForm((f) => ({ ...f, tradeName: v }))} />
           <FieldPair label="Address" value={brcForm.address}
-            onChange={(v) => setBrcForm((f) => ({ ...f, address: v }))} disabled={busy} />
+            onChange={(v) => setBrcForm((f) => ({ ...f, address: v }))} />
           <span className="cw-field-label">BRC status</span>
           <span className="cw-field-value">{app.brc_status || '—'}</span>
         </div>
@@ -1003,9 +1003,9 @@ function StepFields({
         return (
           <div className="cw-fields cw-fields-col1">
             <FieldPair label="MyNJ username" value={myNjDraft.username || ''}
-              onChange={(v) => setMyNjDraft((d) => ({ ...d, username: v }))} disabled={busy} />
+              onChange={(v) => setMyNjDraft((d) => ({ ...d, username: v }))} />
             <FieldPair label="MyNJ password" value={myNjDraft.password || ''}
-              onChange={(v) => setMyNjDraft((d) => ({ ...d, password: v }))} disabled={busy} />
+              onChange={(v) => setMyNjDraft((d) => ({ ...d, password: v }))} />
           </div>
         );
       }
@@ -1139,7 +1139,7 @@ function StepActions({
       type="button"
       className={`cw-action-btn cw-action-${variant}`}
       onClick={onClick}
-      disabled={busy || dis}
+      disabled={dis}
     >{label}</button>
   );
 

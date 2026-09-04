@@ -28,7 +28,7 @@ export default function EmailComposer({ composer, onChangeSubject, onChangeBody,
       <div className="document-modal email-composer-modal" role="dialog" aria-modal="true" aria-label="Send email">
         <div className="document-modal-head">
           <div><strong>Send email</strong><small>{TEMPLATE_LABELS[composer.templateKey] || composer.templateKey}</small></div>
-          <button onClick={onClose} aria-label="Close" disabled={composer.sending}>×</button>
+          <button onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="document-modal-body email-composer-body">
           {composer.loading ? <div className="document-modal-loading">Loading preview…</div> : composer.error && !composer.subject ? <p className="admin-message">{composer.error}</p> : <>
@@ -40,9 +40,9 @@ export default function EmailComposer({ composer, onChangeSubject, onChangeBody,
             {composer.error && <p className="admin-message admin-message-error">{composer.error}</p>}
             <label>To</label><input value={composer.recipient} disabled />
             <label>Subject</label>
-            <input value={composer.subject} onChange={(e) => onChangeSubject(e.target.value)} disabled={composer.sending || Boolean(composer.sentResult?.sent)} />
+            <input value={composer.subject} onChange={(e) => onChangeSubject(e.target.value)} disabled={Boolean(composer.sentResult?.sent)} />
             <label>Body</label>
-            <textarea rows={10} value={composer.body} onChange={(e) => onChangeBody(e.target.value)} disabled={composer.sending || Boolean(composer.sentResult?.sent)} />
+            <textarea rows={10} value={composer.body} onChange={(e) => onChangeBody(e.target.value)} disabled={Boolean(composer.sentResult?.sent)} />
             {composer.attachments?.length > 0 && <div className="email-composer-attachments">
               <label>Attachments</label>
               {composer.attachments.map((a) => (
@@ -56,7 +56,7 @@ export default function EmailComposer({ composer, onChangeSubject, onChangeBody,
         </div>
         <div className="document-modal-footer">
           <div></div>
-          {!composer.sentResult?.sent && <button className="primary" onClick={onSend} disabled={composer.loading || composer.sending || !composer.subject}>{composer.sending ? 'Sending…' : 'Send'}</button>}
+          {!composer.sentResult?.sent && <button className="primary" onClick={onSend} disabled={composer.loading || !composer.subject}>{composer.sending ? 'Sending…' : 'Send'}</button>}
           {composer.sentResult?.sent && <button className="secondary" onClick={onClose}>Done</button>}
         </div>
       </div>

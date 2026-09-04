@@ -536,12 +536,11 @@ router.post('/admin/applications/:id/tax-clearance-issue', requireUezAdmin, uplo
       true
     );
 
-    const emailResult = await safeSendApplicationEmail(application, 'tax_issue', {
-      attachments: [{ filename: req.file.originalname || 'NJ-Tax-Clearance-Issue.png', content: req.file.buffer.toString('base64') }],
-      dedupeKey: `tax_issue:${application.id}:${document.id}`
-    });
+    // No auto-email — the admin reviews the captured screenshot and sends the
+    // tax-issue instructions themselves via the "Send email" button, which
+    // opens the composer to preview/edit before it goes out.
 
-    res.status(201).json({ document, email: emailResult });
+    res.status(201).json({ document });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -854,16 +853,8 @@ router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, asyn
         req.user.id,
         true
       );
-      const credentials = decryptCredential(credential);
-      await safeSendApplicationEmail(data, 'pbs_account_created', {
-        dedupeKey: `pbs_account_created:${application.id}`,
-        extra: {
-          pbs_username: credentials.username,
-          pbs_password: credentials.password,
-          challenge_question: credentials.challengeQuestion,
-          challenge_answer: credentials.challengeAnswer
-        }
-      });
+      // No auto-email — the admin sends the PBS login details via the
+      // "Send email" button, which opens the composer to preview/edit first.
     }
 
     res.json(data);
@@ -986,11 +977,8 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
     if (Object.keys(patch).length === 1) return res.status(400).json({ error: 'No process status was supplied.' });
     const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();
     if (error) throw error;
-    if (body.uezApplicationStatus === 'applied' && application.uez_application_status !== 'applied') {
-      await safeSendApplicationEmail(data, 'uez_application_submitted', {
-        dedupeKey: `uez_application_submitted:${application.id}`
-      });
-    }
+    // No auto-email — the admin sends the "UEZ application submitted"
+    // notice via the "Send email" button, which opens the composer first.
     res.json(data);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1526,11 +1514,8 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
       req.user.id,
       req.body?.visibleToApplicant !== false
     );
-    if (status === 'grant_submitted') {
-      await safeSendApplicationEmail(data, 'grant_submitted', {
-        dedupeKey: `grant_submitted:${application.id}`
-      });
-    }
+    // No auto-email — the admin sends the "Grant submitted" confirmation via
+    // the "Send email" button, which opens the composer to preview/edit first.
 
     res.json(data);
   } catch (err) {

@@ -22,8 +22,8 @@ export default function BrcDetailsCard({ application, brcForm, busy, onChangeBrc
         {/* Sending the BRC problem email lives on the BRC process card above
             now — one action surface instead of two identical buttons. */}
         <div className="admin-action-row">
-          <button className="success-button" onClick={onBrcFound} disabled={busy}>✓ BRC found</button>
-          <button className="warning-button" onClick={onBrcNotFound} disabled={busy}>No BRC found</button>
+          <button className="success-button" onClick={onBrcFound}>✓ BRC found</button>
+          <button className="warning-button" onClick={onBrcNotFound}>No BRC found</button>
         </div>
       </section>
     </details>

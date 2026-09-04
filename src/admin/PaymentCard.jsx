@@ -19,7 +19,7 @@ export default function PaymentCard({ payments, draft, busy, onDraftChange, onCo
           <div><label>Reference</label><input value={draft.reference} onChange={(e) => onDraftChange((old) => ({ ...old, reference: e.target.value }))} /></div>
           <div className="admin-edit-wide"><label>Notes</label><input value={draft.notes} onChange={(e) => onDraftChange((old) => ({ ...old, notes: e.target.value }))} /></div>
         </div>
-        {latest?.status !== 'paid' && <button className="success-button admin-full-button" onClick={onConfirm} disabled={busy}>✓ Confirm payment received</button>}
+        {latest?.status !== 'paid' && <button className="success-button admin-full-button" onClick={onConfirm}>✓ Confirm payment received</button>}
       </section>
     </details>
   );

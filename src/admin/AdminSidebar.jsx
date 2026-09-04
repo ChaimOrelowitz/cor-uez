@@ -18,6 +18,15 @@ const GROUP_LABELS = {
   submitted:   'Submitted',
   cancelled:   'Cancelled',
 };
+// Compact form of the same 5 statuses for the per-row badge (GROUP_LABELS is
+// used as-is for the section headers, where there's more room).
+const ROW_STATUS_LABELS = {
+  not_started: 'New',
+  in_progress: 'In Progress',
+  ready:       'Ready',
+  submitted:   'Submitted',
+  cancelled:   'Cancelled',
+};
 
 // Days since a date string — returns null if date is missing/invalid
 function daysSince(dateStr) {
@@ -87,15 +96,24 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                 const days = groupKey === 'in_progress' ? daysSince(app.updated_at) : null;
                 const tone = agingTone(days);
                 return (
-                  <button
+                  <a
                     key={app.id}
+                    href={`/admin/businesses/${encodeURIComponent(app.id)}`}
                     className={`application-list-item sidebar-group-item-${groupKey} ${selectedId === app.id ? 'active' : ''}`}
-                    onClick={() => onSelectApplication(app.id)}
+                    onClick={(e) => {
+                      // Plain left-click navigates in place (same handler as
+                      // before); ctrl/cmd/shift/middle-click falls through to
+                      // the real href so "open in new tab" / "copy link" work.
+                      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                      e.preventDefault();
+                      onSelectApplication(app.id);
+                    }}
                   >
                     <div className="sidebar-row-name">
                       {app.business_name_input || 'Unnamed business'}
                     </div>
                     <div className="sidebar-row-meta">
+                      <span className={`sidebar-badge status-${groupKey}`}>{ROW_STATUS_LABELS[groupKey]}</span>
                       <span className="sidebar-row-date">
                         {app.created_at ? new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
                       </span>
@@ -103,7 +121,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                       {paymentPending && <span className="sidebar-badge payment-pending">$ Pending</span>}
                       {tone && <span className={`sidebar-badge aging ${tone}`} title={`No activity in ${days} days`}>{days}d</span>}
                     </div>
-                  </button>
+                  </a>
                 );
               })}
             </div>

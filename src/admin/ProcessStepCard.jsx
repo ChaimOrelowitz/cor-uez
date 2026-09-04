@@ -82,7 +82,6 @@ export default function ProcessStepCard({ stepKey, title, factsContent, operatio
           className={`status-pill status-pill-select ${pillTone}`}
           value={operational.state}
           onChange={(e) => changeState(e.target.value)}
-          disabled={busy || saving}
         >
           {PROCESS_STEP_STATES.map((s) => <option key={s} value={s}>{STATE_LABELS[s]}</option>)}
           {operational.source === 'explicit' && <option value={RESET_VALUE}>↺ Reset to auto</option>}
@@ -110,7 +109,7 @@ export default function ProcessStepCard({ stepKey, title, factsContent, operatio
       {actions?.length > 0 && <div className="process-step-actions">
         {actions.map((action) => (
           <div key={action.label} className="process-step-action">
-            <button className="ops-action primary" onClick={action.onClick} disabled={action.disabled || busy}>{action.label}</button>
+            <button className="ops-action primary" onClick={action.onClick} disabled={action.disabled}>{action.label}</button>
           </div>
         ))}
       </div>}

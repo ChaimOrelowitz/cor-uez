@@ -24,7 +24,7 @@ export default function DocumentsPanel({
                 <span><strong>{documentLabel(doc.document_type)}</strong><small>{doc.filename}</small></span>
                 <b>Open</b>
               </button>
-              <button type="button" className="admin-doc-delete-btn" onClick={() => onDelete(doc)} disabled={busy} title="Delete document">
+              <button type="button" className="admin-doc-delete-btn" onClick={() => onDelete(doc)} title="Delete document">
                 Delete
               </button>
             </div>

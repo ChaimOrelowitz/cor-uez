@@ -85,6 +85,18 @@ const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCL
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
 const NJ_PBS_URL = 'https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login';
 
+// Each business gets its own URL — /admin/businesses/:id — so a refresh (or a
+// bookmark, or the back button) lands back on the same business instead of
+// whatever the list API happens to return first.
+function businessIdFromPath() {
+  const match = window.location.pathname.match(/^\/admin\/businesses\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function businessUrl(id) {
+  return `/admin/businesses/${encodeURIComponent(id)}`;
+}
+
 function openOfficialBrcLookup(application) {
   const target = `cor-brc-${application.id}`;
   const popup = window.open('about:blank', target, 'width=1050,height=850,resizable=yes,scrollbars=yes');
@@ -172,6 +184,19 @@ export default function AdminPage() {
     return () => { active = false; };
   }, []);
 
+  // Back/forward between /admin/businesses/:id URLs switches businesses —
+  // openApplication() only replaces the URL, so this is the only path that
+  // needs to react to the browser's own navigation.
+  useEffect(() => {
+    function onPopState() {
+      const id = businessIdFromPath();
+      if (id && id !== selectedId) openApplication(id);
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   // No blind interval here on purpose — every mutation already calls refreshList()
   // itself with the exact result of what just happened, so a timer re-fetching
   // everything every few seconds was only ever fighting whatever you were doing
@@ -220,7 +245,7 @@ export default function AdminPage() {
       const me = await whoAmI();
       setProfile(me);
       if (me.role !== 'admin') throw new Error('This account does not have UEZ admin access.');
-      await refreshList();
+      await refreshList(businessIdFromPath());
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -238,6 +263,11 @@ export default function AdminPage() {
   async function openApplication(id) {
     setSelectedId(id);
     setMessage('');
+    // Keep the URL in sync with whatever business is actually loaded — a plain
+    // correction (replaceState), not a new history entry. selectApplication()
+    // below pushes a real entry for deliberate sidebar clicks.
+    const url = businessUrl(id);
+    if (window.location.pathname !== url) window.history.replaceState(null, '', url);
     try {
       const data = await getAdminApplication(id);
       setDetail(data);
@@ -427,6 +457,12 @@ export default function AdminPage() {
         if (message.status === 'complete') finish(null, { status: 'complete', taxIssue: Boolean(message.taxIssue), ambiguous: Boolean(message.ambiguous) });
         if (message.status === 'not_found') finish(null, { status: 'not_found' });
         if (message.status === 'error') finish(new Error(message.error || 'The document retrieval did not finish.'));
+        // The extension closes this out with status 'cancelled' when the admin
+        // closes its popup window before the workflow finished (background.js's
+        // chrome.windows.onRemoved listener). Without this branch the promise
+        // above never settles, which used to leave `busy` — and the in-progress
+        // status message — stuck indefinitely.
+        if (message.status === 'cancelled') finish(null, { status: 'cancelled' });
       };
       window.addEventListener('message', onMessage);
       window.postMessage({ source: 'cor-uez-app', type: 'COR_UEZ_START', requestId, workflow, payload }, window.location.origin);
@@ -455,6 +491,8 @@ export default function AdminPage() {
         await markAdminBrcNotFound(detail.application.id);
         await refreshList(detail.application.id);
         setMessage('NJ did not find a matching BRC — marked as not found automatically.');
+      } else if (outcome.status === 'cancelled') {
+        setMessage('BRC check window closed before it finished. Nothing was saved — start it again when ready.');
       } else {
         throw new Error(outcome.error || 'The BRC check did not finish.');
       }
@@ -482,6 +520,7 @@ export default function AdminPage() {
         ein: detail.application.ein,
         accessToken: currentSession.access_token
       });
+      if (outcome.status === 'cancelled') { setMessage('PBS setup window closed before it finished. Nothing was saved — start it again when ready.'); return; }
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The PBS workflow did not finish.');
       await refreshList(detail.application.id);
       setMessage('PBS account and business setup completed.');
@@ -506,6 +545,7 @@ export default function AdminPage() {
         ein: detail.application.ein,
         accessToken: currentSession.access_token
       });
+      if (outcome.status === 'cancelled') { setMessage('PBS login window closed before it finished.'); return; }
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'PBS login did not finish.');
       setMessage('PBS is open and signed in.');
     } catch (err) {
@@ -527,6 +567,7 @@ export default function AdminPage() {
         businessName: detail.application.registered_business_name || detail.application.business_name_input,
         accessToken: currentSession.access_token
       });
+      if (outcome.status === 'cancelled') { setMessage('Tax-clearance window closed before it finished. Nothing was saved — start it again when ready.'); return; }
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');
       await refreshList(detail.application.id);
       setMessage(outcome.taxIssue
@@ -567,6 +608,7 @@ export default function AdminPage() {
         businessName: detail.application.registered_business_name || detail.application.business_name_input,
         accessToken: currentSession.access_token
       });
+      if (outcome.status === 'cancelled') { setMessage('LDC application window closed before it finished. Nothing was saved — start it again when ready.'); return; }
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The LDC application workflow did not finish.');
       await refreshList(detail.application.id);
       setMessage("LDC application submitted. The signed JotForm PDF is saved in this applicant's Documents.");
@@ -589,6 +631,7 @@ export default function AdminPage() {
         businessName: detail.application.registered_business_name || detail.application.business_name_input,
         accessToken: currentSession.access_token
       });
+      if (outcome.status === 'cancelled') { setMessage('Lakewood grant window closed before it finished. Nothing was saved — start it again when ready.'); return; }
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The Lakewood grant workflow did not finish.');
       await refreshList(detail.application.id);
       setMessage(outcome.ambiguous
@@ -849,11 +892,11 @@ export default function AdminPage() {
   }
 
   // The rest of the per-step "send the email for this step" actions, same
-  // preview-then-send flow via openEmailComposer/EmailComposer. Each of
-  // these already fires automatically at the moment the step actually
-  // happens (see backend/routes/uez.js) - these buttons are for previewing
-  // or resending it on demand, e.g. if it bounced or COR wants to check the
-  // wording before it reaches the client.
+  // preview-then-send flow via openEmailComposer/EmailComposer. None of these
+  // send automatically (see backend/routes/uez.js) — every one of them is
+  // click "Send email" → preview what will actually go out → click Send.
+  // The only two emails that still fire on their own are the welcome email
+  // (on application submit) and payment_received (on payment confirmation).
   function sendPbsAccountCreatedEmail() {
     openEmailComposer('pbs_account_created');
   }
@@ -1090,6 +1133,9 @@ export default function AdminPage() {
 
   function selectApplication(id) {
     setMobileDetailOpen(true);
+    // A deliberate click gets a real history entry so back/forward moves
+    // between businesses; openApplication() only ever replaces the URL.
+    if (id !== selectedId) window.history.pushState(null, '', businessUrl(id));
     openApplication(id);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
@@ -1112,7 +1158,7 @@ export default function AdminPage() {
             <form onSubmit={handleLogin}>
               <label>Email</label><input type="email" value={login.email} onChange={(e) => setLogin((old) => ({ ...old, email: e.target.value }))} />
               <label>Password</label><input type="password" value={login.password} onChange={(e) => setLogin((old) => ({ ...old, password: e.target.value }))} />
-              <button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+              <button className="primary">{busy ? 'Signing in…' : 'Sign in'}</button>
             </form>
             {message && <div className="validation-error">{message}</div>}
           </div>
@@ -1182,7 +1228,6 @@ export default function AdminPage() {
                   className={`cockpit-status-select gs-${globalStatusValue(detail.application.status)}`}
                   value={globalStatusValue(detail.application.status)}
                   onChange={(e) => setGlobalStatus(e.target.value)}
-                  disabled={busy}
                   title="Set application status"
                 >
                   <option value="not_started">Not Started</option>
@@ -1197,7 +1242,7 @@ export default function AdminPage() {
                   <button
                     className="cockpit-open-pbs-btn"
                     onClick={runPbsLogin}
-                    disabled={busy || !myNjCredentials}
+                    disabled={!myNjCredentials}
                     title={!myNjCredentials ? 'MyNJ credentials required' : 'Open PBS and log in'}
                   >Open PBS</button>
                 </div>
@@ -1309,7 +1354,7 @@ export default function AdminPage() {
             <div className="document-modal-body">{previewBusy ? <div className="document-modal-loading">Loading document…</div> : previewUrl ? <iframe src={previewUrl} title={previewDoc.filename} /> : null}</div>
             <div className="document-modal-footer">
               <div>{previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer">Open in new tab</a>}</div>
-              {(previewDoc.document_type === 'formation' || previewDoc.document_type === 'uez_approval_email') && <div className="document-review-actions"><button className="warning-button" onClick={() => reviewPreviewDoc('rejected')} disabled={busy}>Wrong document</button><button className="success-button" onClick={() => reviewPreviewDoc('approved')} disabled={busy}>✓ Approve</button></div>}
+              {(previewDoc.document_type === 'formation' || previewDoc.document_type === 'uez_approval_email') && <div className="document-review-actions"><button className="warning-button" onClick={() => reviewPreviewDoc('rejected')}>Wrong document</button><button className="success-button" onClick={() => reviewPreviewDoc('approved')}>✓ Approve</button></div>}
             </div>
           </div>
         </div>}

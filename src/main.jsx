@@ -22,7 +22,10 @@ function AdminWithAnalytics() {
 
 const path = window.location.pathname;
 let Root;
-if (path === '/admin') Root = AdminWithAnalytics;
+// /admin/businesses/:id gives each business its own URL (AdminPage reads the
+// id back out of the path) - matched before the other /admin/* exact routes
+// below so a business id never collides with signup-layout/email-settings/etc.
+if (path === '/admin' || /^\/admin\/businesses\/[^/]+$/.test(path)) Root = AdminWithAnalytics;
 else if (path === '/admin/demo-client') Root = () => <App demoMode />;
 else if (path === '/admin/signup-layout') Root = SignupLayoutPage;
 else if (path === '/admin/email-settings') Root = EmailSettingsPage;
