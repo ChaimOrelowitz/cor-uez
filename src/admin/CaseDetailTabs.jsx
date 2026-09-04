@@ -55,9 +55,9 @@ const STEP_DOC_TYPE = {
 // ── State chip styling ────────────────────────────────────────────────────────
 function stateStyle(state) {
   switch (state) {
-    case 'complete':        return { bg: '#1a2c1e', border: '#2d5035', fg: '#57c98a' };
-    case 'in_progress':     return { bg: '#182030', border: '#2a3a54', fg: '#6f9fd8' };
-    case 'waiting':         return { bg: '#2a1f08', border: '#4a3610', fg: '#e0a23c' };
+    case 'complete':        return { bg: '#1a2c1e', border: '#2d5035', fg: '#34d399' };
+    case 'in_progress':     return { bg: '#182030', border: '#2a3a54', fg: '#60a5fa' };
+    case 'waiting':         return { bg: '#2a1f08', border: '#4a3610', fg: '#fbbf24' };
     case 'not_applicable':  return { bg: '#1a1c20', border: '#2c3038', fg: '#6f7883' };
     case 'manual':          return { bg: '#1e1a28', border: '#352d44', fg: '#a08cd8' };
     case 'cancelled':       return { bg: '#261519', border: '#3d2228', fg: '#c0726a' };
@@ -68,9 +68,9 @@ function stateStyle(state) {
 // ── Segment bar colour ────────────────────────────────────────────────────────
 function segBarColor(state) {
   switch (state) {
-    case 'complete':       return '#57c98a';
-    case 'in_progress':   return '#6f9fd8';
-    case 'waiting':       return '#e0a23c';
+    case 'complete':       return '#34d399';
+    case 'in_progress':   return '#60a5fa';
+    case 'waiting':       return '#fbbf24';
     case 'not_applicable':return '#2a3038';
     default:              return '#2a3038';
   }
@@ -268,7 +268,7 @@ export default function CaseDetailTabs({
               className={`cw-seg${active ? ' cw-seg-active' : ''}`}
               onClick={() => setSelectedStep(key)}
             >
-              <span className="cw-seg-bar" style={{ background: active ? segBarColor(step.state) : segBarColor(step.state) + '80' }} />
+              <span className="cw-seg-bar" style={{ background: active ? segBarColor(step.state) : segBarColor(step.state) + 'b3' }} />
               <span className="cw-seg-title">{SEG_LABEL[key]}</span>
               <span className="cw-seg-state" style={{ color: active ? segBarColor(step.state) : undefined }}>
                 {PROCESS_STEP_STATE_LABELS[step.state] || step.state}

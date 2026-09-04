@@ -251,7 +251,10 @@
 
 /* ── Application list rows ────────────────────────────────────────────────── */
 .admin-shell .application-list-item {
-  border-bottom: 1px solid var(--admin-sidebar-border);
+  /* A visibly-there but light hairline between rows — the shared
+     --admin-sidebar-border token (7% white) reads as basically invisible
+     here, so this row divider uses its own slightly stronger opacity. */
+  border-bottom: 1px solid rgba(255,255,255,.14);
   background: transparent;
   padding: 9px 14px;
   color: var(--admin-sidebar-text);
