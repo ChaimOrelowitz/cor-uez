@@ -840,6 +840,8 @@ function StepPanel({
             myNjEditMode={myNjEditMode} myNjDraft={myNjDraft} setMyNjDraft={setMyNjDraft}
             showMyNjSecrets={showMyNjSecrets}
             copyCredential={copyCredential}
+            saveMyNjCredentials={saveMyNjCredentials}
+            cancelMyNjEdit={cancelMyNjEdit}
           />
         </div>
       </div>
@@ -965,7 +967,7 @@ function StepFields({
   paymentDraft, setPaymentDraft,
   pbsAnswerDraft, pbsLoginDraft, setPbsLoginDraft,
   myNjEditMode, myNjDraft, setMyNjDraft, showMyNjSecrets,
-  copyCredential,
+  copyCredential, saveMyNjCredentials, cancelMyNjEdit,
 }) {
   const app = detail.application;
 
@@ -1006,6 +1008,17 @@ function StepFields({
               onChange={(v) => setMyNjDraft((d) => ({ ...d, username: v }))} />
             <FieldPair label="MyNJ password" value={myNjDraft.password || ''}
               onChange={(v) => setMyNjDraft((d) => ({ ...d, password: v }))} />
+            <FieldPair label="Challenge question" value={myNjDraft.challengeQuestion || ''}
+              onChange={(v) => setMyNjDraft((d) => ({ ...d, challengeQuestion: v }))} />
+            <FieldPair label="Challenge answer" value={myNjDraft.challengeAnswer || ''}
+              onChange={(v) => setMyNjDraft((d) => ({ ...d, challengeAnswer: v }))} />
+            {/* Save/Cancel live right next to the fields they apply to —
+                the step's own Actions row (further down the page) also has
+                a copy, but editing and saving should not require a scroll. */}
+            <div className="cw-action-btn-row">
+              <button type="button" className="cw-action-btn cw-action-ok" onClick={saveMyNjCredentials}>💾 Save credentials</button>
+              <button type="button" className="cw-action-btn cw-action-secondary" onClick={cancelMyNjEdit}>Cancel</button>
+            </div>
           </div>
         );
       }
@@ -1024,6 +1037,16 @@ function StepFields({
               <span className="cw-field-value cw-mono">
                 {myNjCredentials.password}
                 <button className="cw-copy-btn" onClick={() => copyCredential(myNjCredentials.password, 'Password')}>Copy</button>
+              </span>
+              <span className="cw-field-label">Challenge question</span>
+              <span className="cw-field-value cw-mono">
+                {myNjCredentials.challengeQuestion}
+                <button className="cw-copy-btn" onClick={() => copyCredential(myNjCredentials.challengeQuestion, 'Challenge question')}>Copy</button>
+              </span>
+              <span className="cw-field-label">Challenge answer</span>
+              <span className="cw-field-value cw-mono">
+                {myNjCredentials.challengeAnswer}
+                <button className="cw-copy-btn" onClick={() => copyCredential(myNjCredentials.challengeAnswer, 'Challenge answer')}>Copy</button>
               </span>
             </>
           ) : (

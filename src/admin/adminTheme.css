@@ -1780,6 +1780,16 @@
   margin-top: 6px;
 }
 
+/* Inline Save/Cancel next to an editable field group (e.g. MyNJ credentials)
+   so saving never requires scrolling down to the separate Actions row. */
+.admin-shell .cw-action-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
 .admin-shell .cw-action-btn {
   font-size: 11px;
   font-weight: 600;
