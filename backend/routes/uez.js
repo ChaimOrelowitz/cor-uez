@@ -467,26 +467,23 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     }
 
     if (documentType === 'uez_approval_email') {
-      // Chaim wants the upload itself to be the approval trigger, not a
-      // separate review click — the admin can still correct a wrong file
-      // afterward via the document preview's "Wrong document" action
-      // (documents/:id/review), which reverts uez_application_status to
-      // 'applied' and marks the review rejected.
+      // The file arriving is a fact; whether it's actually a valid approval
+      // email is a verdict the software can't read from a PDF — that stays a
+      // deliberate admin click (documents/:id/review's "✓ Approve" / "Wrong
+      // document"), not something the upload itself decides.
       const now = new Date().toISOString();
       const { error: appError } = await supabase.from('uez_applications').update({
         pbs_status: 'uez_approval_uploaded',
-        uez_approval_review_status: 'approved',
-        uez_application_status: 'approved',
-        uez_application_submitted: true,
+        uez_approval_review_status: 'not_reviewed',
         updated_at: now
       }).eq('id', application.id);
       if (appError) throw appError;
 
       await addStatusEvent(
         application.id,
-        'uez_approval_approved',
-        'UEZ application approved',
-        'We received your Notice of Certification Application Approved email — your UEZ enrollment is approved.',
+        'uez_approval_uploaded',
+        'UEZ approval email uploaded',
+        'We received your Notice of Certification Application Approved email. COR will verify it and continue your application.',
         req.user.id,
         true
       );

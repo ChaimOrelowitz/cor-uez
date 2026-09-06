@@ -822,6 +822,26 @@ function StepPanel({
               <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
             </div>
           </>
+        ) : stepKey === 'tax_clearance' ? (
+          <>
+            <div className="cw-doc-col">
+              <span className="cw-field-label cw-mono">TAX CLEARANCE</span>
+              <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
+            </div>
+            {/* Only shown once NJ has actually reported an issue — most
+                applications never have one of these. */}
+            {docFor(detail, 'tax_clearance_issue') && (
+              <div className="cw-doc-col">
+                <span className="cw-field-label cw-mono">TC ISSUE SCREENSHOT</span>
+                <DocThumbnail
+                  doc={docFor(detail, 'tax_clearance_issue')}
+                  applicationId={app.id}
+                  onClick={() => { const d = docFor(detail, 'tax_clearance_issue'); if (d) previewDocument(d); }}
+                  variant="inline"
+                />
+              </div>
+            )}
+          </>
         ) : docType && (
           <div className="cw-doc-col">
             <span className="cw-field-label cw-mono">DOCUMENT</span>
