@@ -18,18 +18,24 @@ const upload = multer({
 
 const DOCUMENT_BUCKET = 'uez-documents';
 
+// Grandfather clause: only applications created from this date onward are
+// required to provide their own BRC before submitting. Anything started
+// earlier never saw the wizard's BRC step, so it's exempt. Keep this in sync
+// with the identical constant in src/App.jsx.
+const BRC_REQUIRED_SINCE = new Date('2026-09-06T00:00:00Z');
+
 const DEFAULT_SIGNUP_LAYOUT = {
   account: ['email', 'password'],
   business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
   ownerCore: ['title', 'firstName', 'lastName', 'email', 'phone', 'dob', 'ssn', 'ownershipPercent'],
   ownerAddress: ['addressLine1', 'addressLine2', 'city', 'state', 'zip'],
-  documents: ['formation', 'soleProp', 'pbsAccount', 'supporting'],
+  documents: ['formation', 'soleProp', 'brc', 'pbsAccount', 'supporting'],
   widths: {
     account: { email: 1, password: 1 },
     business: { businessName: 2, businessDescription: 2, ein: 1, yearFounded: 1, hasDba: 1, dbaName: 1, fullTimeEmployees: 1, partTimeEmployees: 1 },
     ownerCore: { title: 1, firstName: 1, lastName: 1, email: 1, phone: 1, dob: 1, ssn: 1, ownershipPercent: 1 },
     ownerAddress: { addressLine1: 1, addressLine2: 1, city: 1, state: 1, zip: 1 },
-    documents: { formation: 2, soleProp: 2, pbsAccount: 2, supporting: 2 }
+    documents: { formation: 2, soleProp: 2, brc: 2, pbsAccount: 2, supporting: 2 }
   }
 };
 
@@ -382,9 +388,10 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
     }
 
     const documentType = String(req.body?.documentType || 'supporting').trim().toLowerCase();
-    if (documentType === 'brc' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'COR handles the Business Registration Certificate lookup for you.' });
-    }
+    // BRC uploads used to be admin-only (COR ran the lookup for you); clients
+    // can now provide their own via the signup wizard's Documents step, which
+    // is why the block that used to live here is gone. getOwnedApplication()
+    // above already keeps a client scoped to their own application.
     if (documentType === 'tax_clearance' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only a UEZ admin can add the tax-clearance letter.' });
     }
@@ -622,7 +629,10 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
       }).eq('id', application.id);
     }
 
-    if (doc.document_type === 'brc' && req.user.role === 'admin') {
+    if (doc.document_type === 'brc') {
+      // Clients can delete their own mis-uploaded BRC now too (removeUploadedDocument
+      // in App.jsx) — reset the status either way so a deleted file can't leave
+      // brc_status stuck at 'uploaded' with nothing backing it.
       await supabase.from('uez_applications').update({
         brc_status: 'pending',
         updated_at: new Date().toISOString()
@@ -673,6 +683,16 @@ router.post('/applications/:id/submit', async (req, res) => {
     const hasFormation = (docsResult.data || []).some((doc) => doc.document_type === 'formation');
     if (!application.is_sole_proprietorship && !hasFormation) {
       return res.status(400).json({ error: 'Please upload the Certificate of Formation or formation document before submitting.' });
+    }
+
+    // Clients now provide their own BRC (upload it, or tell us they registered
+    // for one and will follow up) — only enforced for applications created
+    // after this shipped; see BRC_REQUIRED_SINCE above.
+    const hasBrc = (docsResult.data || []).some((doc) => doc.document_type === 'brc');
+    const brcDeferred = ['client_created', 'found', 'checking', 'manual_verification_required', 'recheck_requested'].includes(application.brc_status);
+    const brcRequired = new Date(application.created_at) >= BRC_REQUIRED_SINCE;
+    if (brcRequired && !hasBrc && !brcDeferred) {
+      return res.status(400).json({ error: 'Please upload your Business Registration Certificate, or tell us you registered for one, before submitting.' });
     }
 
     const submittedAt = new Date().toISOString();

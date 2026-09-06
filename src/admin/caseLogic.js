@@ -35,14 +35,10 @@ export function documentLabel(type) {
   return type;
 }
 
-export function nameControl(name) {
-  return String(name || '').replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase();
-}
-
-export function njTaxId(ein) {
-  const digits = String(ein || '').replace(/\D/g, '').slice(0, 9);
-  return digits.length === 9 ? `${digits}000` : '';
-}
+// Moved to ../brcLookup so the client-facing signup wizard can use the same
+// math without importing admin-only code — re-exported here so every
+// existing `import { nameControl, njTaxId } from './caseLogic'` keeps working.
+export { nameControl, njTaxId } from '../brcLookup';
 
 export function formatSsn(value) {
   const digits = String(value || '').replace(/\D/g, '');
@@ -134,16 +130,22 @@ const URGENT_REVIEW_ITEMS = [
     rank: 2, stepKey: 'brc'
   },
   {
+    test: (app) => app.brc_status === 'uploaded',
+    action: 'Review BRC',
+    attention: 'Client uploaded a Business Registration Certificate — review it',
+    rank: 3, stepKey: 'brc'
+  },
+  {
     test: (app, types, formationReview) => types.has('formation') && formationReview === 'not_reviewed',
     action: 'Review Formation',
     attention: 'Review Certificate of Formation',
-    rank: 3, stepKey: 'formation'
+    rank: 4, stepKey: 'formation'
   },
   {
     test: (app, types, _formationReview, approvalReview) => types.has('uez_approval_email') && approvalReview === 'not_reviewed',
     action: 'Review UEZ approval',
     attention: 'Review UEZ approval email',
-    rank: 4, stepKey: 'uez_enrollment'
+    rank: 5, stepKey: 'uez_enrollment'
   }
 ];
 

@@ -1,8 +1,14 @@
 .cor-hidden-select{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .cor-inline-radios{display:flex;gap:10px;margin-top:8px}.cor-radio-option{display:inline-flex;align-items:center;gap:8px;margin:0;padding:10px 16px;border:1px solid #dfe2ee;border-radius:12px;background:#fbfcff;font-weight:700;color:#39425f;cursor:pointer;min-width:92px}.cor-radio-option input{width:16px;height:16px;margin:0;padding:0;accent-color:#676fe0}.cor-radio-option:has(input:checked){border-color:#777fe6;background:#f1f2ff;color:#515bc8;box-shadow:0 0 0 3px rgba(102,111,224,.08)}
 .portal-grid .portal-card>.muted{margin:18px 20px 0}.portal-grid .portal-card>.admin-full-button{width:calc(100% - 40px);margin:14px 20px 20px}.portal-grid .portal-card>.action-panel{margin:18px 20px 20px}
-/* Clients are not responsible for the BRC. COR handles the lookup from admin. */
-.intake-page .content-block>.upload-card:nth-of-type(3){display:none!important}
+/* The BRC card has more going on than a plain upload-card (lookup values,
+   an external link, the upload button, and a conditional escape-hatch
+   block) - stack it instead of the base upload-card's row layout. */
+.brc-choice-card{flex-direction:column;align-items:stretch;gap:12px}
+.brc-lookup-values{display:flex;gap:20px;flex-wrap:wrap;padding:12px 14px;background:#f8f9fc;border:1px solid #e5e8f2;border-radius:12px}
+.brc-lookup-values>div{display:flex;flex-direction:column;gap:2px}
+.brc-lookup-values span{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#7a8194}
+.brc-lookup-values strong{font-size:15px;font-variant-numeric:tabular-nums}
 @media(max-width:760px){.cor-inline-radios{gap:8px}.cor-radio-option{flex:1;justify-content:center;min-width:0;padding:10px 12px}.portal-grid .portal-card>.muted{margin-left:16px;margin-right:16px}.portal-grid .portal-card>.admin-full-button{width:calc(100% - 32px);margin-left:16px;margin-right:16px}.portal-grid .portal-card>.action-panel{margin-left:16px;margin-right:16px}}
 
 .auth-loading-shell{min-height:100vh;display:grid;place-items:center;background:#f7f8fb}.auth-loading-card{font:600 14px/1.4 system-ui;color:#687184}.login-page-wrap{width:min(460px,calc(100% - 28px));margin:54px auto}.login-card{overflow:hidden}.login-card .content-block{padding:30px}.login-card form{display:grid;gap:8px}.login-card input{margin-bottom:10px}.login-submit{width:100%;margin-top:8px}

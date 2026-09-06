@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { checkUezEligibility, suggestNjAddresses } from './eligibility';
+import { nameControl, njTaxId } from './brcLookup';
 import UezMap from './UezMap';
 import {
   createApplication,
@@ -29,13 +30,13 @@ const DEFAULT_SIGNUP_LAYOUT = {
   business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
   ownerCore: ['title', 'firstName', 'lastName', 'email', 'phone', 'dob', 'ssn', 'ownershipPercent'],
   ownerAddress: ['addressLine1', 'addressLine2', 'city', 'state', 'zip'],
-  documents: ['formation', 'soleProp', 'pbsAccount', 'supporting'],
+  documents: ['formation', 'soleProp', 'brc', 'pbsAccount', 'supporting'],
   widths: {
     account: { email: 1, password: 1 },
     business: { businessName: 2, businessDescription: 2, ein: 1, yearFounded: 1, hasDba: 1, dbaName: 1, fullTimeEmployees: 1, partTimeEmployees: 1 },
     ownerCore: { title: 1, firstName: 1, lastName: 1, email: 1, phone: 1, dob: 1, ssn: 1, ownershipPercent: 1 },
     ownerAddress: { addressLine1: 1, addressLine2: 1, city: 1, state: 1, zip: 1 },
-    documents: { formation: 2, soleProp: 2, pbsAccount: 2, supporting: 2 }
+    documents: { formation: 2, soleProp: 2, brc: 2, pbsAccount: 2, supporting: 2 }
   }
 };
 
@@ -43,6 +44,12 @@ function signupFieldClass(layout, group, key) {
   return Number(layout?.widths?.[group]?.[key]) === 2 ? 'field-span-2' : '';
 }
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
+const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
+// Grandfather clause: only applications created from this date onward are
+// required to provide their own BRC. Keep in sync with the identical
+// constant in backend/routes/uez.js.
+const BRC_REQUIRED_SINCE = new Date('2026-09-06T00:00:00Z');
+const BRC_DEFERRED_STATUSES = ['client_created', 'found', 'checking', 'manual_verification_required', 'recheck_requested'];
 const blankOwner = () => ({ title: '', titleOther: '', firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '' });
 
 function programNameFromCode(code) {
@@ -402,6 +409,7 @@ export default function App({ demoMode = false }) {
   const [uploadingType, setUploadingType] = useState('');
   const [signupLayout, setSignupLayout] = useState(DEFAULT_SIGNUP_LAYOUT);
   const [solePropConfirmedHere, setSolePropConfirmedHere] = useState(false);
+  const [brcBusy, setBrcBusy] = useState(false);
   const [form, setForm] = useState(() => demoMode ? {
     address: '123 Demo Street, Lakewood, NJ 08701', email: 'demo@corsolutions.io', password: 'Demo123!',
     businessName: 'Demo Lakewood Business LLC', businessDescription: 'Demo business for testing the COR client flow', ein: '12-3456789', yearFounded: '2024',
@@ -419,6 +427,9 @@ export default function App({ demoMode = false }) {
   const primaryOwnershipSelection = form.owners.length === 1 && !form.owners[0].ownershipPercent ? '' : (primaryIs100 ? 'yes' : 'no');
   const eligibleProgramName = eligibility?.programs?.[0]?.name || programNameFromCode(bundle?.application?.program_code);
   const hasFormation = documents.some((doc) => doc.document_type === 'formation');
+  const hasBrc = documents.some((doc) => doc.document_type === 'brc');
+  const brcDeferred = BRC_DEFERRED_STATUSES.includes(bundle?.application?.brc_status);
+  const brcRequired = bundle?.application?.created_at ? new Date(bundle.application.created_at) >= BRC_REQUIRED_SINCE : true;
   const update = (key) => (e) => setForm((old) => ({ ...old, [key]: e.target.value }));
 
   useEffect(() => {
@@ -891,10 +902,30 @@ export default function App({ demoMode = false }) {
     setStep(1);
   }
 
+  // Mirrors ApplicantPortal's reportBrcMade (that component's version keeps
+  // its own separate state/refresh loop for the post-submission dashboard) —
+  // this is the wizard's own copy of the same "I registered, I'll follow up"
+  // action, hitting the same client-created endpoint.
+  async function reportBrcRegistered() {
+    if (demoMode) { setMessage('Demo only: BRC follow-up simulated. Nothing was saved.'); return; }
+    setBrcBusy(true); setMessage('');
+    try {
+      await reportBrcCreated(applicationId);
+      const refreshed = await getApplication(applicationId);
+      setBundle(refreshed);
+      setMessage("Thanks — we'll follow up once we've checked for your BRC.");
+    } catch (err) { setMessage(err.message); }
+    finally { setBrcBusy(false); }
+  }
+
   async function continueFromDocuments() {
     if (demoMode) { setMessage(''); setStep(6); return; }
     if (!hasFormation && !solePropConfirmedHere) {
       setMessage('Upload the Certificate of Formation, or confirm below that the business is legally a sole proprietorship.');
+      return;
+    }
+    if (brcRequired && !hasBrc && !brcDeferred) {
+      setMessage('Upload your Business Registration Certificate, or tell us you registered for one, before continuing.');
       return;
     }
     if (!form.hasExistingPbsAccount) { setMessage('Please answer whether you already have a New Jersey PBS account.'); return; }
@@ -1148,6 +1179,22 @@ export default function App({ demoMode = false }) {
                 <div><strong>Don't have a Certificate of Formation?</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship.</p></div>
                 <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Sole proprietorship confirmed' : "I don't have a Certificate of Formation because this business is a sole proprietorship"}</button>{solePropConfirmedHere && <button type="button" className="sole-prop-undo" title="Undo sole proprietorship selection" aria-label="Undo sole proprietorship selection" onClick={undoSoleProprietorship} disabled={busy}>↶</button>}</div>
               </div> : null;
+              if (key === 'brc') return <div className={`upload-card brc-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
+                <div><strong>Business Registration Certificate <span className="required-star">*</span></strong><p>New Jersey requires a Business Registration Certificate (BRC) for every enrolled business. Look yours up using the values below, then upload the PDF it gives you.</p></div>
+                <div className="brc-lookup-values">
+                  <div><span>Name Control</span><strong>{nameControl(form.businessName) || '—'}</strong></div>
+                  <div><span>Tax ID</span><strong>{njTaxId(form.ein) || '—'}</strong></div>
+                </div>
+                <a className="secondary compact inline-button" href={NJ_BRC_LOOKUP_URL} target="_blank" rel="noreferrer">Look up my BRC</a>
+                <label className="secondary inline-button file-button">{uploadingType === 'brc' ? 'Uploading…' : hasBrc ? 'Replace / add another' : 'Upload Business Registration Certificate'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || brcDeferred} onChange={(e) => uploadDoc('brc', e.target.files?.[0])} /></label>
+                {!hasBrc && <div className={`sole-prop-choice ${brcDeferred ? 'selected' : ''}`}>
+                  <div><strong>NJ says your business isn't registered yet?</strong><p>Register for a BRC, then come back and tell us — you don't need to upload anything yet.</p></div>
+                  <div className="sole-prop-action-row">
+                    <a className="secondary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Create my BRC</a>
+                    <button type="button" className={brcDeferred ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={reportBrcRegistered} disabled={brcBusy}>{brcDeferred ? '✓ Registration reported' : "I registered, I'll follow up"}</button>
+                  </div>
+                </div>}
+              </div>;
               if (key === 'pbsAccount') return <div className={`upload-card pbs-account-question ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
                 <div><strong>Do you already have a New Jersey Premier Business Services (PBS) account? <span className="required-star">*</span></strong><p>If you already use PBS/MyNJ for this business, choose Yes and provide the login so COR can use the existing account.</p></div>
                 <div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="yes" checked={form.hasExistingPbsAccount==='yes'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="no" checked={form.hasExistingPbsAccount==='no'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value,pbsUsername:'',pbsPassword:''}))} />No</label></div>
