@@ -440,25 +440,53 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
       );
     }
 
+    if (documentType === 'uez_pending_certification') {
+      // Uploading the pending-certification application is the "applied,
+      // waiting on the state" milestone — advance it here so the admin
+      // doesn't have to also flip the process-flags toggle by hand. Skip
+      // only if it's already past this point (approved) so a later
+      // re-upload can't demote an approved application back to "applied".
+      const now = new Date().toISOString();
+      if (application.uez_application_status !== 'approved') {
+        const { error: appError } = await supabase.from('uez_applications').update({
+          uez_application_status: 'applied',
+          uez_application_submitted: true,
+          updated_at: now
+        }).eq('id', application.id);
+        if (appError) throw appError;
+
+        await addStatusEvent(
+          application.id,
+          'uez_application_submitted',
+          'UEZ application submitted',
+          'Your UEZ Pending Certification application was submitted and is awaiting New Jersey state approval.',
+          req.user.id,
+          true
+        );
+      }
+    }
+
     if (documentType === 'uez_approval_email') {
-      // The file arriving is a fact; whether it's actually a valid approval email
-      // is a verdict the software can't read from a PDF. uez_application_submitted/
-      // uez_application_status only move on explicit review (documents/:id/review),
-      // not on upload alone — otherwise "applied" could mean nothing more than
-      // "some file got uploaded."
+      // Chaim wants the upload itself to be the approval trigger, not a
+      // separate review click — the admin can still correct a wrong file
+      // afterward via the document preview's "Wrong document" action
+      // (documents/:id/review), which reverts uez_application_status to
+      // 'applied' and marks the review rejected.
       const now = new Date().toISOString();
       const { error: appError } = await supabase.from('uez_applications').update({
         pbs_status: 'uez_approval_uploaded',
-        uez_approval_review_status: 'not_reviewed',
+        uez_approval_review_status: 'approved',
+        uez_application_status: 'approved',
+        uez_application_submitted: true,
         updated_at: now
       }).eq('id', application.id);
       if (appError) throw appError;
 
       await addStatusEvent(
         application.id,
-        'uez_approval_uploaded',
-        'UEZ approval email uploaded',
-        'We received your Notice of Certification Application Approved email. COR will verify it and continue your application.',
+        'uez_approval_approved',
+        'UEZ application approved',
+        'We received your Notice of Certification Application Approved email — your UEZ enrollment is approved.',
         req.user.id,
         true
       );
