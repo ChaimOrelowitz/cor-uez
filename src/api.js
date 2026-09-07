@@ -96,6 +96,20 @@ export function saveAdminSignupLayout(layout) {
   });
 }
 
+export async function getHomeStats() {
+  const response = await fetch(`${API_BASE}/api/uez/home-stats`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Could not load home stats.');
+  return payload;
+}
+
+export function saveAdminHomeStats(stats) {
+  return request('/api/uez/admin/home-stats', {
+    method: 'PUT',
+    body: JSON.stringify(stats)
+  });
+}
+
 export function resetAdminSignupLayout() {
   return request('/api/uez/admin/signup-layout/reset', { method: 'POST' });
 }

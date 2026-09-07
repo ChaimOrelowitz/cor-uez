@@ -21,7 +21,8 @@ import {
   reportBrcCreated,
   reportTaxClearanceResolved,
   whoAmI,
-  getSignupLayout
+  getSignupLayout,
+  getHomeStats
 } from './api';
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
@@ -408,6 +409,7 @@ export default function App({ demoMode = false }) {
   const [documents, setDocuments] = useState([]);
   const [uploadingType, setUploadingType] = useState('');
   const [signupLayout, setSignupLayout] = useState(DEFAULT_SIGNUP_LAYOUT);
+  const [homeStats, setHomeStats] = useState(null);
   const [solePropConfirmedHere, setSolePropConfirmedHere] = useState(false);
   const [brcBusy, setBrcBusy] = useState(false);
   const [form, setForm] = useState(() => demoMode ? {
@@ -449,6 +451,14 @@ export default function App({ demoMode = false }) {
         setSignupLayout(merged);
       }
     }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  // The two "ticker" numbers on the home/intro screen — admin-set for now
+  // (HomeStatsPage), not calculated from real data yet.
+  useEffect(() => {
+    let active = true;
+    getHomeStats().then((result) => { if (active) setHomeStats(result); }).catch(() => {});
     return () => { active = false; };
   }, []);
 
@@ -1026,6 +1036,10 @@ export default function App({ demoMode = false }) {
           <div className="service-intro-actions">
             <button className="primary" onClick={() => { setShowServiceIntro(false); setMessage(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Check my business address</button>
           </div>
+          {homeStats && <div className="service-intro-stats">
+            <div><strong>{Number(homeStats.applicationsSubmitted).toLocaleString()}</strong><span>Applications Submitted</span></div>
+            <div><strong>{Number(homeStats.grantsLeft).toLocaleString()}</strong><span>Grants Left</span></div>
+          </div>}
         </section>
 
         <section className="service-explainer-grid" aria-label="About the service">

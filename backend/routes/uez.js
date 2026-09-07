@@ -25,6 +25,8 @@ const DOCUMENT_BUCKET = 'uez-documents';
 // with the identical constant in src/App.jsx.
 const BRC_REQUIRED_SINCE = new Date('2026-09-06T00:00:00Z');
 
+const DEFAULT_HOME_STATS = { applicationsSubmitted: 0, grantsLeft: 0 };
+
 const DEFAULT_SIGNUP_LAYOUT = {
   account: ['email', 'password'],
   business: ['businessName', 'businessDescription', 'ein', 'yearFounded', 'hasDba', 'dbaName', 'fullTimeEmployees', 'partTimeEmployees'],
@@ -182,6 +184,23 @@ router.get('/signup-layout', async (_req, res) => {
   }
 });
 
+// The two homepage "ticker" numbers (applications submitted / grants left) -
+// manually set by an admin for now, shown to every anonymous visitor on the
+// service-intro screen. Same public-GET/admin-PUT shape as signup-layout
+// above, single row keyed id='default' in uez_home_stats.
+router.get('/home-stats', async (_req, res) => {
+  try {
+    const { data, error } = await supabase.from('uez_home_stats').select('applications_submitted, grants_left').eq('id', 'default').maybeSingle();
+    if (error) throw error;
+    res.json({
+      applicationsSubmitted: data?.applications_submitted ?? DEFAULT_HOME_STATS.applicationsSubmitted,
+      grantsLeft: data?.grants_left ?? DEFAULT_HOME_STATS.grantsLeft
+    });
+  } catch (err) {
+    res.json(DEFAULT_HOME_STATS);
+  }
+});
+
 router.use(requireUezAuth);
 
 
@@ -193,6 +212,32 @@ router.put('/admin/signup-layout', requireUezAdmin, async (req, res) => {
       .select('layout, updated_at').single();
     if (error) throw error;
     res.json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put('/admin/home-stats', requireUezAdmin, async (req, res) => {
+  try {
+    const applicationsSubmitted = Number(req.body?.applicationsSubmitted);
+    const grantsLeft = Number(req.body?.grantsLeft);
+    if (!Number.isFinite(applicationsSubmitted) || applicationsSubmitted < 0) {
+      return res.status(400).json({ error: 'Applications submitted must be a non-negative number.' });
+    }
+    if (!Number.isFinite(grantsLeft) || grantsLeft < 0) {
+      return res.status(400).json({ error: 'Grants left must be a non-negative number.' });
+    }
+    const { data, error } = await supabase.from('uez_home_stats')
+      .upsert({
+        id: 'default',
+        applications_submitted: Math.round(applicationsSubmitted),
+        grants_left: Math.round(grantsLeft),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' })
+      .select('applications_submitted, grants_left, updated_at')
+      .single();
+    if (error) throw error;
+    res.json({ applicationsSubmitted: data.applications_submitted, grantsLeft: data.grants_left, updatedAt: data.updated_at });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
