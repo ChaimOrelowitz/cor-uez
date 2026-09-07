@@ -10,10 +10,15 @@ const supabase = require('../db/supabase');
 // silently kept showing the old value forever). Best-effort — a failure
 // here must never undo the real update it's called alongside.
 async function clearExplicitProcessStep(applicationId, stepKey) {
-  await supabase.from('uez_process_steps').delete()
-    .eq('application_id', applicationId)
-    .eq('step_key', stepKey)
-    .catch(() => {});
+  // Supabase's query builder is thenable (works with await) but is not a
+  // real Promise instance, so it has no .catch()/.finally() of its own -
+  // chaining .catch() directly on it throws "... .catch is not a function".
+  // Await it and just ignore any error instead (best-effort, on purpose).
+  try {
+    await supabase.from('uez_process_steps').delete()
+      .eq('application_id', applicationId)
+      .eq('step_key', stepKey);
+  } catch (_) {}
 }
 
 module.exports = { clearExplicitProcessStep };
