@@ -6,6 +6,7 @@ const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
+const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
 
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
@@ -421,6 +422,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
 
     if (documentType === 'formation') {
       await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
+      await clearExplicitProcessStep(application.id, 'formation');
       await addStatusEvent(
         application.id,
         'formation_uploaded',
@@ -436,6 +438,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         brc_status: 'uploaded',
         updated_at: new Date().toISOString()
       }).eq('id', application.id);
+      await clearExplicitProcessStep(application.id, 'brc');
 
       await addStatusEvent(
         application.id,
@@ -445,6 +448,13 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         req.user.id,
         true
       );
+    }
+
+    if (documentType === 'ldc_application') {
+      // deriveDefaultProcessStep for this step is purely "does the document
+      // exist" - nothing else to update, just make sure a stale manual
+      // override can't outlive the real document state.
+      await clearExplicitProcessStep(application.id, 'ldc_application');
     }
 
     if (documentType === 'uez_pending_certification') {
@@ -462,6 +472,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         }).eq('id', application.id);
         if (appError) throw appError;
 
+        await clearExplicitProcessStep(application.id, 'uez_enrollment');
         await addStatusEvent(
           application.id,
           'uez_application_submitted',
@@ -485,6 +496,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         updated_at: now
       }).eq('id', application.id);
       if (appError) throw appError;
+      await clearExplicitProcessStep(application.id, 'uez_enrollment');
 
       await addStatusEvent(
         application.id,
@@ -498,6 +510,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
 
     if (documentType === 'tax_clearance') {
       await supabase.from('uez_applications').update({ tax_clearance_good: true, tax_clearance_status: 'good', tax_clearance_recheck_requested_at: null, updated_at: new Date().toISOString() }).eq('id', application.id);
+      await clearExplicitProcessStep(application.id, 'tax_clearance');
       await addStatusEvent(
         application.id,
         'tax_clearance_received',
@@ -515,6 +528,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
         tax_clearance_recheck_requested_at: null,
         updated_at: new Date().toISOString()
       }).eq('id', application.id);
+      await clearExplicitProcessStep(application.id, 'tax_clearance');
     }
 
     res.status(201).json(data);
@@ -558,6 +572,7 @@ router.post('/admin/applications/:id/tax-clearance-issue', requireUezAdmin, uplo
       updated_at: new Date().toISOString()
     }).eq('id', application.id);
     if (appError) throw appError;
+    await clearExplicitProcessStep(application.id, 'tax_clearance');
 
     await addStatusEvent(
       application.id,
@@ -619,6 +634,7 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
 
     if (doc.document_type === 'formation') {
       await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
+      await clearExplicitProcessStep(application.id, 'formation');
     }
 
     if (doc.document_type === 'uez_approval_email') {
@@ -627,6 +643,7 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
         uez_application_status: application.uez_application_status === 'approved' ? 'applied' : application.uez_application_status,
         updated_at: new Date().toISOString()
       }).eq('id', application.id);
+      await clearExplicitProcessStep(application.id, 'uez_enrollment');
     }
 
     if (doc.document_type === 'brc') {
@@ -637,6 +654,11 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
         brc_status: 'pending',
         updated_at: new Date().toISOString()
       }).eq('id', application.id);
+      await clearExplicitProcessStep(application.id, 'brc');
+    }
+
+    if (doc.document_type === 'ldc_application') {
+      await clearExplicitProcessStep(application.id, 'ldc_application');
     }
 
     res.json({ ok: true, id: doc.id });
@@ -771,6 +793,7 @@ router.put('/applications/:id/pbs-account-info', async (req, res) => {
 
     const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'pbs_mynj');
     if (application.has_existing_pbs_account !== hasExisting) {
       await addStatusEvent(application.id, hasExisting ? 'existing_pbs_reported' : 'pbs_account_needed', hasExisting ? 'Existing PBS account reported' : 'PBS account needed', hasExisting ? 'Applicant reported that the business already has a New Jersey PBS account and supplied the MyNJ login.' : 'Applicant reported that the business does not already have a New Jersey PBS account.', req.user.id, false);
     }
@@ -888,6 +911,7 @@ router.post('/admin/applications/:id/pbs-account-created', requireUezAdmin, asyn
       updated_at: now
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'pbs_mynj');
 
     if (!application.pbs_account_created && application.pbs_status !== 'account_created') {
       await addStatusEvent(
@@ -954,21 +978,13 @@ router.post('/admin/applications/:id/documents/:documentId/review', requireUezAd
       .single();
     if (updateError) throw updateError;
 
-    if (document.document_type === 'uez_approval_email') {
-      // A previously-set manual state (via the step's "state" chip/dropdown)
-      // otherwise permanently overrides the derived status computed from
-      // uez_application_status above (resolveProcessStep in caseLogic.js
-      // checks for an explicit uez_process_steps row before ever falling
-      // back to the derived value) - clear it so the step immediately shows
-      // "State approved"/"complete" (or the correct waiting state on
-      // rejection) instead of silently staying stuck on whatever it was
-      // manually set to before this review.
-      // Best-effort - a failure here shouldn't undo the review decision above.
-      await supabase.from('uez_process_steps').delete()
-        .eq('application_id', application.id)
-        .eq('step_key', 'uez_enrollment')
-        .catch(() => {});
-    }
+    // A previously-set manual state (via the step's state chip) otherwise
+    // permanently overrides the derived status just computed above
+    // (resolveProcessStep in caseLogic.js checks for an explicit
+    // uez_process_steps row before ever falling back to the derived value) —
+    // clear it so the step immediately reflects this review instead of
+    // silently staying stuck on whatever it was manually set to before.
+    await clearExplicitProcessStep(application.id, document.document_type === 'formation' ? 'formation' : 'uez_enrollment');
 
     await addStatusEvent(
       application.id,
@@ -1000,29 +1016,42 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
 
     const body = req.body || {};
     const patch = { updated_at: new Date().toISOString() };
+    // This route is itself a manual override tool - but a distinct one from
+    // the step state chip, and it writes the real status columns the chip's
+    // derived value is computed from, so touching a field here should still
+    // clear any stale chip override for that step (tracked per-field below,
+    // not a blanket clear, since a single request can touch several steps
+    // or none).
+    const affectedSteps = new Set();
     if (typeof body.pbsAccountCreated === 'boolean') {
       patch.pbs_account_created = body.pbsAccountCreated;
       patch.pbs_status = body.pbsAccountCreated ? 'account_created' : null;
+      affectedSteps.add('pbs_mynj');
     }
     if (body.pbsStatus === 'creds_requested') {
       patch.pbs_status = 'creds_requested';
+      affectedSteps.add('pbs_mynj');
     }
     if (typeof body.taxClearanceGood === 'boolean') {
       patch.tax_clearance_good = body.taxClearanceGood;
       patch.tax_clearance_status = body.taxClearanceGood ? 'good' : 'no';
       patch.tax_clearance_recheck_requested_at = null;
+      affectedSteps.add('tax_clearance');
     }
     if (['no', 'issue', 'good'].includes(body.taxClearanceStatus)) {
       patch.tax_clearance_status = body.taxClearanceStatus;
       patch.tax_clearance_good = body.taxClearanceStatus === 'good';
       patch.tax_clearance_recheck_requested_at = null;
+      affectedSteps.add('tax_clearance');
     }
     if (['not_started', 'applied', 'approved'].includes(body.uezApplicationStatus)) {
       patch.uez_application_status = body.uezApplicationStatus;
       patch.uez_application_submitted = body.uezApplicationStatus !== 'not_started';
+      affectedSteps.add('uez_enrollment');
     }
     if (['not_reviewed', 'approved', 'rejected'].includes(body.formationReviewStatus)) {
       patch.formation_review_status = body.formationReviewStatus;
+      affectedSteps.add('formation');
     }
     if (['not_reviewed', 'approved', 'rejected'].includes(body.uezApprovalReviewStatus)) {
       patch.uez_approval_review_status = body.uezApprovalReviewStatus;
@@ -1033,11 +1062,13 @@ router.patch('/admin/applications/:id/process-flags', requireUezAdmin, async (re
         patch.uez_application_status = 'applied';
         patch.uez_application_submitted = true;
       }
+      affectedSteps.add('uez_enrollment');
     }
 
     if (Object.keys(patch).length === 1) return res.status(400).json({ error: 'No process status was supplied.' });
     const { data, error } = await supabase.from('uez_applications').update(patch).eq('id', application.id).select('*').single();
     if (error) throw error;
+    for (const stepKey of affectedSteps) await clearExplicitProcessStep(application.id, stepKey);
     // No auto-email — the admin sends the "UEZ application submitted"
     // notice via the "Send email" button, which opens the composer first.
     res.json(data);
@@ -1069,6 +1100,7 @@ router.post('/applications/:id/payment-reported', async (req, res) => {
       recorded_by: req.user.id
     }).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'payment');
     await addStatusEvent(application.id, 'payment_reported', 'Payment reported', 'You told COR that your payment was sent. We will verify receipt.', req.user.id, true);
     res.status(201).json(data);
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -1088,6 +1120,7 @@ router.post('/applications/:id/tax-clearance-resolved', async (req, res) => {
       updated_at: now
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'tax_clearance');
 
     await addStatusEvent(
       application.id,
@@ -1119,6 +1152,7 @@ router.post('/admin/applications/:id/request-payment', requireUezAdmin, async (r
       .select('*')
       .single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'payment');
 
     await addStatusEvent(application.id, 'payment_requested', 'Payment requested', 'COR requested the $500 service fee.', req.user.id, true);
 
@@ -1171,6 +1205,7 @@ router.put('/admin/applications/:id/payment', requireUezAdmin, async (req, res) 
       result = data;
     }
 
+    await clearExplicitProcessStep(application.id, 'payment');
     if (status === 'paid') {
       await addStatusEvent(application.id, 'payment_recorded', 'Client payment recorded', 'COR confirmed that your payment was received.', req.user.id, true);
       if (existing?.status !== 'paid') {
@@ -1454,6 +1489,7 @@ router.post('/admin/applications/:id/brc-found', requireUezAdmin, async (req, re
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'brc');
 
     await addStatusEvent(
       application.id,
@@ -1491,6 +1527,7 @@ router.post('/admin/applications/:id/brc-not-found', requireUezAdmin, async (req
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'brc');
     // No auto-email here — recording "not found" is a fact, but telling the
     // applicant is a judgment/wording call. Sent explicitly via the "Send BRC
     // problem email" button, which uses this same brc_not_found template.
@@ -1566,6 +1603,10 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
       updated_at: new Date().toISOString()
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    // grant_submission's derived state reads application.status directly
+    // (deriveDefaultProcessStep, caseLogic.js) - only clear when this write
+    // actually changes what that step sees.
+    if (overallStatus === 'applied') await clearExplicitProcessStep(application.id, 'grant_submission');
 
     await addStatusEvent(
       application.id,

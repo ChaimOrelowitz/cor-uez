@@ -20,16 +20,8 @@ import {
   resolveProcessStep,
 } from './caseLogic';
 import DocThumbnail from './DocThumbnail';
-// Legacy view components (still used in the footer drawer's Legacy tab)
-import ActivityPanel from './ActivityPanel';
-import BrcDetailsCard from './BrcDetailsCard';
 import BusinessDetailsCard from './BusinessDetailsCard';
-import DocumentsPanel from './DocumentsPanel';
-import MyNjPbsCard from './MyNjPbsCard';
-import NotesPanel from './NotesPanel';
 import OwnersCard from './OwnersCard';
-import PaymentCard from './PaymentCard';
-import ProcessStepCard from './ProcessStepCard';
 
 // ── Segment labels shown on the process bar (short form) ─────────────────────
 const SEG_LABEL = {
@@ -454,13 +446,13 @@ export default function CaseDetailTabs({
         {footerOpen && (
           <div className="cw-footer-body">
             <div className="cw-footer-tabs">
-              {['docs', 'applicant', 'legacy'].map((t) => (
+              {['docs', 'applicant'].map((t) => (
                 <button
                   key={t}
                   className={`cw-footer-tab${footerTab === t ? ' cw-footer-tab-active' : ''}`}
                   onClick={() => setFooterTab(t)}
                 >
-                  {t === 'docs' ? 'Documents' : t === 'applicant' ? 'Application' : 'Legacy view'}
+                  {t === 'docs' ? 'Documents' : 'Application'}
                 </button>
               ))}
             </div>
@@ -559,65 +551,6 @@ export default function CaseDetailTabs({
                     onAddOwner={addOwner}
                     onRemoveOwner={removeOwner}
                   />
-                </div>
-              )}
-
-              {footerTab === 'legacy' && (
-                <div className="cw-legacy-grid">
-                  <p className="cw-legacy-note">All-cards view — kept as a fallback. Every field is editable on its own step above.</p>
-                  {PROCESS_STEP_KEYS.map((key) => {
-                    const step = resolveProcessStep(key, detail);
-                    return (
-                      <ProcessStepCard
-                        key={key}
-                        stepKey={key}
-                        detail={detail}
-                        busy={busy}
-                        myNjCredentials={myNjCredentials}
-                        brcForm={brcForm} setBrcForm={setBrcForm}
-                        paymentDraft={paymentDraft} setPaymentDraft={setPaymentDraft}
-                        pbsAnswerDraft={pbsAnswerDraft}
-                        pbsLoginDraft={pbsLoginDraft} setPbsLoginDraft={setPbsLoginDraft}
-                        myNjEditMode={myNjEditMode}
-                        myNjDraft={myNjDraft} setMyNjDraft={setMyNjDraft}
-                        showMyNjSecrets={showMyNjSecrets}
-                        previewDocument={previewDocument}
-                        reviewFormationDoc={reviewFormationDoc}
-                        sendFormationRejectedEmail={sendFormationRejectedEmail}
-                        runBrcLookup={runBrcLookup}
-                        sendBrcProblemEmail={sendBrcProblemEmail}
-                        sendBrcWrongAddressEmail={sendBrcWrongAddressEmail}
-                        markPbsAccountCreated={markPbsAccountCreated}
-                        setProcessFlag={setProcessFlag}
-                        runPbsSignup={runPbsSignup}
-                        sendPbsAccountCreatedEmail={sendPbsAccountCreatedEmail}
-                        sendPbsExistingAccountEmail={sendPbsExistingAccountEmail}
-                        runTaxClearance={runTaxClearance}
-                        sendTaxIssueEmail={sendTaxIssueEmail}
-                        sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
-                        runLdcJotform={runLdcJotform}
-                        requestPayment={requestPayment}
-                        confirmPayment={confirmPayment}
-                        sendPaymentRequestedEmail={sendPaymentRequestedEmail}
-                        sendPaymentReceivedEmail={sendPaymentReceivedEmail}
-                        runLakewoodGrantPortal={runLakewoodGrantPortal}
-                        confirmGrantSubmitted={confirmGrantSubmitted}
-                        sendGrantSubmittedEmail={sendGrantSubmittedEmail}
-                        changePbsAnswerDraft={changePbsAnswerDraft}
-                        saveExistingPbsAnswer={saveExistingPbsAnswer}
-                        saveMyNjCredentials={saveMyNjCredentials}
-                        startMyNjEdit={startMyNjEdit}
-                        cancelMyNjEdit={cancelMyNjEdit}
-                        toggleShowMyNjSecrets={toggleShowMyNjSecrets}
-                        copyCredential={copyCredential}
-                        createMyNjCredentials={createMyNjCredentials}
-                        saveBrcFound={saveBrcFound}
-                        saveBrcNotFound={saveBrcNotFound}
-                        saveProcessStep={saveProcessStep}
-                        resetProcessStep={resetProcessStep}
-                      />
-                    );
-                  })}
                 </div>
               )}
             </div>

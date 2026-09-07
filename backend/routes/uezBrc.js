@@ -4,6 +4,7 @@ const { chromium } = require('playwright');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, lookupBrc } = require('../utils/uezBrc');
+const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
 
 const router = express.Router();
 const BRC_FORM_URL = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
@@ -322,6 +323,7 @@ router.post('/:id/request-check', async (req, res) => {
       const canonicalName = result.taxpayerName || result.tradeName || application.business_name_input;
       const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: canonicalName, registered_business_name: canonicalName, brc_data: brcData, brc_last_error: null, updated_at: checkedAt }).eq('id', application.id).select('*').single();
       if (error) throw error;
+      await clearExplicitProcessStep(application.id, 'brc');
       await safeStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
       // MyNJ/PBS credential creation is a separate explicit admin action now.
       return res.json({ application: data, result: brcData, outcome: 'found' });
@@ -330,6 +332,7 @@ router.post('/:id/request-check', async (req, res) => {
     if (result.status === 'not_found') {
       const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'not_found', brc_checked_at: checkedAt, brc_last_error: null, updated_at: checkedAt }).eq('id', application.id).select('*').single();
       if (error) throw error;
+      await clearExplicitProcessStep(application.id, 'brc');
       await safeStatusEvent(application.id, 'waiting_for_brc', 'BRC needed', 'We could not find a current New Jersey Business Registration Certificate. Please register for one, then return here and tell us when it is complete.', req.user.id, true);
       // No auto-email — same reasoning as the admin brc-not-found route in uez.js.
       return res.json({ application: data, outcome: 'not_found' });
@@ -367,6 +370,7 @@ router.post('/:id/admin/not-found', requireUezAdmin, async (req, res) => {
     const checkedAt = new Date().toISOString();
     const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'not_found', brc_checked_at: checkedAt, updated_at: checkedAt }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'brc');
     await safeStatusEvent(application.id, 'waiting_for_brc', 'BRC needed', 'We could not find a current New Jersey Business Registration Certificate. Please register for one, then return here and tell us when it is complete.', req.user.id, true);
     res.json(data);
   } catch (err) { res.status(400).json({ error: err.message }); }
@@ -379,6 +383,7 @@ router.post('/:id/admin/found', requireUezAdmin, async (req, res) => {
     const checkedAt = new Date().toISOString();
     const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: req.body?.registeredBusinessName || application.brc_registered_name, registered_business_name: req.body?.registeredBusinessName || application.registered_business_name, brc_storage_path: req.body?.storagePath || application.brc_storage_path, updated_at: checkedAt }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await clearExplicitProcessStep(application.id, 'brc');
     await safeStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
     // MyNJ/PBS credential creation is a separate explicit admin action now.
     res.json(data);

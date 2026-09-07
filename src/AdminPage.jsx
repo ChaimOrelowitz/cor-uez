@@ -67,19 +67,9 @@ const PIPELINE_STEPS = [
   { key: 'payment',         tab: 'payment_ldc_grant',  short: 'Pay'   },
   { key: 'grant_submission', tab: 'payment_ldc_grant', short: 'Grant' },
 ];
-import ActivityPanel from './admin/ActivityPanel';
 import AdminSidebar from './admin/AdminSidebar';
-import BrcDetailsCard from './admin/BrcDetailsCard';
-import BusinessDetailsCard from './admin/BusinessDetailsCard';
-import DocThumbnail from './admin/DocThumbnail';
-import DocumentsPanel from './admin/DocumentsPanel';
 import EmailComposer from './admin/EmailComposer';
-import MyNjPbsCard from './admin/MyNjPbsCard';
-import NotesPanel from './admin/NotesPanel';
-import OwnersCard from './admin/OwnersCard';
-import PaymentCard from './admin/PaymentCard';
 import CaseDetailTabs from './admin/CaseDetailTabs';
-import ProcessStepCard from './admin/ProcessStepCard';
 
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
