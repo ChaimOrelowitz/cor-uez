@@ -954,6 +954,22 @@ router.post('/admin/applications/:id/documents/:documentId/review', requireUezAd
       .single();
     if (updateError) throw updateError;
 
+    if (document.document_type === 'uez_approval_email') {
+      // A previously-set manual state (via the step's "state" chip/dropdown)
+      // otherwise permanently overrides the derived status computed from
+      // uez_application_status above (resolveProcessStep in caseLogic.js
+      // checks for an explicit uez_process_steps row before ever falling
+      // back to the derived value) - clear it so the step immediately shows
+      // "State approved"/"complete" (or the correct waiting state on
+      // rejection) instead of silently staying stuck on whatever it was
+      // manually set to before this review.
+      // Best-effort - a failure here shouldn't undo the review decision above.
+      await supabase.from('uez_process_steps').delete()
+        .eq('application_id', application.id)
+        .eq('step_key', 'uez_enrollment')
+        .catch(() => {});
+    }
+
     await addStatusEvent(
       application.id,
       eventStatus,
