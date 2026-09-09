@@ -6,6 +6,8 @@ const uezAccountsRoutes = require('./routes/uezAccounts');
 const uezAnalyticsRoutes = require('./routes/uezAnalytics');
 const uezDavRoutes = require('./routes/uezDav');
 const davBridgeRoutes = require('./routes/davBridge');
+const uezJotformRoutes = require('./routes/uezJotform');
+const uezJotformTestRoutes = require('./routes/uezJotformTest');
 
 const app = express();
 const allowedOrigins = [
@@ -19,6 +21,12 @@ const allowedOrigins = [
 // The Cloudflare Worker sends OPTIONS/PROPFIND/REPORT here as signed POSTs,
 // because Render's edge blocks those DAV verbs before Express sees them.
 app.use('/internal/dav-bridge', davBridgeRoutes);
+
+// JotForm can't send a user JWT, so this is verified by a shared-secret
+// token in the URL instead (see uezJotform.js) - mounted here, before the
+// global JSON body parser below, so its own multer parser owns the request
+// (JotForm webhooks POST multipart/form-data), same reasoning as dav-bridge.
+app.use('/api/uez/jotform-webhook', uezJotformRoutes);
 
 // Direct CardDAV discovery/collection routes. No redirects: authenticated
 // CardDAV clients can handle redirects poorly. Keep /dav as a legacy browser
@@ -52,6 +60,7 @@ app.get('/health', (_req, res) => res.json({
 }));
 app.use('/api/uez/analytics', uezAnalyticsRoutes);
 app.use('/api/uez', uezAccountsRoutes);
+app.use('/api/uez', uezJotformTestRoutes);
 app.use('/api/uez', uezRoutes);
 
 const port = process.env.PORT || 4000;

@@ -190,6 +190,10 @@ export function getAdminApplication(applicationId) {
   return request(`/api/uez/admin/applications/${applicationId}`);
 }
 
+export function startJotformTest() {
+  return request('/api/uez/admin/jotform-test/start', { method: 'POST' });
+}
+
 export function updateAdminApplication(applicationId, payload) {
   return request(`/api/uez/admin/applications/${applicationId}`, {
     method: 'PATCH',

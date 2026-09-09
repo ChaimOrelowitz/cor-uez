@@ -7,6 +7,7 @@ import EmailSettingsPage from './EmailSettingsPage';
 import AccountRecoveryPage from './AccountRecoveryPage';
 import SignupLayoutPage from './SignupLayoutPage';
 import HomeStatsPage from './HomeStatsPage';
+import JotformTestPage from './JotformTestPage';
 import AccountsPage from './AccountsPage';
 import { trackPublicVisit } from './analytics';
 import './styles.css';
@@ -30,6 +31,7 @@ if (path === '/admin' || /^\/admin\/businesses\/[^/]+$/.test(path)) Root = Admin
 else if (path === '/admin/demo-client') Root = () => <App demoMode />;
 else if (path === '/admin/signup-layout') Root = SignupLayoutPage;
 else if (path === '/admin/home-stats') Root = HomeStatsPage;
+else if (path === '/admin/jotform-test') Root = JotformTestPage;
 else if (path === '/admin/email-settings') Root = EmailSettingsPage;
 else if (path === '/admin/accounts') Root = AccountsPage;
 else if (path === '/forgot-password') Root = () => <AccountRecoveryPage mode="forgot" />;
