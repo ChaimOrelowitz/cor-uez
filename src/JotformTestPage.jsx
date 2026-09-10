@@ -59,7 +59,7 @@ export default function JotformTestPage() {
     setMessage('');
   }
 
-  if (!authorized) return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">Loading…</div></div>;
+  if (!authorized) return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">{message || 'Loading…'}</div></div>;
 
   return <div className="admin-shell signup-layout-shell">
     <header className="admin-topbar">

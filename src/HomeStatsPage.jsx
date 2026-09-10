@@ -34,7 +34,7 @@ export default function HomeStatsPage() {
     finally { setBusy(false); }
   }
 
-  if (!stats) return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">Loading home stats…</div></div>;
+  if (!stats) return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">{message || 'Loading home stats…'}</div></div>;
 
   return <div className="admin-shell signup-layout-shell">
     <header className="admin-topbar">
