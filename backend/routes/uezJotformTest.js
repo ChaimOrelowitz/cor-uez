@@ -8,9 +8,15 @@ const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 
 const router = express.Router();
-router.use(requireUezAuth);
 
-router.post('/admin/jotform-test/start', requireUezAdmin, async (req, res) => {
+// requireUezAuth/requireUezAdmin are applied directly on this one route,
+// NOT via router.use() - this router is mounted at the broad '/api/uez'
+// prefix in server.js, so a blanket router.use(requireUezAuth) here would
+// intercept EVERY /api/uez/* request (signup, signup-layout, home-stats,
+// etc.) before it ever reached uez.js's actual routes, rejecting every
+// unauthenticated client-facing call with 401 "Missing authorization
+// token" - exactly what happened and broke client account creation.
+router.post('/admin/jotform-test/start', requireUezAuth, requireUezAdmin, async (req, res) => {
   try {
     const payload = {
       applicant_user_id: req.user.id,
