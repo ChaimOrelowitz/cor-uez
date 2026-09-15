@@ -69,8 +69,21 @@ function digits(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
+// A field whose HTML `name` ends in "[]" (multi-file uploads, checkboxes)
+// might come through rawRequest keyed either with or without that suffix,
+// or as any other "<name>[...]" bracket variant - not confirmed against a
+// real submission, so every lookup below resolves defensively across all
+// of them instead of assuming one exact key.
+function resolveKey(answers, name) {
+  if (Object.prototype.hasOwnProperty.call(answers, name)) return name;
+  const bracketed = `${name}[]`;
+  if (Object.prototype.hasOwnProperty.call(answers, bracketed)) return bracketed;
+  return Object.keys(answers).find((key) => key.startsWith(`${name}[`)) || null;
+}
+
 function getValue(answers, name) {
-  const value = answers[name];
+  const key = resolveKey(answers, name);
+  const value = key ? answers[key] : undefined;
   if (Array.isArray(value)) return value[0] ?? '';
   if (value && typeof value === 'object') return '';
   return value ?? '';
@@ -90,16 +103,19 @@ function getSubValue(answers, name, subkey) {
 }
 
 function isChecked(answers, name, expected = 'Yes') {
-  const value = answers[name];
+  const key = resolveKey(answers, name);
+  const value = key ? answers[key] : undefined;
   if (Array.isArray(value)) return value.includes(expected);
   return value === expected;
 }
 
 function getFileUrls(answers, name) {
-  const value = answers[name];
+  const key = resolveKey(answers, name);
+  const value = key ? answers[key] : undefined;
   if (!value) return [];
   if (Array.isArray(value)) return value.filter(Boolean);
   if (typeof value === 'string') return value.split(/[|,]\s*/).map((s) => s.trim()).filter(Boolean);
+  if (typeof value === 'object') return Object.values(value).filter((v) => typeof v === 'string' && v);
   return [];
 }
 
@@ -190,18 +206,21 @@ router.post('/:secretToken', upload.any(), async (req, res) => {
     // 3. Documents - JotForm's file-upload answers are CDN URLs, not bytes;
     // fetch each one server-side and store it the same way the real upload
     // route does (same bucket/path convention, same uez_documents shape).
+    // Each attempt returns a one-line diagnostic (not just a console log,
+    // which nobody outside the server can see) so a failed test run is
+    // self-explanatory from the admin Case Workspace's Activity feed.
     async function storeDocument(documentType, url) {
-      if (!url) return;
+      if (!url) return `${documentType}: no file URL found in the submission (check the field Name / getFileUrls key match)`;
       try {
         const response = await fetch(url);
-        if (!response.ok) { console.warn(`[jotform-webhook] could not fetch ${documentType} from JotForm: ${response.status}`); return; }
+        if (!response.ok) return `${documentType}: fetching ${url} from JotForm failed (HTTP ${response.status})`;
         const buffer = Buffer.from(await response.arrayBuffer());
         const mimetype = response.headers.get('content-type') || 'application/octet-stream';
-        if (!ALLOWED_MIME_TYPES.has(mimetype)) { console.warn(`[jotform-webhook] ${documentType} has disallowed type ${mimetype}, skipping`); return; }
+        if (!ALLOWED_MIME_TYPES.has(mimetype)) return `${documentType}: JotForm returned type "${mimetype}", which isn't in the allowed list (pdf/jpeg/png/webp)`;
         const originalname = decodeURIComponent(url.split('/').pop() || `${documentType}.pdf`);
         const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${safeFilename(originalname)}`;
         const { error: storageError } = await supabase.storage.from(DOCUMENT_BUCKET).upload(storagePath, buffer, { contentType: mimetype, upsert: false });
-        if (storageError) throw storageError;
+        if (storageError) return `${documentType}: storage upload failed — ${storageError.message}`;
         const { error: docError } = await supabase.from('uez_documents').insert({
           application_id: application.id,
           document_type: documentType,
@@ -211,23 +230,42 @@ router.post('/:secretToken', upload.any(), async (req, res) => {
           status: 'received',
           metadata: { mimeType: mimetype, size: buffer.length }
         });
-        if (docError) throw docError;
+        if (docError) return `${documentType}: uez_documents insert failed — ${docError.message}`;
+        return `${documentType}: stored OK (${mimetype}, ${buffer.length} bytes, from ${originalname})`;
       } catch (err) {
-        console.error(`[jotform-webhook] failed to store ${documentType}:`, err.message);
+        return `${documentType}: unexpected error — ${err.message}`;
       }
     }
 
+    const docDiagnostics = [];
     if (!isSoleProp) {
-      await storeDocument('formation', getFileUrls(answers, FIELDS.formationUpload)[0]);
+      docDiagnostics.push(await storeDocument('formation', getFileUrls(answers, FIELDS.formationUpload)[0]));
+    } else {
+      docDiagnostics.push('formation: skipped (sole proprietorship)');
     }
 
     const hasBrc = getValue(answers, FIELDS.hasBrc) === 'Yes';
     if (hasBrc) {
-      await storeDocument('brc', getFileUrls(answers, FIELDS.brcUpload)[0]);
+      docDiagnostics.push(await storeDocument('brc', getFileUrls(answers, FIELDS.brcUpload)[0]));
       await supabase.from('uez_applications').update({ brc_status: 'uploaded' }).eq('id', application.id);
     } else {
+      docDiagnostics.push('brc: deferred (client_created)');
       await supabase.from('uez_applications').update({ brc_status: 'client_created' }).eq('id', application.id);
     }
+
+    // Admin-only diagnostic note - visible in the case's Activity feed,
+    // not shown to the applicant. Best-effort: never let a logging failure
+    // block the actual submission.
+    try {
+      await supabase.from('uez_status_events').insert({
+        application_id: application.id,
+        status: 'jotform_webhook_documents',
+        label: 'JotForm document processing',
+        message: docDiagnostics.join(' | '),
+        visible_to_applicant: false,
+        created_by: null
+      });
+    } catch (_) {}
 
     // 4. Mark submitted. Lighter-weight than the real submit route's full
     // validation checklist on purpose - this is a wiring test, not
