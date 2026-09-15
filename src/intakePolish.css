@@ -41,5 +41,9 @@
 .sole-prop-choice{margin:14px 0 20px;padding:18px;border:1px solid #dfe3ee;border-radius:16px;background:#f8f9fc;display:grid;gap:12px}
 .sole-prop-choice.selected{background:#eff9f3;border-color:#afd8bd}
 .sole-prop-choice strong{font-size:15px}.sole-prop-choice p{margin:5px 0 0;color:#697188;font-size:13px;line-height:1.55}
-.sole-prop-choice button{justify-self:start;text-align:left;line-height:1.35}.sole-prop-confirmed{color:#247447;background:#e3f4e8}
+.sole-prop-choice button{justify-self:stretch;text-align:center;line-height:1.35}.sole-prop-confirmed{color:#247447;background:#e3f4e8}
+/* Center the Create/follow-up buttons in the NJ-says card */
+.sole-prop-action-row{justify-content:center}
+/* All document cards same background shade */
+.upload-card{background:#f8f9fc}
 @media(max-width:760px){.sole-prop-choice button{width:100%}}

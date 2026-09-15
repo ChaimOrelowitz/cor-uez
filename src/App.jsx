@@ -1186,15 +1186,15 @@ export default function App({ demoMode = false }) {
           <div className="ordered-documents">
             {signupLayout.documents.map((key) => {
               if (key === 'formation') return <div className={`upload-card formation-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Upload the business's Certificate of Formation.</p></div>
+                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p></div>
                 <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || solePropConfirmedHere} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>
               </div>;
               if (key === 'soleProp') return !hasFormation ? <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''} ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Don't have a Certificate of Formation?</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship.</p></div>
-                <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Sole proprietorship confirmed' : "I don't have a Certificate of Formation because this business is a sole proprietorship"}</button>{solePropConfirmedHere && <button type="button" className="sole-prop-undo" title="Undo sole proprietorship selection" aria-label="Undo sole proprietorship selection" onClick={undoSoleProprietorship} disabled={busy}>↶</button>}</div>
+                <div><strong>I am a sole proprietorship</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship — those entities always have a Certificate of Formation.</p></div>
+                <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Confirmed — I am a sole proprietorship' : 'I am a sole proprietorship'}</button>{solePropConfirmedHere && <button type="button" className="sole-prop-undo" title="Undo" aria-label="Undo sole proprietorship selection" onClick={undoSoleProprietorship} disabled={busy}>↶</button>}</div>
               </div> : null;
               if (key === 'brc') return <div className={`upload-card brc-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Business Registration Certificate <span className="required-star">*</span></strong><p>New Jersey requires a Business Registration Certificate (BRC) for every enrolled business. Look yours up using the values below, then upload the PDF it gives you.</p></div>
+                <div><strong>Business Registration Certificate (BRC) <span className="required-star">*</span></strong><p>New Jersey requires a BRC for every enrolled business. Most businesses can retrieve theirs online in minutes — click "Look up my BRC" and enter the values below. Download the PDF and upload it here.</p></div>
                 <div className="brc-lookup-values">
                   <div><span>Name Control</span><strong>{nameControl(form.businessName) || '—'}</strong></div>
                   <div><span>Tax ID</span><strong>{njTaxId(form.ein) || '—'}</strong></div>
@@ -1202,10 +1202,10 @@ export default function App({ demoMode = false }) {
                 <a className="secondary compact inline-button" href={NJ_BRC_LOOKUP_URL} target="_blank" rel="noreferrer">Look up my BRC</a>
                 <label className="secondary inline-button file-button">{uploadingType === 'brc' ? 'Uploading…' : hasBrc ? 'Replace / add another' : 'Upload Business Registration Certificate'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || brcDeferred} onChange={(e) => uploadDoc('brc', e.target.files?.[0])} /></label>
                 {!hasBrc && <div className={`sole-prop-choice ${brcDeferred ? 'selected' : ''}`}>
-                  <div><strong>NJ says your business isn't registered yet?</strong><p>Register for a BRC, then come back and tell us — you don't need to upload anything yet.</p></div>
+                  <div><strong>Can't find your BRC yet?</strong><p>If NJ says your business isn't registered, you'll need to register first — it takes about 10 minutes. Once you've registered, come back and let us know. You don't need to upload anything until you have it.</p></div>
                   <div className="sole-prop-action-row">
-                    <a className="secondary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Create my BRC</a>
-                    <button type="button" className={brcDeferred ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={reportBrcRegistered} disabled={brcBusy}>{brcDeferred ? '✓ Registration reported' : "I registered, I'll follow up"}</button>
+                    <a className="secondary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Register my business with NJ</a>
+                    <button type="button" className={brcDeferred ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={reportBrcRegistered} disabled={brcBusy}>{brcDeferred ? '✓ Got it — we\'ll follow up' : "I registered, I'll follow up"}</button>
                   </div>
                 </div>}
               </div>;
