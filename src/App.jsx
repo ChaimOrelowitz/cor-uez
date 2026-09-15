@@ -44,6 +44,19 @@ const DEFAULT_SIGNUP_LAYOUT = {
 function signupFieldClass(layout, group, key) {
   return Number(layout?.widths?.[group]?.[key]) === 2 ? 'field-span-2' : '';
 }
+
+// A layout array item is normally a plain field-key string. An admin can
+// also insert a section break via the Signup Layout editor - represented
+// as an object instead of a string so it can carry its own id (for
+// reordering/removal) and its "light line vs no line" choice, without
+// needing to be a real field the backend has to validate against.
+function isBreak(item) {
+  return Boolean(item) && typeof item === 'object' && item.break === true;
+}
+
+function renderSectionBreak(item) {
+  return <div className={`form-section-break field-span-2 ${item.line ? 'with-line' : 'no-line'}`} key={item.id} />;
+}
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
 // Grandfather clause: only applications created from this date onward are
@@ -1123,7 +1136,7 @@ export default function App({ demoMode = false }) {
         {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); createAccountAndCase(); }}>
           <div className="intro-copy"><h3>Create your COR account</h3><p>Your account keeps your application, documents, and status in one place.</p></div>
           <div className="field-grid ordered-field-grid">
-            {signupLayout.account.map((key) => key === 'email'
+            {signupLayout.account.map((key) => isBreak(key) ? renderSectionBreak(key) : key === 'email'
               ? <div className={signupFieldClass(signupLayout, 'account', key)} key={key}><label>Email <span className="required-star">*</span></label><input type="email" value={form.email} onChange={update('email')} required /></div>
               : <div className={signupFieldClass(signupLayout, 'account', key)} key={key}><label>Password <span className="required-star">*</span></label><input type="password" value={form.password} onChange={update('password')} required minLength="6" /></div>)}
           </div>
@@ -1134,6 +1147,7 @@ export default function App({ demoMode = false }) {
           <div className="intro-copy"><h3>Tell us about the business</h3><p>We’ll use this information for your UEZ enrollment and available grant application.</p></div>
           <div className="field-grid ordered-field-grid business-ordered-grid">
             {signupLayout.business.map((key) => {
+              if (isBreak(key)) return renderSectionBreak(key);
               if (key === 'businessName') return <div className={signupFieldClass(signupLayout, 'business', key)} key={key}><label>Business name <span className="required-star">*</span></label><input required value={form.businessName} onChange={update('businessName')} /></div>;
               if (key === 'businessDescription') return <div className={signupFieldClass(signupLayout, 'business', key)} key={key}><label>In a few words, what does the business do? <span className="required-star">*</span></label><textarea value={form.businessDescription} onChange={update('businessDescription')} placeholder="Example: HVAC installation and repair" required /></div>;
               if (key === 'ein') return <div className={signupFieldClass(signupLayout, 'business', key)} key={key}><label>EIN <span className="required-star">*</span></label><input required inputMode="numeric" value={form.ein} onChange={(e) => { const d=e.target.value.replace(/\D/g,'').slice(0,9); setForm((old)=>({...old,ein:d.length>2?`${d.slice(0,2)}-${d.slice(2)}`:d})); }} maxLength="10" placeholder="12-3456789" /></div>;
@@ -1156,6 +1170,7 @@ export default function App({ demoMode = false }) {
             <div className="owner-card-head"><strong>{index === 0 ? 'Primary owner' : `Additional owner ${index + 1}`}</strong>{index > 0 && <button className="owner-remove" type="button" onClick={() => removeOwner(index)}>Remove</button>}</div>
             <div className="field-grid ordered-field-grid">
               {signupLayout.ownerCore.map((key) => {
+                if (isBreak(key)) return renderSectionBreak(key);
                 if (key === 'title') return <React.Fragment key={key}><div className={signupFieldClass(signupLayout, 'ownerCore', key)}><label>Title <span className="required-star">*</span></label><select required value={owner.title || ''} onChange={updateOwner(index, 'title')}><option value="" disabled>Select title</option><option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Ms.">Ms.</option><option value="Dr.">Dr.</option><option value="Rabbi">Rabbi</option><option value="Other">Other</option></select></div>{owner.title === 'Other' && <div><label>Other title <span className="required-star">*</span></label><input required value={owner.titleOther || ''} onChange={updateOwner(index, 'titleOther')} /></div>}</React.Fragment>;
                 if (key === 'firstName') return <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>First name <span className="required-star">*</span></label><input required value={owner.firstName} onChange={updateOwner(index, 'firstName')} /></div>;
                 if (key === 'lastName') return <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>Last name <span className="required-star">*</span></label><input required value={owner.lastName} onChange={updateOwner(index, 'lastName')} /></div>;
@@ -1168,6 +1183,7 @@ export default function App({ demoMode = false }) {
               })}
               <div className="owner-address-heading field-span-2"><strong>Home address</strong></div>
               {signupLayout.ownerAddress.map((key) => {
+                if (isBreak(key)) return renderSectionBreak(key);
                 if (key === 'addressLine1') return <div className={signupFieldClass(signupLayout, 'ownerAddress', key)} key={key}><label>Street address <span className="required-star">*</span></label><input required autoComplete="street-address" value={owner.addressLine1 || ''} onChange={updateOwner(index, 'addressLine1')} /></div>;
                 if (key === 'addressLine2') return <div className={signupFieldClass(signupLayout, 'ownerAddress', key)} key={key}><label>Address line 2</label><input value={owner.addressLine2 || ''} onChange={updateOwner(index, 'addressLine2')} /></div>;
                 if (key === 'city') return <div className={signupFieldClass(signupLayout, 'ownerAddress', key)} key={key}><label>City <span className="required-star">*</span></label><input required value={owner.city || ''} onChange={updateOwner(index, 'city')} /></div>;
@@ -1185,6 +1201,7 @@ export default function App({ demoMode = false }) {
           <div className="intro-copy"><h3>Documents</h3><p>Upload your formation document and any other supporting documents you want COR to have.</p></div>
           <div className="ordered-documents">
             {signupLayout.documents.map((key) => {
+              if (isBreak(key)) return renderSectionBreak(key);
               if (key === 'formation') return <div className={`upload-card formation-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
                 <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p></div>
                 <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || solePropConfirmedHere} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>

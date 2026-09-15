@@ -42,12 +42,24 @@ const DEFAULT_SIGNUP_LAYOUT = {
   }
 };
 
+// A layout item is normally a field-key string. An admin can also insert a
+// section break via the Signup Layout editor - stored as {break:true, id,
+// line} instead of a string, since it isn't a real field and shouldn't be
+// checked against DEFAULT_SIGNUP_LAYOUT's fixed field set below.
+function isBreakItem(item) {
+  return item && typeof item === 'object' && item.break === true;
+}
+
 function validateSignupLayout(layout) {
   const clean = { widths: {} };
   for (const [group, defaults] of Object.entries(DEFAULT_SIGNUP_LAYOUT)) {
     if (group === 'widths') continue;
-    const received = Array.isArray(layout?.[group]) ? layout[group] : defaults;
-    if (received.length !== defaults.length || new Set(received).size !== defaults.length || received.some((key) => !defaults.includes(key))) {
+    const receivedRaw = Array.isArray(layout?.[group]) ? layout[group] : defaults;
+    const received = receivedRaw.map((item) => (isBreakItem(item)
+      ? { break: true, id: String(item.id || '').slice(0, 40) || `brk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, line: item.line !== false }
+      : item));
+    const fieldKeys = received.filter((item) => !isBreakItem(item));
+    if (fieldKeys.length !== defaults.length || new Set(fieldKeys).size !== defaults.length || fieldKeys.some((key) => !defaults.includes(key))) {
       throw new Error(`Invalid signup layout for ${group}. Fields can only be reordered within their existing page.`);
     }
     clean[group] = received;

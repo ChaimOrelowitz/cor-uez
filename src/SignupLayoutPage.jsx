@@ -9,6 +9,13 @@ const GROUPS = {
   documents: { title: 'Documents page', fields: { formation: 'Certificate of Formation upload', soleProp: 'Sole proprietorship alternative', brc: 'Business Registration Certificate upload', pbsAccount: 'Existing PBS account question', supporting: 'Other supporting document' } }
 };
 
+// A layout item is normally a field-key string. This editor can also
+// insert a section break - stored as {break:true, id, line} instead of a
+// string - so a break can be reordered/removed like a field but isn't one.
+function isBreak(item) {
+  return Boolean(item) && typeof item === 'object' && item.break === true;
+}
+
 export default function SignupLayoutPage() {
   const [layout, setLayout] = useState(null);
   const [drag, setDrag] = useState(null);
@@ -49,6 +56,24 @@ export default function SignupLayoutPage() {
     return Number(layout.widths?.[group]?.[key]) === 2 ? 2 : 1;
   }
 
+  function addBreak(group) {
+    setLayout((old) => ({
+      ...old,
+      [group]: [...old[group], { break: true, id: `brk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, line: true }]
+    }));
+  }
+
+  function removeBreak(group, id) {
+    setLayout((old) => ({ ...old, [group]: old[group].filter((item) => !(isBreak(item) && item.id === id)) }));
+  }
+
+  function setBreakLine(group, id, line) {
+    setLayout((old) => ({
+      ...old,
+      [group]: old[group].map((item) => (isBreak(item) && item.id === id ? { ...item, line } : item))
+    }));
+  }
+
   async function save() {
     setBusy(true); setMessage('');
     try {
@@ -82,27 +107,43 @@ export default function SignupLayoutPage() {
       {message && <div className="form-message layout-message">{message}</div>}
       <div className="layout-groups">
         {Object.entries(GROUPS).map(([group, info]) => <section className="wizard-card layout-group" key={group}>
-          <div className="layout-group-head"><h2>{info.title}</h2><span>{layout[group].length} fields</span></div>
+          <div className="layout-group-head"><h2>{info.title}</h2><span>{layout[group].filter((item) => !isBreak(item)).length} fields</span></div>
           <div className="layout-visual-grid">
-            {layout[group].map((key, index) => <div
-              key={key}
-              className={`layout-field-tile ${spanFor(group, key) === 2 ? 'span-full' : 'span-half'} ${drag?.group === group && drag?.index === index ? 'dragging' : ''}`}
-              draggable
-              onDragStart={() => setDrag({ group, index })}
-              onDragEnd={() => setDrag(null)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); if (drag?.group === group) move(group, drag.index, index); setDrag(null); }}
-            >
-              <div className="layout-field-main"><span className="drag-handle" aria-hidden="true">⋮⋮</span><strong>{info.fields[key] || key}</strong></div>
-              <div className="layout-field-controls">
-                <div className="layout-span-toggle" aria-label={`Width for ${info.fields[key] || key}`}>
-                  <button type="button" className={spanFor(group, key) === 1 ? 'active' : ''} onClick={() => setSpan(group, key, 1)}>Half row</button>
-                  <button type="button" className={spanFor(group, key) === 2 ? 'active' : ''} onClick={() => setSpan(group, key, 2)}>Full row</button>
+            {layout[group].map((item, index) => {
+              const brk = isBreak(item);
+              const itemKey = brk ? item.id : item;
+              return <div
+                key={itemKey}
+                className={`layout-field-tile ${brk ? 'layout-break-tile span-full' : (spanFor(group, item) === 2 ? 'span-full' : 'span-half')} ${drag?.group === group && drag?.index === index ? 'dragging' : ''}`}
+                draggable
+                onDragStart={() => setDrag({ group, index })}
+                onDragEnd={() => setDrag(null)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); if (drag?.group === group) move(group, drag.index, index); setDrag(null); }}
+              >
+                <div className="layout-field-main"><span className="drag-handle" aria-hidden="true">⋮⋮</span><strong>{brk ? 'Section break' : (info.fields[item] || item)}</strong></div>
+                <div className="layout-field-controls">
+                  {brk ? (
+                    <div className="layout-span-toggle" aria-label="Section break style">
+                      <button type="button" className={item.line ? 'active' : ''} onClick={() => setBreakLine(group, item.id, true)}>Light line</button>
+                      <button type="button" className={!item.line ? 'active' : ''} onClick={() => setBreakLine(group, item.id, false)}>No line</button>
+                    </div>
+                  ) : (
+                    <div className="layout-span-toggle" aria-label={`Width for ${info.fields[item] || item}`}>
+                      <button type="button" className={spanFor(group, item) === 1 ? 'active' : ''} onClick={() => setSpan(group, item, 1)}>Half row</button>
+                      <button type="button" className={spanFor(group, item) === 2 ? 'active' : ''} onClick={() => setSpan(group, item, 2)}>Full row</button>
+                    </div>
+                  )}
+                  <div className="layout-row-actions">
+                    <button title="Move up" onClick={() => move(group, index, index - 1)} disabled={index === 0}>↑</button>
+                    <button title="Move down" onClick={() => move(group, index, index + 1)} disabled={index === layout[group].length - 1}>↓</button>
+                    {brk && <button title="Remove section break" onClick={() => removeBreak(group, item.id)}>✕</button>}
+                  </div>
                 </div>
-                <div className="layout-row-actions"><button title="Move up" onClick={() => move(group, index, index - 1)} disabled={index === 0}>↑</button><button title="Move down" onClick={() => move(group, index, index + 1)} disabled={index === layout[group].length - 1}>↓</button></div>
-              </div>
-            </div>)}
+              </div>;
+            })}
           </div>
+          <button type="button" className="secondary compact layout-add-break" onClick={() => addBreak(group)}>+ Add section break</button>
         </section>)}
       </div>
     </main>
