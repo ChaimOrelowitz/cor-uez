@@ -7,7 +7,12 @@
 // client wizard doesn't have to reach into admin-only code for it.
 
 export function nameControl(name) {
-  return String(name || '').replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase();
+  // NJ's rule: first 4 characters of the business/trade name, keeping only
+  // letters, digits, & and - (no spaces/slashes/other punctuation), padded
+  // with trailing hyphens if the cleaned name is under 4 characters.
+  const cleaned = String(name || '').replace(/[^a-z0-9&-]/gi, '').toUpperCase();
+  if (!cleaned) return '';
+  return cleaned.slice(0, 4).padEnd(4, '-');
 }
 
 export function njTaxId(ein) {

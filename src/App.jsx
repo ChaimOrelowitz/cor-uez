@@ -84,9 +84,66 @@ function documentLabel(type) {
     uez_approval_email: 'Notice of Certification Application Approved email',
     tax_clearance: 'New Jersey tax-clearance letter',
     ldc_application: 'Lakewood LDC incentive application',
-    supporting: 'Supporting document'
+    supporting: 'Supporting document',
+    sole_prop_declaration: 'Sole proprietorship declaration'
   };
   return labels[type] || type;
+}
+
+function pdfEscapeText(value) {
+  return String(value).replace(/[\\()]/g, (c) => `\\${c}`);
+}
+
+function pdfSafeLine(value, maxLen = 78) {
+  const cleaned = String(value || '').replace(/[^\x20-\x7e]/g, '?');
+  return cleaned.length > maxLen ? `${cleaned.slice(0, maxLen - 3)}...` : cleaned;
+}
+
+// Hand-builds a minimal, valid single-page PDF (no library needed) so the
+// signup wizard can attach a real document to the case file the moment a
+// client declares themselves a sole proprietorship, instead of leaving that
+// step with no paper trail at all.
+function buildSoleProprietorshipDeclarationPdf({ businessName, declaredAt }) {
+  const lines = [
+    { text: 'Sole Proprietorship Declaration', size: 16, dy: 0 },
+    { text: pdfSafeLine(`Business: ${businessName || 'Not provided'}`, 70), size: 11, dy: -32 },
+    { text: `Declared: ${declaredAt}`, size: 11, dy: -16 },
+    { text: 'The applicant confirmed, through the COR Solutions UEZ signup', size: 11, dy: -26 },
+    { text: 'wizard, that this business is legally a sole proprietorship and', size: 11, dy: -16 },
+    { text: 'therefore does not have a Certificate of Formation issued by the', size: 11, dy: -16 },
+    { text: 'State of New Jersey Division of Revenue and Enterprise Services.', size: 11, dy: -16 }
+  ];
+
+  const streamLines = ['BT', '72 740 Td'];
+  let lastSize = null;
+  lines.forEach((line) => {
+    if (line.dy !== 0) streamLines.push(`0 ${line.dy} Td`);
+    if (line.size !== lastSize) { streamLines.push(`/F1 ${line.size} Tf`); lastSize = line.size; }
+    streamLines.push(`(${pdfEscapeText(line.text)}) Tj`);
+  });
+  streamLines.push('ET');
+  const content = streamLines.join('\n');
+
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i++) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return new Blob([pdf], { type: 'application/pdf' });
 }
 
 function formatPhone(value) {
@@ -868,6 +925,17 @@ export default function App({ demoMode = false }) {
     setBusy(true); setMessage('');
     try {
       await persistSoleProprietorship(true);
+      const declaredAt = new Date().toLocaleDateString();
+      if (demoMode) {
+        setDocuments((old) => [...old.filter((doc) => doc.document_type !== 'sole_prop_declaration'), { id: `demo-sole-prop-${Date.now()}`, document_type: 'sole_prop_declaration', filename: 'sole-proprietorship-declaration.pdf' }]);
+      } else {
+        const pdfBlob = buildSoleProprietorshipDeclarationPdf({ businessName: form.businessName, declaredAt });
+        const pdfFile = new File([pdfBlob], 'sole-proprietorship-declaration.pdf', { type: 'application/pdf' });
+        await uploadApplicationDocument(applicationId, 'sole_prop_declaration', pdfFile);
+        const refreshed = await getApplication(applicationId);
+        setBundle(refreshed);
+        setDocuments(refreshed.documents || []);
+      }
       setMessage('Sole proprietorship confirmed. No Certificate of Formation is required.');
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
@@ -878,7 +946,17 @@ export default function App({ demoMode = false }) {
     try {
       await persistSoleProprietorship(false);
       setSolePropConfirmedHere(false);
-      setMessage('Sole proprietorship selection cleared. You can upload the Certificate of Formation.');
+      const declaration = documents.find((doc) => doc.document_type === 'sole_prop_declaration');
+      if (declaration) {
+        if (demoMode) {
+          setDocuments((old) => old.filter((doc) => doc.id !== declaration.id));
+        } else {
+          await deleteDocument(applicationId, declaration.id);
+          const refreshed = await getApplication(applicationId);
+          setBundle(refreshed);
+          setDocuments(refreshed.documents || []);
+        }
+      }
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   }
@@ -1203,13 +1281,13 @@ export default function App({ demoMode = false }) {
           <div className="ordered-documents">
             {signupLayout.documents.map((key) => {
               if (isBreak(key)) return renderSectionBreak(key);
-              if (key === 'formation') return <div className={`upload-card formation-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p><a href={cofExampleImage} target="_blank" rel="noreferrer" className="doc-example-link"><img src={cofExampleImage} alt="Example Certificate of Formation" className="doc-example-thumb" /><span>See an example</span></a></div>
-                <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || solePropConfirmedHere} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>
+              if (key === 'formation') return solePropConfirmedHere ? null : <div className={`upload-card formation-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
+                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p><a href={cofExampleImage} target="_blank" rel="noreferrer" className="doc-example-link"><img src={cofExampleImage} alt="Example Certificate of Formation" className="doc-example-thumb" /><span>See an example of a Certificate of Formation</span></a></div>
+                <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>
               </div>;
               if (key === 'soleProp') return !hasFormation ? <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''} ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
                 <div><strong>I am a sole proprietorship</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship — those entities always have a Certificate of Formation.</p></div>
-                <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Confirmed — I am a sole proprietorship' : 'I am a sole proprietorship'}</button>{solePropConfirmedHere && <button type="button" className="sole-prop-undo" title="Undo" aria-label="Undo sole proprietorship selection" onClick={undoSoleProprietorship} disabled={busy}>↶</button>}</div>
+                <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Confirmed — I am a sole proprietorship' : 'I am a sole proprietorship'}</button>{solePropConfirmedHere && <button type="button" className="secondary" onClick={undoSoleProprietorship} disabled={busy}>Undo</button>}</div>
               </div> : null;
               if (key === 'brc') return <div className={`upload-card brc-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
                 <div><strong>Business Registration Certificate (BRC) <span className="required-star">*</span></strong><p>New Jersey requires a BRC for every enrolled business. Most businesses can retrieve theirs online in minutes — click "Look up my BRC" and enter the values below. Download the PDF and upload it here.</p></div>
@@ -1231,9 +1309,9 @@ export default function App({ demoMode = false }) {
                 <div><strong>Do you already have a New Jersey Premier Business Services (PBS) account? <span className="required-star">*</span></strong><p>If you already use PBS/MyNJ for this business, choose Yes and provide the login so COR can use the existing account.</p></div>
                 <div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="yes" checked={form.hasExistingPbsAccount==='yes'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="no" checked={form.hasExistingPbsAccount==='no'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value,pbsUsername:'',pbsPassword:''}))} />No</label></div>
                 <a className="pbs-check-link" href="https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login" target="_blank" rel="noreferrer">Not sure? Open PBS / MyNJ to check for a saved login or reset your password.</a>
-                {form.hasExistingPbsAccount === 'yes' && <div className="field-grid pbs-existing-login-grid"><div><label>MyNJ username <span className="required-star">*</span></label><input value={form.pbsUsername} onChange={update('pbsUsername')} required /></div><div><label>MyNJ password <span className="required-star">*</span></label><input type="password" value={form.pbsPassword} onChange={update('pbsPassword')} required /></div></div>}
+                {form.hasExistingPbsAccount === 'yes' && <div className="pbs-existing-login-grid"><div><label>MyNJ username <span className="required-star">*</span></label><input value={form.pbsUsername} onChange={update('pbsUsername')} required /></div><div><label>MyNJ password <span className="required-star">*</span></label><input type="password" value={form.pbsPassword} onChange={update('pbsPassword')} required /></div></div>}
               </div>;
-              if (key === 'supporting') return <div className={`upload-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}><div><strong>Other supporting document</strong><p>Optional. Add anything you think COR should have for this application.</p></div><label className="secondary inline-button file-button">{uploadingType === 'supporting' ? 'Uploading…' : 'Upload another file'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('supporting', e.target.files?.[0])} /></label></div>;
+              if (key === 'supporting') return null;
               return null;
             })}
           </div>

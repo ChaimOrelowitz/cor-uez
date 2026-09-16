@@ -32,6 +32,7 @@ export function documentLabel(type) {
   if (type === 'tax_clearance') return 'Tax-clearance letter';
   if (type === 'ldc_application') return 'LDC incentive application';
   if (type === 'supporting') return 'Supporting';
+  if (type === 'sole_prop_declaration') return 'Sole proprietorship declaration';
   return type;
 }
 
