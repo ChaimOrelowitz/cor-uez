@@ -225,6 +225,36 @@
   .admin-detail { padding: 18px; }
 }
 
+/* Desktop applications list: collapsed by default so the case workspace gets
+   the full window width; opening it floats the list over the content as an
+   overlay drawer instead of squeezing the layout narrower. Scoped above the
+   900px breakpoint only - the mobile/tablet list<->detail swap above is
+   untouched. */
+@media (min-width: 901px) {
+  .admin-layout {
+    display: block;
+    position: relative;
+    grid-template-columns: none;
+  }
+  .admin-detail { height: 100%; }
+  .admin-sidebar {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 340px;
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    box-shadow: 0 16px 44px rgba(15,20,15,.28);
+  }
+  .admin-layout.sidebar-open .admin-sidebar { transform: translateX(0); }
+  .sidebar-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: rgba(10,16,10,.22);
+  }
+}
+
 @media (max-width: 640px) {
   .upload-card { align-items: flex-start; flex-direction: column; }
   .review-grid { grid-template-columns: 1fr; }

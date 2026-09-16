@@ -190,6 +190,10 @@ export default function AdminPage() {
   const [manualDocUploading, setManualDocUploading] = useState(false);
   const [directUploadType, setDirectUploadType] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  // Desktop applications list: an overlay drawer, collapsed by default so
+  // the case workspace gets the full screen width. Opening it floats it
+  // over the content rather than squeezing the layout narrower.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteEditingId, setNoteEditingId] = useState(null);
@@ -1202,6 +1206,7 @@ export default function AdminPage() {
 
   function selectApplication(id) {
     setMobileDetailOpen(true);
+    setSidebarOpen(false);
     // A deliberate click gets a real history entry so back/forward moves
     // between businesses; openApplication() only ever replaces the URL.
     if (id !== selectedId) window.history.pushState(null, '', businessUrl(id));
@@ -1246,7 +1251,17 @@ export default function AdminPage() {
 
   return <div className={`admin-shell${darkMode ? ' dark' : ''}`} data-theme={darkMode ? undefined : 'light'}>
     <header className="admin-topbar">
-      <div className="admin-brand"><div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div></div>
+      <div className="admin-brand">
+        <button
+          type="button"
+          className="sidebar-toggle-btn"
+          onClick={() => setSidebarOpen((open) => !open)}
+          title={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
+          aria-label={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
+          aria-expanded={sidebarOpen}
+        >☰</button>
+        <div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div>
+      </div>
       <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/home-stats">HOME STATS</a><a href="/admin/jotform-test">JOTFORM TEST</a><a href="/admin/accounts">ACCOUNTS</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button><button onClick={handleSignOut}>Log out</button></div>
       <details className="admin-mobile-menu">
         <summary aria-label="Open admin menu">•••</summary>
@@ -1263,7 +1278,8 @@ export default function AdminPage() {
       </details>
     </header>
 
-    <main className={`admin-layout ${mobileDetailOpen ? 'mobile-detail-open' : 'mobile-list-open'}`}>
+    <main className={`admin-layout ${mobileDetailOpen ? 'mobile-detail-open' : 'mobile-list-open'} ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}`}>
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
       <AdminSidebar
         applications={applications}
         selectedId={selectedId}

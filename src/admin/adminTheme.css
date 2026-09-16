@@ -34,15 +34,16 @@
   --admin-text-muted: #6b6255;
   --admin-text-faint: #948a7a;
 
-  /* sidebar — deep forest panel, its own independent palette */
-  --admin-sidebar-bg:           #15241b;
-  --admin-sidebar-surface:      #1d3226;
-  --admin-sidebar-text:         #e3ece5;
-  --admin-sidebar-text-muted:   #8ea795;
-  --admin-sidebar-border:       rgba(255,255,255,.07);
-  --admin-sidebar-hover:        rgba(255,255,255,.05);
-  --admin-sidebar-active-bg:    rgba(79, 157, 105, .22);
-  --admin-sidebar-active-bar:   #4f9d69;
+  /* sidebar — forest green panel, its own independent palette (lightened
+     from the original near-black green so it reads less heavy) */
+  --admin-sidebar-bg:           #2c4c3a;
+  --admin-sidebar-surface:      #385f49;
+  --admin-sidebar-text:         #eef5ef;
+  --admin-sidebar-text-muted:   #a9c4b1;
+  --admin-sidebar-border:       rgba(255,255,255,.09);
+  --admin-sidebar-hover:        rgba(255,255,255,.07);
+  --admin-sidebar-active-bg:    rgba(115, 191, 143, .26);
+  --admin-sidebar-active-bar:   #6fbf8d;
 
   /* accent — sage green, unified with the success/"done" scale below */
   --admin-accent: #4f9d69;
@@ -524,7 +525,7 @@
 .admin-shell .cockpit-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   flex-wrap: wrap;
   padding-top: 18px;
@@ -1214,6 +1215,21 @@
   line-height: 1;
 }
 
+.admin-shell .sidebar-toggle-btn {
+  background: var(--admin-surface-sunken);
+  color: var(--admin-text-muted);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-sm);
+  font-size: 14px;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.admin-shell .sidebar-toggle-btn:hover { color: var(--admin-text); border-color: var(--admin-border-strong); }
+.admin-shell .sidebar-toggle-btn[aria-expanded="true"] { background: var(--admin-accent-soft); color: var(--admin-accent); border-color: var(--admin-accent); }
+@media (max-width: 900px) { .admin-shell .sidebar-toggle-btn { display: none; } }
+
 /* ---- Inline document preview (Formation & BRC tab) ----------------------- */
 /* Renders the signed document URL full-width so the admin can read it        */
 /* without clicking to open the modal. Images show as <img>; PDFs as iframe. */
@@ -1494,12 +1510,19 @@
 
 /* ---- Process bar --------------------------------------------------------- */
 
+/* A rounded segmented-control pill bar, not a flush row of tabs - matches
+   the elevated-card panel it sits above (see .cw-step-panel), which now
+   floats with real margin instead of sitting flush under these tabs. */
 .admin-shell .cw-process-bar {
   display: flex;
   flex-direction: row;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--cw-line);
-  background: var(--cw-panel);
+  gap: 4px;
+  margin: 20px 20px 0;
+  padding: 6px;
+  background: var(--cw-chip-bg);
+  border-radius: 16px;
+  border-bottom: none;
 }
 
 .admin-shell .cw-seg {
@@ -1507,23 +1530,24 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 8px 10px 7px;
+  padding: 8px 12px;
   cursor: pointer;
-  border-right: 1px solid var(--cw-line);
+  border-right: none;
+  border-radius: 11px;
   background: transparent;
   transition: background 0.12s;
   min-width: 0;
   user-select: none;
 }
-.admin-shell .cw-seg:last-child { border-right: none; }
-.admin-shell .cw-seg:hover { background: var(--cw-chip-bg); }
+.admin-shell .cw-seg:hover { background: var(--cw-border-soft); }
 
 .admin-shell .cw-seg-active {
-  background: var(--cw-app-bg);
-  border-bottom: 1px solid var(--cw-app-bg);
-  margin-bottom: -1px;
+  background: var(--cw-panel);
+  box-shadow: 0 4px 12px rgba(20,20,10,.10);
+  border-bottom: none;
+  margin-bottom: 0;
 }
-.admin-shell .cw-seg-active:hover { background: var(--cw-app-bg); }
+.admin-shell .cw-seg-active:hover { background: var(--cw-panel); }
 
 .admin-shell .cw-seg-bar {
   display: block;
