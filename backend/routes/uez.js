@@ -682,6 +682,19 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
       .single();
     if (docError || !doc) return res.status(404).json({ error: 'Document not found' });
 
+    // Was this the newest document of its type? The admin case workspace now
+    // lets an admin browse and delete *any* document in a type's history, not
+    // just the current one - the review-status resets below must only fire
+    // when the current (newest) doc is the one being removed, or deleting an
+    // old duplicate would wrongly knock an already-approved newer doc back to
+    // "not reviewed".
+    const { data: sameTypeDocs } = await supabase.from('uez_documents')
+      .select('id, created_at')
+      .eq('application_id', application.id)
+      .eq('document_type', doc.document_type)
+      .order('created_at', { ascending: false });
+    const isNewestOfType = (sameTypeDocs || [])[0]?.id === doc.id;
+
     if (doc.storage_path) {
       await supabase.storage.from(DOCUMENT_BUCKET).remove([doc.storage_path]).catch(() => {});
     }
@@ -689,12 +702,12 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
     const { error: deleteError } = await supabase.from('uez_documents').delete().eq('id', doc.id);
     if (deleteError) throw deleteError;
 
-    if (doc.document_type === 'formation') {
+    if (isNewestOfType && doc.document_type === 'formation') {
       await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
       await clearExplicitProcessStep(application.id, 'formation');
     }
 
-    if (doc.document_type === 'uez_approval_email') {
+    if (isNewestOfType && doc.document_type === 'uez_approval_email') {
       await supabase.from('uez_applications').update({
         uez_approval_review_status: 'not_reviewed',
         uez_application_status: application.uez_application_status === 'approved' ? 'applied' : application.uez_application_status,
@@ -703,7 +716,7 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
       await clearExplicitProcessStep(application.id, 'uez_enrollment');
     }
 
-    if (doc.document_type === 'brc') {
+    if (isNewestOfType && doc.document_type === 'brc') {
       // Clients can delete their own mis-uploaded BRC now too (removeUploadedDocument
       // in App.jsx) — reset the status either way so a deleted file can't leave
       // brc_status stuck at 'uploaded' with nothing backing it.
@@ -714,7 +727,7 @@ router.delete('/applications/:id/documents/:documentId', async (req, res) => {
       await clearExplicitProcessStep(application.id, 'brc');
     }
 
-    if (doc.document_type === 'ldc_application') {
+    if (isNewestOfType && doc.document_type === 'ldc_application') {
       await clearExplicitProcessStep(application.id, 'ldc_application');
     }
 

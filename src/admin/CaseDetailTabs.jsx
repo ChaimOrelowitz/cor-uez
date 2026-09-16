@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   adminQueueInfo,
   docFor,
+  docsFor,
   formatDob,
   formatSsn,
   formatTimestamp,
@@ -187,6 +188,8 @@ export default function CaseDetailTabs({
   openDoc,
   handleDeleteDoc,
   uploadManualAdminDocument,
+  uploadDocumentDirect,
+  directUploadType,
   updateApplicationDraft,
   updateOwnerDraft,
   addOwner,
@@ -322,6 +325,8 @@ export default function CaseDetailTabs({
             saveBrcNotFound={saveBrcNotFound}
             saveProcessStep={saveProcessStep}
             resetProcessStep={resetProcessStep}
+            uploadDocumentDirect={uploadDocumentDirect}
+            directUploadType={directUploadType}
             prevLabel={prevKey ? SEG_LABEL[prevKey] : null}
             nextLabel={nextKey ? SEG_LABEL[nextKey] : null}
             onPrev={() => prevKey && setSelectedStep(prevKey)}
@@ -562,6 +567,30 @@ export default function CaseDetailTabs({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// One document container for a step panel: the inline preview plus a direct
+// upload button and (when more than one document of this type exists) a note
+// that there's a stack to browse — clicking the preview opens the modal,
+// which has its own prev/next + delete controls (see AdminPage.jsx).
+function DocSlot({ label, doc, docType, gallery, app, previewDocument, uploadDocumentDirect, directUploadType }) {
+  const uploading = directUploadType === docType;
+  return (
+    <div className="cw-doc-col">
+      <span className="cw-field-label cw-mono">{label}</span>
+      <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
+      {gallery.length > 1 && <small className="cw-doc-count-note">{gallery.length} uploaded — open to browse</small>}
+      <label className={`cw-doc-upload-btn${uploading ? ' disabled' : ''}`}>
+        {uploading ? 'Uploading…' : doc ? 'Replace / add another' : 'Upload'}
+        <input
+          type="file"
+          accept=".pdf,image/*"
+          disabled={uploading}
+          onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) uploadDocumentDirect(docType, file); }}
+        />
+      </label>
+    </div>
+  );
+}
+
 // StepPanel — renders the focused step's full content
 // ═══════════════════════════════════════════════════════════════════════════════
 function StepPanel({
@@ -579,6 +608,7 @@ function StepPanel({
   changePbsAnswerDraft, saveExistingPbsAnswer, saveMyNjCredentials,
   startMyNjEdit, cancelMyNjEdit, toggleShowMyNjSecrets, copyCredential, createMyNjCredentials,
   saveBrcFound, saveBrcNotFound, saveProcessStep, resetProcessStep,
+  uploadDocumentDirect, directUploadType,
   prevLabel, nextLabel, onPrev, onNext,
 }) {
   const app = detail.application;
@@ -741,45 +771,45 @@ function StepPanel({
       <div className="cw-doc-fields-grid">
         {stepKey === 'uez_enrollment' ? (
           <>
-            <div className="cw-doc-col">
-              <span className="cw-field-label cw-mono">UEZ PENDING CERT</span>
-              <DocThumbnail
-                doc={docFor(detail, 'uez_pending_certification')}
-                applicationId={app.id}
-                onClick={() => { const d = docFor(detail, 'uez_pending_certification'); if (d) previewDocument(d); }}
-                variant="inline"
-              />
-            </div>
-            <div className="cw-doc-col">
-              <span className="cw-field-label cw-mono">UEZ APPROVAL EMAIL</span>
-              <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
-            </div>
+            <DocSlot
+              label="UEZ PENDING CERT" docType="uez_pending_certification"
+              doc={docFor(detail, 'uez_pending_certification')} gallery={docsFor(detail, 'uez_pending_certification')}
+              app={app} previewDocument={previewDocument}
+              uploadDocumentDirect={uploadDocumentDirect} directUploadType={directUploadType}
+            />
+            <DocSlot
+              label="UEZ APPROVAL EMAIL" docType="uez_approval_email"
+              doc={doc} gallery={docsFor(detail, 'uez_approval_email')}
+              app={app} previewDocument={previewDocument}
+              uploadDocumentDirect={uploadDocumentDirect} directUploadType={directUploadType}
+            />
           </>
         ) : stepKey === 'tax_clearance' ? (
           <>
-            <div className="cw-doc-col">
-              <span className="cw-field-label cw-mono">TAX CLEARANCE</span>
-              <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
-            </div>
+            <DocSlot
+              label="TAX CLEARANCE" docType="tax_clearance"
+              doc={doc} gallery={docsFor(detail, 'tax_clearance')}
+              app={app} previewDocument={previewDocument}
+              uploadDocumentDirect={uploadDocumentDirect} directUploadType={directUploadType}
+            />
             {/* Only shown once NJ has actually reported an issue — most
                 applications never have one of these. */}
             {docFor(detail, 'tax_clearance_issue') && (
-              <div className="cw-doc-col">
-                <span className="cw-field-label cw-mono">TC ISSUE SCREENSHOT</span>
-                <DocThumbnail
-                  doc={docFor(detail, 'tax_clearance_issue')}
-                  applicationId={app.id}
-                  onClick={() => { const d = docFor(detail, 'tax_clearance_issue'); if (d) previewDocument(d); }}
-                  variant="inline"
-                />
-              </div>
+              <DocSlot
+                label="TC ISSUE SCREENSHOT" docType="tax_clearance_issue"
+                doc={docFor(detail, 'tax_clearance_issue')} gallery={docsFor(detail, 'tax_clearance_issue')}
+                app={app} previewDocument={previewDocument}
+                uploadDocumentDirect={uploadDocumentDirect} directUploadType={directUploadType}
+              />
             )}
           </>
         ) : docType && (
-          <div className="cw-doc-col">
-            <span className="cw-field-label cw-mono">DOCUMENT</span>
-            <DocThumbnail doc={doc} applicationId={app.id} onClick={() => doc && previewDocument(doc)} variant="inline" />
-          </div>
+          <DocSlot
+            label="DOCUMENT" docType={docType}
+            doc={doc} gallery={docsFor(detail, docType)}
+            app={app} previewDocument={previewDocument}
+            uploadDocumentDirect={uploadDocumentDirect} directUploadType={directUploadType}
+          />
         )}
 
         <div className="cw-fields-col">

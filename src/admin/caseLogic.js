@@ -252,6 +252,14 @@ export function docFor(detail, type) {
   return [...(detail?.documents || [])].reverse().find((doc) => doc.document_type === type) || null;
 }
 
+// Every document of a type, oldest first - docFor() above only ever surfaces
+// the newest one, which is right for "what's the current formation doc" but
+// hides older uploads of the same type instead of letting an admin browse or
+// delete them.
+export function docsFor(detail, type) {
+  return (detail?.documents || []).filter((doc) => doc.document_type === type);
+}
+
 export function formationSatisfied(detail) {
   const formation = docFor(detail, 'formation');
   if (!formation) return Boolean(detail?.application?.is_sole_proprietorship);

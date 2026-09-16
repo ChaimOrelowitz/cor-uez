@@ -36,6 +36,7 @@ import {
   applicationDraftFrom,
   attentionItems,
   docFor,
+  docsFor,
   documentLabel,
   filterAndSortApplications,
   formatTimestamp,
@@ -155,6 +156,7 @@ export default function AdminPage() {
   const [manualDocType, setManualDocType] = useState('supporting');
   const [manualDocFile, setManualDocFile] = useState(null);
   const [manualDocUploading, setManualDocUploading] = useState(false);
+  const [directUploadType, setDirectUploadType] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
   const [noteBusy, setNoteBusy] = useState(false);
@@ -247,7 +249,7 @@ export default function AdminPage() {
     const rows = await getAdminApplications();
     setApplications(rows || []);
     const id = preferredId || selectedId || rows?.[0]?.id;
-    if (id) await openApplication(id);
+    return id ? await openApplication(id) : null;
   }
 
   async function openApplication(id) {
@@ -282,8 +284,10 @@ export default function AdminPage() {
         paymentDate: latestPayment?.payment_date || new Date().toISOString().slice(0,10),
         paymentMethod: latestPayment?.payment_method || 'Zelle', reference: latestPayment?.reference || '', notes: latestPayment?.notes || ''
       });
+      return data;
     } catch (err) {
       setMessage(err.message);
+      return null;
     }
   }
 
@@ -382,6 +386,49 @@ export default function AdminPage() {
       setMessage(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Deletes whichever document the preview modal is currently showing, then
+  // hops to the next document of that same type (or the previous one, or
+  // just closes) so deleting doesn't dump the admin back out to the list.
+  async function deletePreviewDoc() {
+    if (!previewDoc) return;
+    if (!window.confirm(`Permanently delete "${previewDoc.filename}"?`)) return;
+    const type = previewDoc.document_type;
+    const gallery = docsFor(detail, type);
+    const idx = gallery.findIndex((d) => d.id === previewDoc.id);
+    setBusy(true);
+    setMessage(`Deleting ${previewDoc.filename}…`);
+    try {
+      await deleteDocument(detail.application.id, previewDoc.id);
+      const refreshed = await refreshList(detail.application.id);
+      const remaining = refreshed ? docsFor(refreshed, type) : [];
+      if (remaining.length) previewDocument(remaining[Math.min(idx, remaining.length - 1)]);
+      else closePreview();
+      setMessage('Document deleted.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Uploads straight into a specific document-type slot on a step panel
+  // (e.g. the Formation tab's doc container), skipping the generic "pick a
+  // type from a dropdown" uploader in the case-file drawer.
+  async function uploadDocumentDirect(docType, file) {
+    if (!file) return;
+    setDirectUploadType(docType);
+    setMessage('Uploading document…');
+    try {
+      await uploadApplicationDocument(detail.application.id, docType, file);
+      await refreshList(detail.application.id);
+      setMessage('Document added to the applicant file.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setDirectUploadType('');
     }
   }
 
@@ -1318,6 +1365,8 @@ export default function AdminPage() {
             openDoc={openDoc}
             handleDeleteDoc={handleDeleteDoc}
             uploadManualAdminDocument={uploadManualAdminDocument}
+            uploadDocumentDirect={uploadDocumentDirect}
+            directUploadType={directUploadType}
             updateApplicationDraft={updateApplicationDraft}
             updateOwnerDraft={updateOwnerDraft}
             addOwner={addOwner}
@@ -1340,16 +1389,27 @@ export default function AdminPage() {
             <div className="document-modal-footer"><div><a href={NJ_PBS_URL} target="_blank" rel="noreferrer">Open PBS in new tab</a><small className="pbs-frame-note">If New Jersey blocks the embedded page, use this link.</small></div><button className="secondary" onClick={() => setPbsModalOpen(false)}>Close</button></div>
           </div>
         </div>}
-        {previewDoc && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closePreview(); }}>
-          <div className="document-modal" role="dialog" aria-modal="true" aria-label={documentLabel(previewDoc.document_type)}>
-            <div className="document-modal-head"><div><strong>{documentLabel(previewDoc.document_type)}</strong><small>{previewDoc.filename}</small></div><button onClick={closePreview} aria-label="Close document">×</button></div>
-            <div className="document-modal-body">{previewBusy ? <div className="document-modal-loading">Loading document…</div> : previewUrl ? <iframe src={previewUrl} title={previewDoc.filename} /> : null}</div>
-            <div className="document-modal-footer">
-              <div>{previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer">Open in new tab</a>}</div>
-              {(previewDoc.document_type === 'formation' || previewDoc.document_type === 'uez_approval_email') && <div className="document-review-actions"><button className="warning-button" onClick={() => reviewPreviewDoc('rejected')}>Wrong document</button><button className="success-button" onClick={() => reviewPreviewDoc('approved')}>✓ Approve</button></div>}
+        {previewDoc && (() => {
+          const gallery = docsFor(detail, previewDoc.document_type);
+          const idx = gallery.findIndex((d) => d.id === previewDoc.id);
+          return <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) closePreview(); }}>
+            <div className="document-modal" role="dialog" aria-modal="true" aria-label={documentLabel(previewDoc.document_type)}>
+              <div className="document-modal-head"><div><strong>{documentLabel(previewDoc.document_type)}</strong><small>{previewDoc.filename}{gallery.length > 1 ? ` · ${idx + 1} of ${gallery.length}` : ''}</small></div><button onClick={closePreview} aria-label="Close document">×</button></div>
+              <div className="document-modal-body">
+                {gallery.length > 1 && idx > 0 && <button type="button" className="document-modal-nav document-modal-nav-prev" aria-label="Previous document" onClick={() => previewDocument(gallery[idx - 1])}>‹</button>}
+                {previewBusy ? <div className="document-modal-loading">Loading document…</div> : previewUrl ? <iframe src={previewUrl} title={previewDoc.filename} /> : null}
+                {gallery.length > 1 && idx < gallery.length - 1 && <button type="button" className="document-modal-nav document-modal-nav-next" aria-label="Next document" onClick={() => previewDocument(gallery[idx + 1])}>›</button>}
+              </div>
+              <div className="document-modal-footer">
+                <div>{previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer">Open in new tab</a>}</div>
+                <div className="document-review-actions">
+                  {(previewDoc.document_type === 'formation' || previewDoc.document_type === 'uez_approval_email') && <><button className="warning-button" onClick={() => reviewPreviewDoc('rejected')}>Wrong document</button><button className="success-button" onClick={() => reviewPreviewDoc('approved')}>✓ Approve</button></>}
+                  <button type="button" className="danger-button" onClick={deletePreviewDoc}>Delete</button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>}
+          </div>;
+        })()}
         <EmailComposer
           composer={emailComposer}
           onChangeSubject={(value) => setEmailComposer((prev) => ({ ...prev, subject: value }))}

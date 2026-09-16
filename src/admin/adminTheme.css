@@ -1720,6 +1720,24 @@
   color: var(--cw-muted3);
   font-style: italic;
 }
+.admin-shell .cw-doc-count-note {
+  font-size: 10px;
+  color: var(--cw-muted3);
+}
+.admin-shell .cw-doc-upload-btn {
+  display: block;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 8px;
+  border-radius: 8px;
+  background: var(--cw-chip-bg);
+  color: var(--cw-info);
+  border: 1px solid var(--cw-panel-border);
+  cursor: pointer;
+}
+.admin-shell .cw-doc-upload-btn input { display: none; }
+.admin-shell .cw-doc-upload-btn.disabled { opacity: .5; cursor: default; }
 
 /* ---- Fields grid --------------------------------------------------------- */
 
