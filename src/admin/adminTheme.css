@@ -477,28 +477,32 @@
   padding: 20px 20px 0;
 }
 /* Elevated card, matching the step panels below it: no border, big radius,
-   a soft shadow instead of a hard edge, generous internal padding. */
+   a soft shadow instead of a hard edge. Identity on the left, all controls
+   grouped on the right of the same row - kept short on purpose, the tabs
+   and step content below are the main event, not this card. */
 .admin-shell .cockpit-strip {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
   width: 100%;
   box-sizing: border-box;
-  gap: 18px;
+  gap: 24px;
   background: var(--cw-panel);
   border-radius: var(--cw-radius);
   box-shadow: var(--cw-shadow);
-  padding: 26px 28px;
+  padding: 20px 24px;
 }
-.admin-shell .cockpit-identity { min-width: 0; }
+.admin-shell .cockpit-identity { flex: 1; min-width: 0; }
 .admin-shell .cockpit-identity h1 {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 700;
   letter-spacing: -.01em;
   line-height: 1.2;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   color: var(--cw-text);
 }
 .admin-shell .cockpit-meta-grid {
@@ -556,15 +560,13 @@
   display: block;
   margin-bottom: 10px;
 }
-/* Controls row — status select + chips, below a divider under the identity block */
+/* Controls column — status select + chips, right side of the identity row */
 .admin-shell .cockpit-controls {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-top: 18px;
-  border-top: 1px solid var(--cw-line);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
 /* Pipeline strip — 8 step dots, dark-bg version */

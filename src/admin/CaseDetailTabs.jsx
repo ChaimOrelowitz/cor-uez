@@ -64,8 +64,10 @@ function segBarColor(state) {
     case 'complete':       return '#34d399';
     case 'in_progress':   return '#60a5fa';
     case 'waiting':       return '#fbbf24';
-    case 'not_applicable':return '#2a3038';
-    default:              return '#2a3038';
+    // Neutral/not-started track - a fixed dark hex here read as a hard grey
+    // line on the light theme's tabs; var() resolves per-theme instead.
+    case 'not_applicable':return 'var(--cw-bar-empty)';
+    default:              return 'var(--cw-bar-empty)';
   }
 }
 
@@ -263,7 +265,7 @@ export default function CaseDetailTabs({
               className={`cw-seg${active ? ' cw-seg-active' : ''}`}
               onClick={() => setSelectedStep(key)}
             >
-              <span className="cw-seg-bar" style={{ background: active ? segBarColor(step.state) : segBarColor(step.state) + 'b3' }} />
+              <span className="cw-seg-bar" style={{ background: segBarColor(step.state), opacity: active ? 1 : 0.7 }} />
               <span className="cw-seg-title">{SEG_LABEL[key]}</span>
               <span className="cw-seg-state" style={{ color: active ? segBarColor(step.state) : undefined }}>
                 {PROCESS_STEP_STATE_LABELS[step.state] || step.state}
