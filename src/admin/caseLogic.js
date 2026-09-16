@@ -573,3 +573,39 @@ export function resolveProcessStep(stepKey, detail) {
   const derived = deriveDefaultProcessStep(stepKey, detail);
   return { ...derived, waitingSince: null, waitingReason: null, manualNote: null, source: 'derived', updatedByName: null, updatedAt: null };
 }
+
+// Ordered waterfall for the sidebar's granular "what's actually next" badge —
+// distinct from adminQueueInfo's urgent-review picker below. Walks the same
+// 8 pipeline steps in a fixed order and reports the first one that isn't
+// complete yet, so "Needs BRC" only ever shows once Formation is approved,
+// "Needs PBS" only once BRC is done, and so on. A sidebar list row (from
+// GET /admin/applications) isn't a full case `detail` object - it carries
+// document_types/payment_status/process_steps instead of documents/payments
+// arrays - so this builds a minimal stand-in detail good enough for
+// resolveProcessStep's derived-state checks.
+const NEXT_STEP_WATERFALL = ['formation', 'brc', 'pbs_mynj', 'tax_clearance', 'uez_enrollment', 'ldc_application', 'payment', 'grant_submission'];
+const NEXT_STEP_LABELS = {
+  formation: 'Not started',
+  brc: 'Needs BRC',
+  pbs_mynj: 'Needs PBS',
+  tax_clearance: 'Needs TC',
+  uez_enrollment: 'Needs UEZ',
+  ldc_application: 'Needs LDC application',
+  payment: 'Needs payment',
+  grant_submission: 'Needs grant submission'
+};
+
+export function nextStepStatus(row) {
+  const detail = {
+    application: row,
+    documents: (row.document_types || []).map((type) => ({ document_type: type })),
+    payments: row.payment_status ? [{ status: row.payment_status }] : [],
+    statusEvents: [],
+    processSteps: row.process_steps || []
+  };
+  for (const stepKey of NEXT_STEP_WATERFALL) {
+    const { state } = resolveProcessStep(stepKey, detail);
+    if (state !== 'complete' && state !== 'not_applicable') return NEXT_STEP_LABELS[stepKey];
+  }
+  return 'Complete';
+}

@@ -14,6 +14,7 @@ import {
   grantSubmissionLikelyDetected,
   grantSubmitGateReason,
   lastEmailSent,
+  nextStepStatus,
   packetReady,
   paymentStatusLabel,
   pbsAccountGateReason,
@@ -517,5 +518,75 @@ describe('resolveProcessStep', () => {
       processSteps: [{ step_key: 'brc', state: 'complete', updated_by_name: 'Chaim', updated_at: '2026-08-28T12:00:00Z' }]
     };
     expect(resolveProcessStep('payment', detail).source).toBe('derived');
+  });
+});
+
+describe('nextStepStatus (sidebar waterfall)', () => {
+  it('a brand-new application just needs Formation approved', () => {
+    expect(nextStepStatus({})).toBe('Not started');
+  });
+
+  it('Formation approved but nothing else -> Needs BRC', () => {
+    expect(nextStepStatus({ document_types: ['formation'], formation_review_status: 'approved' })).toBe('Needs BRC');
+  });
+
+  it('sole proprietorship skips Formation straight to Needs BRC', () => {
+    expect(nextStepStatus({ is_sole_proprietorship: true })).toBe('Needs BRC');
+  });
+
+  it('BRC found -> Needs PBS', () => {
+    expect(nextStepStatus({
+      document_types: ['formation'], formation_review_status: 'approved', brc_status: 'found'
+    })).toBe('Needs PBS');
+  });
+
+  it('PBS account created -> Needs TC', () => {
+    expect(nextStepStatus({
+      document_types: ['formation'], formation_review_status: 'approved', brc_status: 'found', pbs_account_created: true
+    })).toBe('Needs TC');
+  });
+
+  it('tax clearance good -> Needs UEZ', () => {
+    expect(nextStepStatus({
+      document_types: ['formation'], formation_review_status: 'approved', brc_status: 'found',
+      pbs_account_created: true, tax_clearance_status: 'good'
+    })).toBe('Needs UEZ');
+  });
+
+  it('UEZ approved -> Needs LDC application', () => {
+    expect(nextStepStatus({
+      document_types: ['formation'], formation_review_status: 'approved', brc_status: 'found',
+      pbs_account_created: true, tax_clearance_status: 'good', uez_application_status: 'approved'
+    })).toBe('Needs LDC application');
+  });
+
+  it('LDC application on file -> Needs payment', () => {
+    expect(nextStepStatus({
+      document_types: ['formation', 'ldc_application'], formation_review_status: 'approved', brc_status: 'found',
+      pbs_account_created: true, tax_clearance_status: 'good', uez_application_status: 'approved'
+    })).toBe('Needs payment');
+  });
+
+  it('paid -> Needs grant submission', () => {
+    expect(nextStepStatus({
+      document_types: ['formation', 'ldc_application'], formation_review_status: 'approved', brc_status: 'found',
+      pbs_account_created: true, tax_clearance_status: 'good', uez_application_status: 'approved',
+      payment_status: 'paid'
+    })).toBe('Needs grant submission');
+  });
+
+  it('grant submission explicitly marked complete -> Complete', () => {
+    expect(nextStepStatus({
+      document_types: ['formation', 'ldc_application'], formation_review_status: 'approved', brc_status: 'found',
+      pbs_account_created: true, tax_clearance_status: 'good', uez_application_status: 'approved',
+      payment_status: 'paid', process_steps: [{ step_key: 'grant_submission', state: 'complete' }]
+    })).toBe('Complete');
+  });
+
+  it('UEZ approved out of order with no tax clearance still reports Needs TC, not Needs UEZ', () => {
+    expect(nextStepStatus({
+      document_types: ['formation'], formation_review_status: 'approved', brc_status: 'found',
+      pbs_account_created: true, uez_application_status: 'approved'
+    })).toBe('Needs TC');
   });
 });

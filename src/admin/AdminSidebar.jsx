@@ -1,4 +1,5 @@
 import React from 'react';
+import { nextStepStatus } from './caseLogic';
 
 // Maps any DB status value → one of 5 canonical groups
 function toGroup(app) {
@@ -92,6 +93,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
               {rows.map((app) => {
                 const paid = app.payment_status === 'paid';
                 const paymentPending = app.payment_status === 'client_reported';
+                const nextStep = nextStepStatus(app);
                 // Aging — only flag in_progress (already moving beats already submitted/ready)
                 const days = groupKey === 'in_progress' ? daysSince(app.updated_at) : null;
                 const tone = agingTone(days);
@@ -114,6 +116,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                     </div>
                     <div className="sidebar-row-meta">
                       <span className={`sidebar-badge status-${groupKey}`}>{ROW_STATUS_LABELS[groupKey]}</span>
+                      <span className={`sidebar-badge next-step ${nextStep === 'Complete' ? 'next-step-complete' : ''}`}>{nextStep}</span>
                       <span className="sidebar-row-date">
                         {app.created_at ? new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
                       </span>

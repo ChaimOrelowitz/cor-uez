@@ -411,6 +411,12 @@
 .admin-shell .sidebar-badge.status-ready       { background: rgba(245,158,11,.22); color: #fde68a; }
 .admin-shell .sidebar-badge.status-submitted   { background: rgba(79,157,105,.22); color: #8fd6ab; }
 .admin-shell .sidebar-badge.status-cancelled   { background: rgba(156,163,175,.15); color: #9ca3af; }
+/* Granular "what's actually next" badge — a strict waterfall across the 8
+   pipeline steps (see nextStepStatus() in caseLogic.js), separate from the
+   5-group status above so "Needs BRC" etc. is visible without opening the
+   case. */
+.admin-shell .sidebar-badge.next-step { background: rgba(139,92,246,.2); color: #c4b5fd; }
+.admin-shell .sidebar-badge.next-step.next-step-complete { background: rgba(34,197,94,.18); color: #86efac; }
 /* Aging badges — only on in_progress rows */
 .admin-shell .sidebar-badge.aging { font-variant-numeric: tabular-nums; }
 .admin-shell .sidebar-badge.age-warn   { background: rgba(245,158,11,.18); color: #fcd34d; }

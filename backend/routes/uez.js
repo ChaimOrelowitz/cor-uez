@@ -1298,20 +1298,27 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
     const ids = (data || []).map((row) => row.id);
     if (!ids.length) return res.json([]);
 
-    const [ownersResult, docsResult, paymentsResult] = await Promise.all([
+    const [ownersResult, docsResult, paymentsResult, processStepsResult] = await Promise.all([
       supabase.from('uez_owners').select('application_id, first_name, last_name, phone').in('application_id', ids),
       supabase.from('uez_documents').select('application_id, document_type, created_at').in('application_id', ids),
-      supabase.from('uez_payments').select('application_id, status, amount, payment_date, created_at').in('application_id', ids).order('created_at')
+      supabase.from('uez_payments').select('application_id, status, amount, payment_date, created_at').in('application_id', ids).order('created_at'),
+      supabase.from('uez_process_steps').select('*').in('application_id', ids)
     ]);
     if (ownersResult.error) throw ownersResult.error;
     if (docsResult.error) throw docsResult.error;
     if (paymentsResult.error) throw paymentsResult.error;
+    if (processStepsResult.error) throw processStepsResult.error;
 
     const ownerCounts = {};
     const ownerNames = {};
     const docCounts = {};
     const docTypes = {};
     const latestPayments = {};
+    const processStepsByApp = {};
+    for (const row of processStepsResult.data || []) {
+      if (!processStepsByApp[row.application_id]) processStepsByApp[row.application_id] = [];
+      processStepsByApp[row.application_id].push(row);
+    }
     for (const row of ownersResult.data || []) {
       ownerCounts[row.application_id] = (ownerCounts[row.application_id] || 0) + 1;
       if (!ownerNames[row.application_id]) ownerNames[row.application_id] = [];
@@ -1339,6 +1346,7 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
         document_count: docCounts[row.id] || 0,
         document_types: [...types],
         required_document_ready_count: readyCount,
+        process_steps: processStepsByApp[row.id] || [],
         payment_status: latestPayments[row.id]?.status || null,
         payment_amount: latestPayments[row.id]?.amount || null
       };
