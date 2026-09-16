@@ -3,6 +3,7 @@ import { checkUezEligibility, suggestNjAddresses } from './eligibility';
 import { nameControl, njTaxId } from './brcLookup';
 import UezMap from './UezMap';
 import cofExampleImage from './assets/cof-generic-example.png';
+import brcExampleImage from './assets/brc-generic-example.png';
 import {
   createApplication,
   getApplicantSession,
@@ -479,6 +480,7 @@ export default function App({ demoMode = false }) {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [documents, setDocuments] = useState([]);
   const [uploadingType, setUploadingType] = useState('');
+  const [exampleDocPreview, setExampleDocPreview] = useState(null);
   const [signupLayout, setSignupLayout] = useState(DEFAULT_SIGNUP_LAYOUT);
   const [homeStats, setHomeStats] = useState(null);
   const [solePropConfirmedHere, setSolePropConfirmedHere] = useState(false);
@@ -1282,7 +1284,7 @@ export default function App({ demoMode = false }) {
             {signupLayout.documents.map((key) => {
               if (isBreak(key)) return renderSectionBreak(key);
               if (key === 'formation') return solePropConfirmedHere ? null : <div className={`upload-card formation-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p><a href={cofExampleImage} target="_blank" rel="noreferrer" className="doc-example-link"><img src={cofExampleImage} alt="Example Certificate of Formation" className="doc-example-thumb" /><span>See an example of a Certificate of Formation</span></a></div>
+                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p><button type="button" className="doc-example-link" onClick={() => setExampleDocPreview({ title: 'Example Certificate of Formation', src: cofExampleImage })}><img src={cofExampleImage} alt="Example Certificate of Formation" className="doc-example-thumb" /><span>See an example of a Certificate of Formation</span></button></div>
                 <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>
               </div>;
               if (key === 'soleProp') return !hasFormation ? <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''} ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
@@ -1292,7 +1294,7 @@ export default function App({ demoMode = false }) {
               if (key === 'brc') return <React.Fragment key={key}>
                 <div className="documents-service-note field-span-2"><span className="eyebrow">COR SOLUTIONS' PART OF THE PROCESS</span><p>From here — once your Business Registration Certificate is on file — through your grant application, COR Solutions manages the process on your behalf.</p></div>
                 <div className={`upload-card brc-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`}>
-                <div><strong>Business Registration Certificate (BRC) <span className="required-star">*</span></strong><p>New Jersey requires a BRC for every enrolled business. Most businesses can retrieve theirs online in minutes — click "Look up my BRC" and enter the values below. Download the PDF and upload it here.</p></div>
+                <div><strong>Business Registration Certificate (BRC) <span className="required-star">*</span></strong><p>New Jersey requires a BRC for every enrolled business. Most businesses can retrieve theirs online in minutes — click "Look up my BRC" and enter the values below. Download the PDF and upload it here.</p><button type="button" className="doc-example-link" onClick={() => setExampleDocPreview({ title: 'Example Business Registration Certificate', src: brcExampleImage })}><img src={brcExampleImage} alt="Example Business Registration Certificate" className="doc-example-thumb" /><span>See an example of a Business Registration Certificate</span></button></div>
                 <div className="brc-lookup-values">
                   <div><span>Name Control</span><strong>{nameControl(form.businessName) || '—'}</strong></div>
                   <div><span>Tax ID</span><strong>{njTaxId(form.ein) || '—'}</strong></div>
@@ -1348,6 +1350,13 @@ export default function App({ demoMode = false }) {
       </div>
 
       <div className="trust-row"><span>Secure application</span><span>•</span><span>Private document storage</span><span>•</span><span>Progress saved to your account</span></div>
+
+      {exampleDocPreview && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setExampleDocPreview(null); }}>
+        <div className="document-modal doc-example-modal" role="dialog" aria-modal="true" aria-label={exampleDocPreview.title}>
+          <div className="document-modal-head"><div><strong>{exampleDocPreview.title}</strong></div><button onClick={() => setExampleDocPreview(null)} aria-label="Close example">×</button></div>
+          <div className="document-modal-body doc-example-modal-body"><img src={exampleDocPreview.src} alt={exampleDocPreview.title} /></div>
+        </div>
+      </div>}
     </main>
   </div>;
 }
