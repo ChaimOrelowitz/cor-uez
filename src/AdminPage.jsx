@@ -69,7 +69,7 @@ const PIPELINE_STEPS = [
   { key: 'payment',         tab: 'payment_ldc_grant',  short: 'Pay'   },
   { key: 'grant_submission', tab: 'payment_ldc_grant', short: 'Grant' },
 ];
-import AdminSidebar from './admin/AdminSidebar';
+import AdminSidebar, { groupCounts } from './admin/AdminSidebar';
 import EmailComposer from './admin/EmailComposer';
 import CaseDetailTabs from './admin/CaseDetailTabs';
 
@@ -164,6 +164,7 @@ export default function AdminPage() {
   const [profile, setProfile] = useState(null);
   const [login, setLogin] = useState({ email: '', password: '' });
   const [applications, setApplications] = useState([]);
+  const applicationCounts = useMemo(() => groupCounts(applications), [applications]);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [filter, setFilter] = useState('needs');
@@ -1251,16 +1252,24 @@ export default function AdminPage() {
 
   return <div className={`admin-shell${darkMode ? ' dark' : ''}`} data-theme={darkMode ? undefined : 'light'}>
     <header className="admin-topbar">
-      <div className="admin-brand">
-        <button
-          type="button"
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarOpen((open) => !open)}
-          title={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
-          aria-label={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
-          aria-expanded={sidebarOpen}
-        >☰</button>
-        <div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div>
+      <div className="admin-topbar-left">
+        <div className="admin-brand">
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarOpen((open) => !open)}
+            title={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
+            aria-label={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
+            aria-expanded={sidebarOpen}
+          >☰</button>
+          <div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div>
+        </div>
+        <div className="topbar-stats">
+          <span className="topbar-stat"><strong>{applications.length}</strong><small>Total</small></span>
+          <span className="topbar-stat"><strong>{applicationCounts.in_progress}</strong><small>In progress</small></span>
+          <span className="topbar-stat"><strong>{applicationCounts.ready}</strong><small>Ready</small></span>
+          <span className="topbar-stat"><strong>{applicationCounts.submitted}</strong><small>Submitted</small></span>
+        </div>
       </div>
       <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/home-stats">HOME STATS</a><a href="/admin/jotform-test">JOTFORM TEST</a><a href="/admin/accounts">ACCOUNTS</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button><button onClick={handleSignOut}>Log out</button></div>
       <details className="admin-mobile-menu">

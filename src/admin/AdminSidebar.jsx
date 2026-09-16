@@ -2,7 +2,7 @@ import React from 'react';
 import { displayBusinessName, nextStepStatus } from './caseLogic';
 
 // Maps any DB status value → one of 5 canonical groups
-function toGroup(app) {
+export function toGroup(app) {
   const s = app.status;
   if (s === 'applied' || s === 'grant_submitted' || s === 'submitted') return 'submitted';
   if (s === 'ready_for_submission') return 'ready';
@@ -11,7 +11,7 @@ function toGroup(app) {
   return 'in_progress';
 }
 
-const GROUP_ORDER = ['not_started', 'in_progress', 'ready', 'submitted', 'cancelled'];
+export const GROUP_ORDER = ['not_started', 'in_progress', 'ready', 'submitted', 'cancelled'];
 const GROUP_LABELS = {
   not_started: 'Not Started',
   in_progress: 'In Progress',
@@ -21,13 +21,21 @@ const GROUP_LABELS = {
 };
 // Compact form of the same 5 statuses for the per-row badge (GROUP_LABELS is
 // used as-is for the section headers, where there's more room).
-const ROW_STATUS_LABELS = {
+export const ROW_STATUS_LABELS = {
   not_started: 'New',
   in_progress: 'In Progress',
   ready:       'Ready',
   submitted:   'Submitted',
   cancelled:   'Cancelled',
 };
+
+// Same 5-group breakdown the sidebar sections use, for the topbar counter
+// cluster - so the counts stay visible even while the sidebar is collapsed.
+export function groupCounts(applications) {
+  const counts = { not_started: 0, in_progress: 0, ready: 0, submitted: 0, cancelled: 0 };
+  (applications || []).forEach((app) => { counts[toGroup(app)] += 1; });
+  return counts;
+}
 
 // Days since a date string — returns null if date is missing/invalid
 function daysSince(dateStr) {
@@ -71,7 +79,6 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
       <div className="admin-sidebar-head">
         <div className="sidebar-head-row">
           <span>APPLICATIONS</span>
-          <strong>{applications.length}</strong>
         </div>
         <input
           placeholder="Search business, email, EIN"

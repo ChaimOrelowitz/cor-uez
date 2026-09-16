@@ -34,16 +34,18 @@
   --admin-text-muted: #6b6255;
   --admin-text-faint: #948a7a;
 
-  /* sidebar — forest green panel, its own independent palette (lightened
-     from the original near-black green so it reads less heavy) */
-  --admin-sidebar-bg:           #2c4c3a;
-  --admin-sidebar-surface:      #385f49;
-  --admin-sidebar-text:         #eef5ef;
-  --admin-sidebar-text-muted:   #a9c4b1;
-  --admin-sidebar-border:       rgba(255,255,255,.09);
-  --admin-sidebar-hover:        rgba(255,255,255,.07);
-  --admin-sidebar-active-bg:    rgba(115, 191, 143, .26);
-  --admin-sidebar-active-bar:   #6fbf8d;
+  /* sidebar — dusty slate blue, the true color-wheel complement of the
+     cream body (cream sits at ~40°, this is ~220°) - reads as clearly its
+     own zone without being another heavy dark panel. Brand's sage green
+     stays as the accent for active/selected states. */
+  --admin-sidebar-bg:           #eef2f7;
+  --admin-sidebar-surface:      #e4eaf2;
+  --admin-sidebar-text:         #22364c;
+  --admin-sidebar-text-muted:   #62789a;
+  --admin-sidebar-border:       #d7e0ea;
+  --admin-sidebar-hover:        rgba(34,54,76,.05);
+  --admin-sidebar-active-bg:    #dfe8f2;
+  --admin-sidebar-active-bar:   #4f9d69;
 
   /* accent — sage green, unified with the success/"done" scale below */
   --admin-accent: #4f9d69;
@@ -187,11 +189,20 @@
 
 /* ---- 3. Top bar, sidebar, filter row, list rows -------------------------- */
 
-.admin-shell .admin-topbar { height: 52px; background: var(--admin-surface); border-bottom: 1px solid var(--admin-border); }
+.admin-shell .admin-topbar { height: 52px; background: var(--admin-surface-sunken); border-bottom: 1px solid var(--admin-border); }
+.admin-shell .admin-topbar-left { display: flex; align-items: center; gap: 22px; min-width: 0; }
 .admin-shell .admin-brand span { color: var(--admin-text-faint); }
 .admin-shell .admin-top-actions a, .admin-shell .admin-top-actions button {
-  background: var(--admin-surface-sunken); color: var(--admin-text-muted); border-radius: var(--admin-radius-sm); font-size: var(--admin-font-size-small);
+  background: var(--admin-surface); color: var(--admin-text-muted); border-radius: var(--admin-radius-sm); font-size: var(--admin-font-size-small);
 }
+
+/* Applications counter cluster — moved up from the sidebar head so the
+   counts stay visible while the applications list is collapsed. */
+.admin-shell .topbar-stats { display: flex; align-items: center; gap: 16px; }
+.admin-shell .topbar-stat { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+.admin-shell .topbar-stat strong { font-size: 15px; color: var(--admin-text); font-variant-numeric: tabular-nums; }
+.admin-shell .topbar-stat small { font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--admin-text-faint); }
+@media (max-width: 1100px) { .admin-shell .topbar-stats { display: none; } }
 /* ── Sidebar shell ────────────────────────────────────────────────────────── */
 .admin-shell .admin-sidebar {
   background: var(--admin-sidebar-bg);
@@ -205,14 +216,14 @@
 .admin-shell .admin-sidebar-head span { color: var(--admin-sidebar-text-muted); }
 .admin-shell .admin-sidebar-head strong { color: var(--admin-sidebar-text); }
 .admin-shell .admin-sidebar-head input {
-  background: rgba(255,255,255,.06);
+  background: #fff;
   border-color: var(--admin-sidebar-border);
   color: var(--admin-sidebar-text);
   border-radius: var(--admin-radius-sm);
 }
 .admin-shell .admin-sidebar-head input::placeholder { color: var(--admin-sidebar-text-muted); }
 .admin-shell .admin-sidebar-head input:focus {
-  background: rgba(255,255,255,.1);
+  background: #fff;
   border-color: var(--admin-sidebar-active-bar);
   box-shadow: none;
 }
@@ -252,10 +263,7 @@
 
 /* ── Application list rows ────────────────────────────────────────────────── */
 .admin-shell .application-list-item {
-  /* A visibly-there but light hairline between rows — the shared
-     --admin-sidebar-border token (7% white) reads as basically invisible
-     here, so this row divider uses its own slightly stronger opacity. */
-  border-bottom: 1px solid rgba(255,255,255,.14);
+  border-bottom: 1px solid var(--admin-sidebar-border);
   background: transparent;
   padding: 9px 14px;
   color: var(--admin-sidebar-text);
@@ -414,36 +422,36 @@
   white-space: nowrap;
 }
 .admin-shell .sidebar-badge.payment-paid {
-  background: rgba(34,197,94,.18);
-  color: #86efac;
+  background: var(--admin-good-bg);
+  color: var(--admin-good-text);
 }
 .admin-shell .sidebar-badge.payment-pending {
-  background: rgba(245,158,11,.2);
-  color: #fcd34d;
+  background: var(--admin-warn-bg);
+  color: var(--admin-warn-text);
 }
 .admin-shell .sidebar-badge.payment-unpaid {
-  background: rgba(255,255,255,.08);
+  background: rgba(34,54,76,.07);
   color: var(--admin-sidebar-text-muted);
 }
 /* Global-status badge — same 5 groups as the section headers above, shown on
    every row too so the status reads at a glance without tracking which
    section you're scrolled into. */
-.admin-shell .sidebar-badge.status-not_started { background: rgba(255,255,255,.08); color: var(--admin-sidebar-text-muted); }
-.admin-shell .sidebar-badge.status-in_progress { background: rgba(59,130,246,.2);  color: #93c5fd; }
-.admin-shell .sidebar-badge.status-ready       { background: rgba(245,158,11,.22); color: #fde68a; }
-.admin-shell .sidebar-badge.status-submitted   { background: rgba(79,157,105,.22); color: #8fd6ab; }
-.admin-shell .sidebar-badge.status-cancelled   { background: rgba(156,163,175,.15); color: #9ca3af; }
+.admin-shell .sidebar-badge.status-not_started { background: rgba(34,54,76,.07); color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-badge.status-in_progress { background: #dce9fb; color: #2f5fa3; }
+.admin-shell .sidebar-badge.status-ready       { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+.admin-shell .sidebar-badge.status-submitted   { background: var(--admin-good-bg); color: var(--admin-good-text); }
+.admin-shell .sidebar-badge.status-cancelled   { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
 /* Granular "what's actually next" badge — a strict waterfall across the 8
    pipeline steps (see nextStepStatus() in caseLogic.js), separate from the
    5-group status above so "Needs BRC" etc. is visible without opening the
    case. */
-.admin-shell .sidebar-badge.next-step { background: rgba(139,92,246,.2); color: #c4b5fd; }
-.admin-shell .sidebar-badge.next-step.next-step-complete { background: rgba(34,197,94,.18); color: #86efac; }
+.admin-shell .sidebar-badge.next-step { background: #ece5fb; color: #6b46c1; }
+.admin-shell .sidebar-badge.next-step.next-step-complete { background: var(--admin-good-bg); color: var(--admin-good-text); }
 /* Aging badges — only on in_progress rows */
 .admin-shell .sidebar-badge.aging { font-variant-numeric: tabular-nums; }
-.admin-shell .sidebar-badge.age-warn   { background: rgba(245,158,11,.18); color: #fcd34d; }
-.admin-shell .sidebar-badge.age-orange { background: rgba(234,88,12,.2);   color: #fb923c; }
-.admin-shell .sidebar-badge.age-red    { background: rgba(220,38,38,.2);   color: #f87171; }
+.admin-shell .sidebar-badge.age-warn   { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+.admin-shell .sidebar-badge.age-orange { background: #fbe2cf; color: #a4501a; }
+.admin-shell .sidebar-badge.age-red    { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
 /* Cancelled rows get dimmer */
 .admin-shell .sidebar-group-item-cancelled { opacity: .55; }
 .admin-shell .sidebar-group-item-cancelled:hover,
@@ -458,8 +466,12 @@
 
 /* ---- 4. Cockpit command strip + attention --------------------------------- */
 
-/* Identity row — dark background gives it the control-panel zone feel */
+/* A legacy rule (workflow.css) still makes .admin-detail-header a row flex
+   container from when it held identity+controls side by side directly; now
+   it holds one child (.cockpit-strip) that must fill the full width, or the
+   card shrinks to fit its own content instead of stretching the row. */
 .admin-shell .admin-detail-header {
+  display: block;
   background: transparent;
   border-bottom: none;
   padding: 20px 20px 0;
@@ -469,6 +481,8 @@
 .admin-shell .cockpit-strip {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
   gap: 18px;
   background: var(--cw-panel);
   border-radius: var(--cw-radius);
@@ -1564,7 +1578,7 @@
 
 .admin-shell .cw-seg-active {
   background: var(--cw-panel);
-  box-shadow: 0 4px 12px rgba(20,20,10,.10);
+  box-shadow: none;
   border-bottom: none;
   margin-bottom: 0;
 }

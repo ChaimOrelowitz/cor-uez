@@ -14,7 +14,7 @@
 .auth-loading-shell{min-height:100vh;display:grid;place-items:center;background:#f7f8fb}.auth-loading-card{font:600 14px/1.4 system-ui;color:#687184}.login-page-wrap{width:min(460px,calc(100% - 28px));margin:54px auto}.login-card{overflow:hidden}.login-card .content-block{padding:30px}.login-card form{display:grid;gap:8px}.login-card input{margin-bottom:10px}.login-submit{width:100%;margin-top:8px}
 @media(max-width:760px){.login-page-wrap{margin:28px auto}.login-card .content-block{padding:22px}}
 
-.email-settings-primary{font-weight:900!important;padding:9px 13px!important;border-radius:10px!important;background:#fff!important;color:#4f57c8!important}.warn-panel .inline-button{margin-right:10px;margin-top:10px}
+.email-settings-primary{font-weight:900!important;padding:9px 13px!important;border-radius:10px!important;background:#e9f4ec!important;color:#2f7d52!important}.warn-panel .inline-button{margin-right:10px;margin-top:10px}
 
 
 /* Public service explainer shown before the UEZ map */
