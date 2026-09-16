@@ -1289,7 +1289,9 @@ export default function App({ demoMode = false }) {
                 <div><strong>I am a sole proprietorship</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship — those entities always have a Certificate of Formation.</p></div>
                 <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Confirmed — I am a sole proprietorship' : 'I am a sole proprietorship'}</button>{solePropConfirmedHere && <button type="button" className="secondary" onClick={undoSoleProprietorship} disabled={busy}>Undo</button>}</div>
               </div> : null;
-              if (key === 'brc') return <div className={`upload-card brc-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
+              if (key === 'brc') return <React.Fragment key={key}>
+                <div className="documents-service-note field-span-2"><span className="eyebrow">COR SOLUTIONS' PART OF THE PROCESS</span><p>From here — once your Business Registration Certificate is on file — through your grant application, COR Solutions manages the process on your behalf.</p></div>
+                <div className={`upload-card brc-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`}>
                 <div><strong>Business Registration Certificate (BRC) <span className="required-star">*</span></strong><p>New Jersey requires a BRC for every enrolled business. Most businesses can retrieve theirs online in minutes — click "Look up my BRC" and enter the values below. Download the PDF and upload it here.</p></div>
                 <div className="brc-lookup-values">
                   <div><span>Name Control</span><strong>{nameControl(form.businessName) || '—'}</strong></div>
@@ -1304,7 +1306,8 @@ export default function App({ demoMode = false }) {
                     <button type="button" className={brcDeferred ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={reportBrcRegistered} disabled={brcBusy}>{brcDeferred ? '✓ Got it — we\'ll follow up' : "I registered, I'll follow up"}</button>
                   </div>
                 </div>}
-              </div>;
+                </div>
+              </React.Fragment>;
               if (key === 'pbsAccount') return <div className={`upload-card pbs-account-question ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
                 <div><strong>Do you already have a New Jersey Premier Business Services (PBS) account? <span className="required-star">*</span></strong><p>If you already use PBS/MyNJ for this business, choose Yes and provide the login so COR can use the existing account.</p></div>
                 <div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="yes" checked={form.hasExistingPbsAccount==='yes'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="no" checked={form.hasExistingPbsAccount==='no'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value,pbsUsername:'',pbsPassword:''}))} />No</label></div>
@@ -1327,6 +1330,8 @@ export default function App({ demoMode = false }) {
             <div><span>Documents</span><strong>{documents.length}</strong><small>{hasFormation ? 'Formation document received' : 'No formation document uploaded'}</small></div>
           </div>
           <div className="hint review-consent">By submitting, you authorize COR Solutions to use the information and documents provided to prepare and process your UEZ enrollment and applicable grant application.</div>
+          <div className="hint review-consent">Along the way, COR Solutions will likely ask you to complete certain steps that only you, the business owner, are able to perform — COR Solutions cannot take those actions on your behalf.</div>
+          <div className="hint review-consent">COR Solutions will now begin processing your information. Once every step is complete, COR Solutions will request a $500 payment before submitting your grant application — payment is due prior to the application being filed. Those funds are held by COR Solutions until the application is decided: if the application is denied, the $500 is refunded in full. Once the application is approved by the LDC, the fee is no longer refundable.</div>
         </div>}
 
         {message && <div className="form-message">{message}</div>}
