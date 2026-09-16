@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { checkUezEligibility, suggestNjAddresses } from './eligibility';
 import { nameControl, njTaxId } from './brcLookup';
 import UezMap from './UezMap';
+import cofExampleImage from './assets/cof-generic-example.png';
 import {
   createApplication,
   getApplicantSession,
@@ -1203,7 +1204,7 @@ export default function App({ demoMode = false }) {
             {signupLayout.documents.map((key) => {
               if (isBreak(key)) return renderSectionBreak(key);
               if (key === 'formation') return <div className={`upload-card formation-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p></div>
+                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p><a href={cofExampleImage} target="_blank" rel="noreferrer" className="doc-example-link"><img src={cofExampleImage} alt="Example Certificate of Formation" className="doc-example-thumb" /><span>See an example</span></a></div>
                 <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || solePropConfirmedHere} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>
               </div>;
               if (key === 'soleProp') return !hasFormation ? <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''} ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
