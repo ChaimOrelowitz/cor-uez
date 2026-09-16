@@ -91,8 +91,8 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                 <span className="sidebar-group-count">{rows.length}</span>
               </div>
               {rows.map((app) => {
-                const paid = app.payment_status === 'paid';
-                const paymentPending = app.payment_status === 'client_reported';
+                const paymentTone = app.payment_status === 'paid' ? 'paid' : app.payment_status === 'client_reported' ? 'pending' : 'unpaid';
+                const paymentLabel = paymentTone === 'paid' ? 'Paid' : paymentTone === 'pending' ? 'Pending' : 'Not paid';
                 const nextStep = nextStepStatus(app);
                 // Aging — only flag in_progress (already moving beats already submitted/ready)
                 const days = groupKey === 'in_progress' ? daysSince(app.updated_at) : null;
@@ -111,18 +111,21 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                       onSelectApplication(app.id);
                     }}
                   >
-                    <div className="sidebar-row-name">
-                      {displayBusinessName(app) || 'Unnamed business'}
-                    </div>
-                    <div className="sidebar-row-meta">
-                      <span className={`sidebar-badge status-${groupKey}`}>{ROW_STATUS_LABELS[groupKey]}</span>
-                      <span className={`sidebar-badge next-step ${nextStep === 'Complete' ? 'next-step-complete' : ''}`}>{nextStep}</span>
+                    <div className="sidebar-row-top">
+                      <span className="sidebar-row-name">{displayBusinessName(app) || 'Unnamed business'}</span>
                       <span className="sidebar-row-date">
                         {app.created_at ? new Date(app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
                       </span>
-                      {paid && <span className="sidebar-badge paid">Paid</span>}
-                      {paymentPending && <span className="sidebar-badge payment-pending">$ Pending</span>}
-                      {tone && <span className={`sidebar-badge aging ${tone}`} title={`No activity in ${days} days`}>{days}d</span>}
+                    </div>
+                    <div className="sidebar-row-meta">
+                      <div className="sidebar-row-meta-left">
+                        <span className={`sidebar-badge status-${groupKey}`}>{ROW_STATUS_LABELS[groupKey]}</span>
+                        <span className={`sidebar-badge next-step ${nextStep === 'Complete' ? 'next-step-complete' : ''}`}>{nextStep}</span>
+                      </div>
+                      <div className="sidebar-row-meta-right">
+                        {tone && <span className={`sidebar-badge aging ${tone}`} title={`No activity in ${days} days`}>{days}d</span>}
+                        <span className={`sidebar-badge payment-${paymentTone}`}>{paymentLabel}</span>
+                      </div>
                     </div>
                   </a>
                 );
