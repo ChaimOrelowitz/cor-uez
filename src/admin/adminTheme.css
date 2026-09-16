@@ -438,63 +438,97 @@
 
 /* Identity row — dark background gives it the control-panel zone feel */
 .admin-shell .admin-detail-header {
-  background: #0e1526;
+  background: transparent;
   border-bottom: none;
-  padding: 14px 18px 0;
+  padding: 20px 20px 0;
 }
-/* Two-column strip: identity takes remaining space, controls are fixed right */
+/* Elevated card, matching the step panels below it: no border, big radius,
+   a soft shadow instead of a hard edge, generous internal padding. */
 .admin-shell .cockpit-strip {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 10px;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--cw-panel);
+  border-radius: var(--cw-radius);
+  box-shadow: var(--cw-shadow);
+  padding: 26px 28px;
 }
-.admin-shell .cockpit-identity {
-  flex: 1;
-  min-width: 0; /* allows text to ellipsis instead of pushing controls out */
-}
+.admin-shell .cockpit-identity { min-width: 0; }
 .admin-shell .cockpit-identity h1 {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -.01em;
-  line-height: 1.15;
-  margin: 0;
-  color: #e8ecf5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.admin-shell .cockpit-identity .cockpit-meta {
-  color: #6b7a9a;
-  font-size: 11px;
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.admin-shell .cockpit-ein {
-  color: #4b6a9b;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 22px;
   font-weight: 700;
-  margin-right: 8px;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  margin: 0 0 14px;
+  color: var(--cw-text);
 }
-.admin-shell .admin-detail-header .eyebrow {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: #5fbf82;
-  display: block;
-  margin-bottom: 3px;
+.admin-shell .cockpit-meta-grid {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
 }
-/* Controls column — status select on top, chips + PBS below */
-.admin-shell .cockpit-controls {
-  flex-shrink: 0;
+.admin-shell .cockpit-meta-item {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+.admin-shell .cockpit-meta-item .cockpit-meta-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--cw-muted3);
+}
+.admin-shell .cockpit-meta-item .cockpit-meta-value {
+  display: flex;
+  align-items: center;
   gap: 6px;
-  padding-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cw-text-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-shell .copy-field-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 0;
+  cursor: pointer;
+  background: var(--cw-chip-bg);
+  color: var(--cw-muted3);
+  font-size: 11px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.admin-shell .copy-field-btn:hover { background: var(--cw-border-soft); color: var(--admin-accent); }
+.admin-shell .admin-detail-header .eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--admin-accent);
+  display: block;
+  margin-bottom: 10px;
+}
+/* Controls row — status select + chips, below a divider under the identity block */
+.admin-shell .cockpit-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 18px;
+  border-top: 1px solid var(--cw-line);
 }
 
 /* Pipeline strip — 8 step dots, dark-bg version */
@@ -561,25 +595,23 @@
 .admin-shell .admin-header-status span { background: rgba(37,99,235,.18); color: #93c5fd; }
 .admin-shell .admin-header-status small { color: #6b7a9a; }
 
-/* Chips on dark cockpit background */
+/* Chips on the light elevated cockpit card */
 .admin-shell .cockpit-chip {
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.12);
-  color: #a8b3ce;
-  border-radius: var(--admin-radius-sm);
-  padding: 3px 9px;
+  background: var(--cw-chip-bg);
+  border: none;
+  color: var(--cw-text-mute);
+  border-radius: var(--admin-radius-md);
+  padding: 7px 13px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
 .admin-shell .cockpit-chip.good {
-  background: rgba(34,197,94,.12);
-  border-color: rgba(34,197,94,.28);
-  color: #4ade80;
+  background: var(--admin-good-bg);
+  color: var(--admin-good-text);
 }
 .admin-shell .cockpit-chip.warn {
-  background: rgba(245,158,11,.12);
-  border-color: rgba(245,158,11,.28);
-  color: #fbbf24;
+  background: var(--admin-warn-bg);
+  color: var(--admin-warn-text);
 }
 
 /* ---- Status dropdown in cockpit chips row -------------------------------- */
@@ -587,60 +619,55 @@
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
-  border-radius: var(--admin-radius-sm);
-  padding: 3px 24px 3px 9px;
-  font-size: 11px;
+  border-radius: var(--admin-radius-md);
+  padding: 8px 26px 8px 13px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: .03em;
-  border: 1px solid transparent;
+  border: none;
   outline: none;
   transition: filter .12s, opacity .12s;
   /* chevron arrow baked in */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23fff' stroke-opacity='.45' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b6f66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 7px center;
+  background-position: right 9px center;
 }
 .admin-shell .cockpit-status-select:disabled { opacity: .5; cursor: default; }
 .admin-shell .cockpit-status-select:focus { box-shadow: 0 0 0 2px var(--admin-accent-ring); }
 
 /* Per-status colour variants */
 .admin-shell .cockpit-status-select.gs-not_started {
-  background-color: rgba(255,255,255,.08);
-  border-color: rgba(255,255,255,.14);
-  color: #a8b3ce;
+  background-color: var(--cw-chip-bg);
+  color: var(--cw-text-mute);
 }
 .admin-shell .cockpit-status-select.gs-in_progress {
-  background-color: rgba(37,99,235,.18);
-  border-color: rgba(37,99,235,.4);
-  color: #93c5fd;
+  background-color: #e6eefb;
+  color: #3a6ea8;
 }
 .admin-shell .cockpit-status-select.gs-applied {
-  background-color: rgba(34,197,94,.14);
-  border-color: rgba(34,197,94,.35);
-  color: #4ade80;
+  background-color: var(--admin-good-bg);
+  color: var(--admin-good-text);
 }
 .admin-shell .cockpit-status-select.gs-ready_for_submission {
-  background-color: rgba(245,158,11,.16);
-  border-color: rgba(245,158,11,.38);
-  color: #fde68a;
+  background-color: var(--admin-warn-bg);
+  color: var(--admin-warn-text);
 }
 .admin-shell .cockpit-status-select.gs-cancelled {
-  background-color: rgba(156,64,63,.16);
-  border-color: rgba(156,64,63,.36);
-  color: #f87171;
+  background-color: var(--admin-danger-bg);
+  color: var(--admin-danger-text);
 }
 /* native option elements inherit background from browser; override the arrow tint per variant */
 .admin-shell .cockpit-status-select.gs-in_progress {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2393c5fd' stroke-opacity='.7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233a6ea8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .admin-shell .cockpit-status-select.gs-applied {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234ade80' stroke-opacity='.7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%232f7d52' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .admin-shell .cockpit-status-select.gs-ready_for_submission {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23fde68a' stroke-opacity='.7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a6a2e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .admin-shell .cockpit-status-select.gs-cancelled {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23f87171' stroke-opacity='.7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239c4a3f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .admin-shell .admin-message { background: var(--admin-accent-soft); color: var(--admin-accent); border-radius: var(--admin-radius-sm); }
 .admin-shell .admin-message-error { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
@@ -650,13 +677,12 @@
   background: var(--admin-accent);
   color: #fff;
   border: none;
-  border-radius: var(--admin-radius-sm);
-  padding: 4px 12px;
+  border-radius: var(--admin-radius-md);
+  padding: 8px 14px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .02em;
   cursor: pointer;
-  margin-left: auto;
   transition: background .12s;
 }
 .admin-shell .cockpit-open-pbs-btn:hover:not(:disabled) { background: var(--admin-accent-hover); }
@@ -1394,8 +1420,9 @@
   --cw-state-manual:      #a78bfa;
   --cw-state-cancelled:   #3a3f4a;
 
-  --cw-radius: 10px;
+  --cw-radius: 20px;
   --cw-radius-sm: 6px;
+  --cw-shadow: 0 22px 44px rgba(0,0,0,.45);
 }
 
 /* ---- CW tokens: light override ------------------------------------------ */
@@ -1448,6 +1475,8 @@
   --cw-state-na:          #c9d0d8;
   --cw-state-manual:      #7c3aed;
   --cw-state-cancelled:   #c9d0d8;
+
+  --cw-shadow: 0 22px 44px rgba(30,20,5,.10);
 }
 
 /* ---- Layout shell -------------------------------------------------------- */
@@ -1551,15 +1580,16 @@
 /* ---- Step panel ---------------------------------------------------------- */
 
 .admin-shell .cw-step-panel {
-  margin: 16px;
+  margin: 20px;
   background: var(--cw-panel);
-  border: 1px solid var(--cw-panel-border);
-  border-radius: 0 0 var(--cw-radius) var(--cw-radius);
+  border: none;
+  border-radius: var(--cw-radius);
+  box-shadow: var(--cw-shadow);
   overflow: hidden;
 }
 
 .admin-shell .cw-step-header {
-  padding: 14px 16px 12px;
+  padding: 22px 24px 16px;
   border-bottom: 1px solid var(--cw-line);
 }
 
@@ -1656,8 +1686,8 @@
 .admin-shell .cw-doc-fields-grid {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 16px;
-  padding: 14px 16px;
+  gap: 20px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--cw-line);
 }
 

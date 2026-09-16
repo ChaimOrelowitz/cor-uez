@@ -4,6 +4,7 @@ import {
   adminQueueInfo,
   attentionItems,
   deriveDefaultProcessStep,
+  displayBusinessName,
   documentLabel,
   filterAndSortApplications,
   formatDob,
@@ -588,5 +589,25 @@ describe('nextStepStatus (sidebar waterfall)', () => {
       document_types: ['formation'], formation_review_status: 'approved', brc_status: 'found',
       pbs_account_created: true, uez_application_status: 'approved'
     })).toBe('Needs TC');
+  });
+});
+
+describe('displayBusinessName', () => {
+  it('falls back to the self-reported name before the BRC is retrieved', () => {
+    expect(displayBusinessName({ business_name_input: 'Lakewood Bagel Co' })).toBe('Lakewood Bagel Co');
+  });
+
+  it('prefers the BRC-confirmed registered name once it exists', () => {
+    expect(displayBusinessName({
+      business_name_input: 'Lakewood Bagel',
+      registered_business_name: 'LAKEWOOD BAGEL CO LLC'
+    })).toBe('LAKEWOOD BAGEL CO LLC');
+  });
+
+  it('falls back to brc_registered_name when registered_business_name is unset', () => {
+    expect(displayBusinessName({
+      business_name_input: 'Lakewood Bagel',
+      brc_registered_name: 'LAKEWOOD BAGEL CO LLC'
+    })).toBe('LAKEWOOD BAGEL CO LLC');
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { nextStepStatus } from './caseLogic';
+import { displayBusinessName, nextStepStatus } from './caseLogic';
 
 // Maps any DB status value → one of 5 canonical groups
 function toGroup(app) {
@@ -112,7 +112,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                     }}
                   >
                     <div className="sidebar-row-name">
-                      {app.business_name_input || 'Unnamed business'}
+                      {displayBusinessName(app) || 'Unnamed business'}
                     </div>
                     <div className="sidebar-row-meta">
                       <span className={`sidebar-badge status-${groupKey}`}>{ROW_STATUS_LABELS[groupKey]}</span>

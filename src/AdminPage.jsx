@@ -35,6 +35,7 @@ import {
 import {
   applicationDraftFrom,
   attentionItems,
+  displayBusinessName,
   docFor,
   docsFor,
   documentLabel,
@@ -123,6 +124,37 @@ function openOfficialBrcLookup(application) {
   HTMLFormElement.prototype.submit.call(form);
   form.remove();
   popup.focus();
+}
+
+// Small copy-to-clipboard icon button used next to identity fields (business
+// name, EIN, phone) in the case header — briefly swaps to a checkmark so the
+// click has visible feedback instead of just trusting the clipboard worked.
+function CopyButton({ value, label }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return null;
+  return (
+    <button
+      type="button"
+      className="copy-field-btn"
+      title={`Copy ${label}`}
+      aria-label={`Copy ${label}`}
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(String(value));
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        } catch {
+          // Clipboard API can be denied/unavailable — silently no-op rather
+          // than surfacing an error banner for a convenience button.
+        }
+      }}
+    >
+      {copied
+        ? <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        : <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>}
+    </button>
+  );
 }
 
 export default function AdminPage() {
@@ -777,7 +809,7 @@ export default function AdminPage() {
 
   async function deleteApplication() {
     const confirmation = window.prompt(
-      `This permanently deletes ${detail.application.business_name_input}, its owners, documents, and application history. Type DELETE to continue.`
+      `This permanently deletes ${displayBusinessName(detail.application)}, its owners, documents, and application history. Type DELETE to continue.`
     );
     if (confirmation !== 'DELETE') return;
 
@@ -1243,24 +1275,38 @@ export default function AdminPage() {
       <section className="admin-detail">
         {detail && <div className="mobile-detail-nav">
           <button type="button" onClick={() => { setMobileDetailOpen(false); window.scrollTo({ top: 0, behavior: 'instant' }); }}>‹ Applicants</button>
-          <div><strong>{detail.application.business_name_input || 'Application'}</strong><small>{readyDocumentCount(detail)}/5 docs · {paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</small></div>
+          <div><strong>{displayBusinessName(detail.application) || 'Application'}</strong><small>{readyDocumentCount(detail)}/5 docs · {paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</small></div>
         </div>}
         {message && <div className="admin-message">{message}</div>}
         {!detail && <div className="admin-empty"><h2>Select an application</h2><p>New submissions will appear on the left.</p></div>}
 
         {detail && <>
           <div className="admin-detail-header cockpit-header">
-            {/* Two-column control strip: identity left, controls right */}
             <div className="cockpit-strip">
               <div className="cockpit-identity">
                 <span className="eyebrow">UEZ APPLICATION</span>
-                <h1 title={detail.application.business_name_input}>{detail.application.business_name_input}</h1>
-                <p className="cockpit-meta">
-                  {detail.application.ein ? <span className="cockpit-ein">EIN {detail.application.ein}</span> : null}
-                  {detail.application.contact_email}
-                  {detail.application.contact_phone ? ` · ${detail.application.contact_phone}` : ''}
-                  {detail.owners?.[0] ? ` · ${detail.owners[0].firstName} ${detail.owners[0].lastName}` : ''}
-                </p>
+                <h1 title={displayBusinessName(detail.application)}>
+                  {displayBusinessName(detail.application)}
+                  <CopyButton value={displayBusinessName(detail.application)} label="business name" />
+                </h1>
+                <div className="cockpit-meta-grid">
+                  {detail.application.ein && <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">EIN</span>
+                    <div className="cockpit-meta-value">{detail.application.ein}<CopyButton value={njTaxId(detail.application.ein)} label="EIN" /></div>
+                  </div>}
+                  {detail.application.contact_phone && <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">Phone</span>
+                    <div className="cockpit-meta-value">{detail.application.contact_phone}<CopyButton value={detail.application.contact_phone} label="phone number" /></div>
+                  </div>}
+                  {detail.application.contact_email && <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">Email</span>
+                    <div className="cockpit-meta-value">{detail.application.contact_email}</div>
+                  </div>}
+                  {detail.owners?.[0] && <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">Primary owner</span>
+                    <div className="cockpit-meta-value">{detail.owners[0].firstName} {detail.owners[0].lastName}</div>
+                  </div>}
+                </div>
               </div>
               <div className="cockpit-controls">
                 <select

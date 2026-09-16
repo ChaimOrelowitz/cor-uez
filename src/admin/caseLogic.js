@@ -21,6 +21,17 @@ export function statusLabel(status) {
   return status === 'applied' || status === 'grant_submitted' ? 'Applied' : 'In Progress';
 }
 
+// Once New Jersey's own BRC lookup confirms a business's registered name,
+// that's the name COR should show as *the* business name everywhere it's
+// used as this case's identity (sidebar, case header) - it's the state's
+// record of truth, and can legitimately differ from what the applicant
+// typed at signup (a DBA, a typo, a shortened name). The self-reported
+// business_name_input is still shown separately, alongside the registered
+// name, on the Business details card for comparison.
+export function displayBusinessName(app) {
+  return app?.registered_business_name || app?.brc_registered_name || app?.business_name_input || '';
+}
+
 export function programLabel(code) {
   return code === 'lakewood_technology_grant' ? 'Lakewood LDC Technology Grant' : (code || 'UEZ enrollment');
 }
