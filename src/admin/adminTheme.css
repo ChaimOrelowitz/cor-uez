@@ -338,38 +338,60 @@
 .admin-shell .sidebar-head-row span { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--admin-sidebar-text-muted); }
 .admin-shell .sidebar-head-row strong { color: var(--admin-sidebar-text); font-size: 12px; }
 
-.admin-shell .sidebar-group { margin-bottom: 2px; }
+.admin-shell .sidebar-group { margin-bottom: 4px; }
+/* A real button now (click to collapse/expand) - deliberately more visible
+   than a plain text label: its own tinted bar instead of a hairline. */
 .admin-shell .sidebar-group-header {
   display: flex;
+  width: 100%;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 14px 4px;
-  border-top: 1px solid var(--admin-sidebar-border);
+  gap: 8px;
+  padding: 9px 12px;
+  margin: 6px 8px 5px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--admin-sidebar-surface);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
 }
-.admin-shell .sidebar-group-header:first-child { border-top: none; }
-.admin-shell .sidebar-group-label {
+.admin-shell .sidebar-group-header:hover { filter: brightness(0.98); }
+.admin-shell .sidebar-group-label-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.admin-shell .sidebar-group-chevron {
   font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
   color: var(--admin-sidebar-text-muted);
+  transition: transform .15s ease;
+  flex: 0 0 auto;
+}
+.admin-shell .sidebar-group-chevron.collapsed { transform: rotate(-90deg); }
+.admin-shell .sidebar-group-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--admin-sidebar-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .admin-shell .sidebar-group-count {
-  font-size: 9px;
-  background: rgba(255,255,255,.08);
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(34,54,76,.08);
   color: var(--admin-sidebar-text-muted);
-  padding: 0 5px;
+  padding: 1px 7px;
   border-radius: 20px;
+  flex: 0 0 auto;
 }
-/* Color-code section labels by group */
-.admin-shell .sidebar-group-not_started .sidebar-group-label { color: var(--admin-sidebar-text-muted); }
-.admin-shell .sidebar-group-in_progress .sidebar-group-label  { color: #93c5fd; }
-.admin-shell .sidebar-group-in_progress .sidebar-group-count  { background: rgba(59,130,246,.2); color: #93c5fd; }
-.admin-shell .sidebar-group-ready .sidebar-group-label        { color: #fde68a; }
-.admin-shell .sidebar-group-ready .sidebar-group-count        { background: rgba(245,158,11,.22); color: #fde68a; }
-.admin-shell .sidebar-group-submitted .sidebar-group-label    { color: #86efac; }
-.admin-shell .sidebar-group-submitted .sidebar-group-count    { background: rgba(34,197,94,.15); color: #86efac; }
-.admin-shell .sidebar-group-cancelled .sidebar-group-label    { color: #9ca3af; opacity: .6; }
+/* Color-code each section by what it means - "needs X" sections share one
+   accent (matching the per-row next-step badge), Complete is the app's
+   good/green, Cancelled and Not started stay neutral. */
+.admin-shell [class*="sidebar-group-needs-"] .sidebar-group-label { color: #6b46c1; }
+.admin-shell [class*="sidebar-group-needs-"] .sidebar-group-count { background: #ece5fb; color: #6b46c1; }
+.admin-shell .sidebar-group-complete .sidebar-group-label { color: var(--admin-good-text); }
+.admin-shell .sidebar-group-complete .sidebar-group-count { background: var(--admin-good-bg); color: var(--admin-good-text); }
+.admin-shell .sidebar-group-cancelled .sidebar-group-label { color: var(--admin-sidebar-text-muted); opacity: .75; }
 
 /* Sidebar row internals — a real <a href="/admin/businesses/:id"> now, so
    ctrl/cmd/middle-click "open in new tab" and "copy link" work like any
@@ -441,6 +463,12 @@
 .admin-shell .sidebar-badge.status-ready       { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
 .admin-shell .sidebar-badge.status-submitted   { background: var(--admin-good-bg); color: var(--admin-good-text); }
 .admin-shell .sidebar-badge.status-cancelled   { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
+/* Granular "what's actually next" badge — the same waterfall the sidebar
+   sections group by (see nextStepStatus() in caseLogic.js); shown on every
+   row too, not just the section header, so it's still readable once a
+   section is scrolled past or if sections get reordered/filtered later. */
+.admin-shell .sidebar-badge.next-step { background: #ece5fb; color: #6b46c1; }
+.admin-shell .sidebar-badge.next-step.next-step-complete { background: var(--admin-good-bg); color: var(--admin-good-text); }
 /* Aging badges — only on in_progress rows */
 .admin-shell .sidebar-badge.aging { font-variant-numeric: tabular-nums; }
 .admin-shell .sidebar-badge.age-warn   { background: var(--admin-warn-bg); color: var(--admin-warn-text); }

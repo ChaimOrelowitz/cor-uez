@@ -67,6 +67,7 @@ function agingTone(days) {
 }
 
 export default function AdminSidebar({ applications, selectedId, search, onSearchChange, onSelectApplication }) {
+  const [collapsed, setCollapsed] = React.useState(() => new Set());
   const q = String(search || '').trim().toLowerCase();
 
   // Filter by search
@@ -107,14 +108,28 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
           const rows = groups[section];
           if (!rows.length) return null;
           const key = slug(section);
+          const isCollapsed = collapsed.has(section);
           return (
             <div key={section} className={`sidebar-group sidebar-group-${key}`}>
-              <div className="sidebar-group-header">
-                <span className="sidebar-group-label">{section}</span>
+              <button
+                type="button"
+                className="sidebar-group-header"
+                onClick={() => setCollapsed((old) => {
+                  const next = new Set(old);
+                  if (next.has(section)) next.delete(section); else next.add(section);
+                  return next;
+                })}
+                aria-expanded={!isCollapsed}
+              >
+                <span className="sidebar-group-label-row">
+                  <span className={`sidebar-group-chevron ${isCollapsed ? 'collapsed' : ''}`}>▾</span>
+                  <span className="sidebar-group-label">{section}</span>
+                </span>
                 <span className="sidebar-group-count">{rows.length}</span>
-              </div>
-              {rows.map((app) => {
+              </button>
+              {!isCollapsed && rows.map((app) => {
                 const coarseGroup = toGroup(app);
+                const nextStep = nextStepStatus(app);
                 const paymentTone = app.payment_status === 'paid' ? 'paid' : app.payment_status === 'client_reported' ? 'pending' : 'unpaid';
                 const paymentLabel = paymentTone === 'paid' ? 'Paid' : paymentTone === 'pending' ? 'Pending' : 'Not paid';
                 // Aging — only flag in_progress (already moving beats already submitted/ready)
@@ -143,6 +158,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                     <div className="sidebar-row-meta">
                       <div className="sidebar-row-meta-left">
                         <span className={`sidebar-badge status-${coarseGroup}`}>{ROW_STATUS_LABELS[coarseGroup]}</span>
+                        <span className={`sidebar-badge next-step ${nextStep === 'Complete' ? 'next-step-complete' : ''}`}>{nextStep}</span>
                       </div>
                       <div className="sidebar-row-meta-right">
                         {tone && <span className={`sidebar-badge aging ${tone}`} title={`No activity in ${days} days`}>{days}d</span>}
