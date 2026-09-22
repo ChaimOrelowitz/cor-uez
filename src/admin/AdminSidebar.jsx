@@ -1,6 +1,25 @@
 import React from 'react';
 import { displayBusinessName, nextStepStatus } from './caseLogic';
 
+// The waterfall labels nextStepStatus() returns, in pipeline order, plus a
+// Cancelled bucket pulled out separately - a cancelled application doesn't
+// meaningfully "need" its next pipeline step anymore, so grouping it under
+// whatever the waterfall happens to say next would be misleading.
+const SECTION_ORDER = [
+  'Not started', 'Needs BRC', 'Needs PBS', 'Needs TC', 'Needs UEZ',
+  'Needs LDC application', 'Needs payment', 'Needs grant submission',
+  'Complete', 'Cancelled',
+];
+
+function sectionKey(app) {
+  return app.status === 'cancelled' ? 'Cancelled' : nextStepStatus(app);
+}
+
+// CSS-safe class suffix for a section label, e.g. "Needs LDC application" -> "needs-ldc-application"
+function slug(label) {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 // Maps any DB status value → one of 5 canonical groups
 export function toGroup(app) {
   const s = app.status;
@@ -12,15 +31,9 @@ export function toGroup(app) {
 }
 
 export const GROUP_ORDER = ['not_started', 'in_progress', 'ready', 'submitted', 'cancelled'];
-const GROUP_LABELS = {
-  not_started: 'Not Started',
-  in_progress: 'In Progress',
-  ready:       'Ready for Submission',
-  submitted:   'Submitted',
-  cancelled:   'Cancelled',
-};
-// Compact form of the same 5 statuses for the per-row badge (GROUP_LABELS is
-// used as-is for the section headers, where there's more room).
+// Compact form of the same 5 statuses - shown as the small per-row status
+// badge (the sidebar's own section headers are the granular next-step
+// labels now, see SECTION_ORDER above).
 export const ROW_STATUS_LABELS = {
   not_started: 'New',
   in_progress: 'In Progress',
@@ -63,14 +76,16 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
       .some((v) => String(v || '').toLowerCase().includes(q));
   });
 
-  // Group and sort newest-first within each group
+  // Group by granular pipeline position (Not started / Needs BRC / ... /
+  // Complete, plus Cancelled) instead of the coarse 5-value status column -
+  // "what does this case actually need next" is the more useful triage view.
   const groups = {};
-  GROUP_ORDER.forEach((g) => { groups[g] = []; });
+  SECTION_ORDER.forEach((g) => { groups[g] = []; });
   matched.forEach((app) => {
-    const g = toGroup(app);
+    const g = sectionKey(app);
     if (groups[g]) groups[g].push(app);
   });
-  GROUP_ORDER.forEach((g) => {
+  SECTION_ORDER.forEach((g) => {
     groups[g].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   });
 
@@ -88,27 +103,28 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
       </div>
 
       <div className="application-list">
-        {GROUP_ORDER.map((groupKey) => {
-          const rows = groups[groupKey];
+        {SECTION_ORDER.map((section) => {
+          const rows = groups[section];
           if (!rows.length) return null;
+          const key = slug(section);
           return (
-            <div key={groupKey} className={`sidebar-group sidebar-group-${groupKey}`}>
+            <div key={section} className={`sidebar-group sidebar-group-${key}`}>
               <div className="sidebar-group-header">
-                <span className="sidebar-group-label">{GROUP_LABELS[groupKey]}</span>
+                <span className="sidebar-group-label">{section}</span>
                 <span className="sidebar-group-count">{rows.length}</span>
               </div>
               {rows.map((app) => {
+                const coarseGroup = toGroup(app);
                 const paymentTone = app.payment_status === 'paid' ? 'paid' : app.payment_status === 'client_reported' ? 'pending' : 'unpaid';
                 const paymentLabel = paymentTone === 'paid' ? 'Paid' : paymentTone === 'pending' ? 'Pending' : 'Not paid';
-                const nextStep = nextStepStatus(app);
                 // Aging — only flag in_progress (already moving beats already submitted/ready)
-                const days = groupKey === 'in_progress' ? daysSince(app.updated_at) : null;
+                const days = coarseGroup === 'in_progress' ? daysSince(app.updated_at) : null;
                 const tone = agingTone(days);
                 return (
                   <a
                     key={app.id}
                     href={`/admin/businesses/${encodeURIComponent(app.id)}`}
-                    className={`application-list-item sidebar-group-item-${groupKey} ${selectedId === app.id ? 'active' : ''}`}
+                    className={`application-list-item sidebar-group-item-${key} ${selectedId === app.id ? 'active' : ''}`}
                     onClick={(e) => {
                       // Plain left-click navigates in place (same handler as
                       // before); ctrl/cmd/shift/middle-click falls through to
@@ -126,8 +142,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
                     </div>
                     <div className="sidebar-row-meta">
                       <div className="sidebar-row-meta-left">
-                        <span className={`sidebar-badge status-${groupKey}`}>{ROW_STATUS_LABELS[groupKey]}</span>
-                        <span className={`sidebar-badge next-step ${nextStep === 'Complete' ? 'next-step-complete' : ''}`}>{nextStep}</span>
+                        <span className={`sidebar-badge status-${coarseGroup}`}>{ROW_STATUS_LABELS[coarseGroup]}</span>
                       </div>
                       <div className="sidebar-row-meta-right">
                         {tone && <span className={`sidebar-badge aging ${tone}`} title={`No activity in ${days} days`}>{days}d</span>}
