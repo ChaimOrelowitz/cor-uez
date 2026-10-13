@@ -507,7 +507,10 @@ export default function AdminPage() {
       waiting_for_pbs_verification: "Complete New Jersey's security verification in the visible PBS window.",
       waiting_for_pbs_human_step: 'COR reached a PBS step that was not completed in the HAR. Review and continue manually.',
       waiting_for_pbs_page: 'Waiting for the next PBS page…',
-      pbs_needs_attention: 'PBS needs your attention in the visible NJ window.'
+      pbs_needs_attention: 'PBS needs your attention in the visible NJ window.',
+      opening_uez_application: 'Opening the NJ UEZ Certification Application…',
+      saving_uez_application: 'Capturing the UEZ application page…',
+      uploading_uez_application: "Saving the captured page as the pending certificate…"
     };
     const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     return new Promise((resolve, reject) => {
@@ -686,6 +689,29 @@ export default function AdminPage() {
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The LDC application workflow did not finish.');
       await refreshList(detail.application.id);
       setMessage("LDC application submitted. The signed JotForm PDF is saved in this applicant's Documents.");
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runUezEnrollment() {
+    setBusy(true);
+    setMessage('Starting the COR Chrome extension…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the UEZ application.');
+
+      const outcome = await runExtensionWorkflow('uez_enrollment', {
+        applicationId: detail.application.id,
+        businessName: detail.application.registered_business_name || detail.application.business_name_input,
+        accessToken: currentSession.access_token
+      });
+      if (outcome.status === 'cancelled') { setMessage('UEZ application window closed before it finished. Nothing was saved — start it again when ready.'); return; }
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The UEZ application workflow did not finish.');
+      await refreshList(detail.application.id);
+      setMessage('UEZ Certification Application captured and saved as the pending certificate.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1193,9 +1219,14 @@ export default function AdminPage() {
   function globalStatusValue(status) {
     if (status === 'applied' || status === 'grant_submitted' || status === 'submitted') return 'applied';
     if (status === 'cancelled') return 'cancelled';
+    if (status === 'call_state') return 'call_state';
     if (status === 'ready_for_submission') return 'ready_for_submission';
     if (status === 'in_progress' || status === 'ready_for_ldc') return 'in_progress';
     return 'not_started';
+  }
+
+  function toggleCallState(checked) {
+    setGlobalStatus(checked ? 'call_state' : 'in_progress');
   }
 
   const filtered = useMemo(
@@ -1334,6 +1365,14 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="cockpit-controls">
+                <label className="cockpit-call-state">
+                  <input
+                    type="checkbox"
+                    checked={globalStatusValue(detail.application.status) === 'call_state'}
+                    onChange={(e) => toggleCallState(e.target.checked)}
+                  />
+                  Call State
+                </label>
                 <select
                   className={`cockpit-status-select gs-${globalStatusValue(detail.application.status)}`}
                   value={globalStatusValue(detail.application.status)}
@@ -1344,6 +1383,7 @@ export default function AdminPage() {
                   <option value="in_progress">In Progress</option>
                   <option value="ready_for_submission">Ready for Submission</option>
                   <option value="applied">Submitted</option>
+                  <option value="call_state">Call State</option>
                   <option value="cancelled">Cancelled</option>
                 </select>
                 <div className="cockpit-chips-row">

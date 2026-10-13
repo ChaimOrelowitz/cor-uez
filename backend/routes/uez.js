@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const multer = require('multer');
+const { chromium } = require('playwright');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { encryptText, decryptText } = require('../utils/uezCrypto');
@@ -1655,6 +1656,92 @@ router.post('/admin/applications/:id/grant-submission/detected', requireUezAdmin
   }
 });
 
+// The admin drives the NJ UEZ certification wizard by hand (the extension only
+// pre-fills fields it already has data for and never auto-submits a page -
+// see brc-helper-extension/uez-application.js), then clicks "Capture" on
+// whichever page shows the finished/pending certificate. This renders that
+// screenshot into a PDF the same way the BRC capture route does
+// (backend/routes/uezBrc.js) and uploads it as the uez_pending_certification
+// document, which is what actually flips the step - see the
+// documentType === 'uez_pending_certification' branch in
+// POST /applications/:id/documents above.
+router.post('/admin/applications/:id/uez-application-captured', requireUezAdmin, async (req, res) => {
+  let browser;
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+
+    const screenshotBase64 = typeof req.body?.screenshotBase64 === 'string' ? req.body.screenshotBase64.trim() : '';
+    const submittedId = typeof req.body?.submittedId === 'string' ? req.body.submittedId.trim() : '';
+    if (!screenshotBase64) return res.status(400).json({ error: 'The captured UEZ application page was empty.' });
+
+    let imageBuffer;
+    try { imageBuffer = Buffer.from(screenshotBase64, 'base64'); } catch (_) { imageBuffer = null; }
+    if (!imageBuffer || imageBuffer.length < 100 || imageBuffer.subarray(1, 4).toString('ascii') !== 'PNG') {
+      return res.status(400).json({ error: 'The captured UEZ application page was not a valid PNG.' });
+    }
+
+    browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage', '--no-sandbox'] });
+    const page = await browser.newPage({ javaScriptEnabled: false });
+    await page.setContent(`<!doctype html><html><head><style>@page{size:Letter;margin:.35in}html,body{margin:0;padding:0;background:#fff}body{display:flex;align-items:flex-start;justify-content:center}img{display:block;max-width:100%;height:auto}</style></head><body><img src="data:image/png;base64,${screenshotBase64}"></body></html>`, { waitUntil: 'load', timeout: 15000 });
+    const pdf = await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.35in', right: '0.35in', bottom: '0.35in', left: '0.35in' } });
+    if (!pdf || pdf.length < 100 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
+      throw new Error('COR could not render the UEZ application page as a valid PDF.');
+    }
+
+    const filename = submittedId
+      ? `NJ-UEZ-Certification-Application-${submittedId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80)}.pdf`
+      : 'NJ-UEZ-Certification-Application.pdf';
+    const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${filename}`;
+    const { error: storageError } = await supabase.storage.from(DOCUMENT_BUCKET).upload(storagePath, pdf, { contentType: 'application/pdf', upsert: false });
+    if (storageError) throw storageError;
+
+    const { data: document, error: documentError } = await supabase.from('uez_documents').insert({
+      application_id: application.id,
+      document_type: 'uez_pending_certification',
+      storage_path: storagePath,
+      filename,
+      source: 'admin_upload',
+      status: 'received',
+      metadata: { mimeType: 'application/pdf', size: pdf.length, capturedBy: 'chrome_extension', submittedId: submittedId || null },
+      created_by: req.user.id
+    }).select('id, document_type, filename, source, status, metadata, created_at').single();
+    if (documentError) throw documentError;
+
+    // Same milestone the generic upload route already applies for this
+    // document type - duplicated here (not called directly, since that logic
+    // lives inline in the multipart route above) rather than left out, so
+    // this capture path advances the step exactly like a manual upload would.
+    if (application.uez_application_status !== 'approved') {
+      const now = new Date().toISOString();
+      const { error: appError } = await supabase.from('uez_applications').update({
+        uez_application_status: 'applied',
+        uez_application_submitted: true,
+        updated_at: now
+      }).eq('id', application.id);
+      if (appError) throw appError;
+
+      await clearExplicitProcessStep(application.id, 'uez_enrollment');
+      await addStatusEvent(
+        application.id,
+        'uez_application_submitted',
+        'UEZ application submitted',
+        submittedId
+          ? `Your UEZ Pending Certification application was submitted (confirmation ${submittedId}) and is awaiting New Jersey state approval.`
+          : 'Your UEZ Pending Certification application was submitted and is awaiting New Jersey state approval.',
+        req.user.id,
+        true
+      );
+    }
+
+    res.status(201).json({ application, document });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+});
+
 router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) => {
   try {
     const status = String(req.body?.status || '').trim();
@@ -1668,13 +1755,15 @@ router.post('/admin/applications/:id/status', requireUezAdmin, async (req, res) 
 
     const overallStatus = status === 'cancelled'
       ? 'cancelled'
-      : status === 'ready_for_submission'
-        ? 'ready_for_submission'
-        : ['grant_submitted', 'applied', 'submitted'].includes(status)
-          ? 'applied'
-          : status === 'not_started'
-            ? 'not_started'
-            : application.status === 'applied' ? 'applied' : 'in_progress';
+      : status === 'call_state'
+        ? 'call_state'
+        : status === 'ready_for_submission'
+          ? 'ready_for_submission'
+          : ['grant_submitted', 'applied', 'submitted'].includes(status)
+            ? 'applied'
+            : status === 'not_started'
+              ? 'not_started'
+              : application.status === 'applied' ? 'applied' : 'in_progress';
 
     const { data, error } = await supabase.from('uez_applications').update({
       status: overallStatus,

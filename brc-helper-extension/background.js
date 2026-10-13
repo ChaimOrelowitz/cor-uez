@@ -153,7 +153,7 @@ async function clearIncognitoWorkflowCookies(tabId) {
 async function startWorkflow(message, sender) {
   const senderOrigin = sender.tab?.url ? new URL(sender.tab.url).origin : '';
   if (!isAllowedOrigin(senderOrigin)) throw new Error('Open this helper from the COR UEZ admin app.');
-  if (!['brc', 'tax_clearance', 'pbs_signup', 'pbs_login', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
+  if (!['brc', 'tax_clearance', 'pbs_signup', 'pbs_login', 'uez_enrollment', 'ldc_jotform', 'lakewood_portal'].includes(message.workflow)) throw new Error('Unknown COR workflow.');
   const existing = await getJob();
   if (existing && Date.now() - (existing.createdAt || 0) < 30 * 60 * 1000 && existing.status !== 'complete' && existing.status !== 'error') {
     throw new Error('A COR document retrieval is already running. Finish it first.');
@@ -178,6 +178,8 @@ async function startWorkflow(message, sender) {
       ? 'https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login'
       : job.workflow === 'pbs_signup'
         ? 'https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/'
+      : job.workflow === 'uez_enrollment'
+        ? 'https://portal03.nj.gov/ords_apex_oit/f?p=405:100'
       : job.workflow === 'ldc_jotform'
         ? 'https://form.jotform.com/241936732268060'
         : 'https://form.jotform.com/222748639284165';
@@ -204,14 +206,14 @@ async function startWorkflow(message, sender) {
     await setJob(null);
     throw error;
   }
-  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : (job.workflow === 'tax_clearance' || job.workflow === 'pbs_login') ? 'opening_pbs' : job.workflow === 'pbs_signup' ? 'opening_pbs_signup' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
+  const openingStatus = job.workflow === 'brc' ? 'opening_brc' : (job.workflow === 'tax_clearance' || job.workflow === 'pbs_login') ? 'opening_pbs' : job.workflow === 'pbs_signup' ? 'opening_pbs_signup' : job.workflow === 'uez_enrollment' ? 'opening_uez_application' : job.workflow === 'ldc_jotform' ? 'opening_ldc_form' : 'opening_lakewood_portal';
   await notify(job, openingStatus);
   return { ok: true, jobId: job.id };
 }
 
 async function injectNjHelper(tabId) {
   const job = await getJob().catch(() => null);
-  const file = job?.workflow === 'pbs_signup' ? 'pbs.js' : 'content.js';
+  const file = job?.workflow === 'pbs_signup' ? 'pbs.js' : job?.workflow === 'uez_enrollment' ? 'uez-application.js' : 'content.js';
   await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: [file] }).catch(() => {});
 }
 
@@ -287,6 +289,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }))
         }
       };
+    }
+    if (message?.type === 'COR_UEZ_APP_GET_DATA') {
+      if (job.workflow !== 'uez_enrollment' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching UEZ application workflow is active.' };
+      const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
+      const application = detail.application || {};
+      const owner = detail.owners?.[0] || {};
+      const einDigits = String(application.ein || '').replace(/\D/g, '').slice(0, 9);
+      const businessName = application.registered_business_name || application.brc_registered_name || application.business_name_input || '';
+      return {
+        ok: true,
+        data: {
+          business: {
+            einDigits,
+            taxIdFull: einDigits.length === 9 ? `${einDigits}000` : '',
+            taxIdFormatted: einDigits.length === 9 ? `${einDigits.slice(0, 3)}-${einDigits.slice(3, 6)}-${einDigits.slice(6, 9)}/000` : '',
+            corpName: businessName,
+            busName: businessName,
+            addressLine1: application.address_line1 || '',
+            addressLine2: application.address_line2 || '',
+            city: application.city || '',
+            state: application.state || 'NJ',
+            zip: application.zip || '',
+            phone: application.contact_phone || owner.phone || '',
+            email: application.contact_email || owner.email || '',
+            fullTimeEmployees: application.full_time_employees ?? '',
+            partTimeEmployees: application.part_time_employees ?? ''
+          },
+          contact: {
+            salutation: owner.title || '',
+            firstName: owner.firstName || '',
+            lastName: owner.lastName || '',
+            phone: owner.phone || application.contact_phone || '',
+            email: owner.email || application.contact_email || ''
+          }
+        }
+      };
+    }
+    if (message?.type === 'COR_UEZ_APP_CAPTURE_REQUEST') {
+      if (job.workflow !== 'uez_enrollment') return { ok: false, error: 'No matching UEZ application workflow is active.' };
+      await notify(job, 'saving_uez_application');
+      try {
+        const windowId = sender.tab?.windowId || job.windowId;
+        if (!windowId) throw new Error('COR could not identify the UEZ application browser window.');
+        const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+        const screenshotBase64 = String(dataUrl || '').split(',')[1] || '';
+        if (!screenshotBase64) throw new Error('COR could not capture the UEZ application page.');
+        await notify(job, 'uploading_uez_application');
+        await api(job, `/api/uez/admin/applications/${job.applicationId}/uez-application-captured`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ screenshotBase64, submittedId: message.submittedId || '' })
+        });
+        await notify(job, 'complete');
+        if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);
+        await setJob(null);
+        return { ok: true };
+      } catch (err) {
+        await fail(job, err);
+        await setJob(null);
+        return { ok: false, error: err.message };
+      }
     }
     if (message?.type === 'COR_LAKEWOOD_GET_DOCUMENT') {
       if (job.workflow !== 'lakewood_portal' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching Lakewood grant workflow is active.' };

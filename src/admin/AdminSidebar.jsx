@@ -1,18 +1,23 @@
 import React from 'react';
 import { displayBusinessName, nextStepStatus } from './caseLogic';
 
-// The waterfall labels nextStepStatus() returns, in pipeline order, plus a
-// Cancelled bucket pulled out separately - a cancelled application doesn't
-// meaningfully "need" its next pipeline step anymore, so grouping it under
-// whatever the waterfall happens to say next would be misleading.
+// The waterfall labels nextStepStatus() returns, in pipeline order, plus two
+// buckets pulled out separately and overriding the waterfall entirely:
+// Call State sits at the very top (an admin flagged this case as needing a
+// phone call to the state, regardless of where it sits in the pipeline), and
+// Cancelled sits at the bottom - a cancelled application doesn't meaningfully
+// "need" its next pipeline step anymore.
 const SECTION_ORDER = [
+  'Call State',
   'Not started', 'Needs BRC', 'Needs PBS', 'Needs TC', 'Needs UEZ',
   'Needs LDC application', 'Needs payment', 'Needs grant submission',
   'Complete', 'Cancelled',
 ];
 
 function sectionKey(app) {
-  return app.status === 'cancelled' ? 'Cancelled' : nextStepStatus(app);
+  if (app.status === 'call_state') return 'Call State';
+  if (app.status === 'cancelled') return 'Cancelled';
+  return nextStepStatus(app);
 }
 
 // CSS-safe class suffix for a section label, e.g. "Needs LDC application" -> "needs-ldc-application"
@@ -20,18 +25,19 @@ function slug(label) {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
-// Maps any DB status value → one of 5 canonical groups
+// Maps any DB status value → one of 6 canonical groups
 export function toGroup(app) {
   const s = app.status;
   if (s === 'applied' || s === 'grant_submitted' || s === 'submitted') return 'submitted';
   if (s === 'ready_for_submission') return 'ready';
   if (s === 'cancelled') return 'cancelled';
+  if (s === 'call_state') return 'call_state';
   if (!s || s === 'not_started') return 'not_started';
   return 'in_progress';
 }
 
-export const GROUP_ORDER = ['not_started', 'in_progress', 'ready', 'submitted', 'cancelled'];
-// Compact form of the same 5 statuses - shown as the small per-row status
+export const GROUP_ORDER = ['not_started', 'in_progress', 'ready', 'submitted', 'call_state', 'cancelled'];
+// Compact form of the same statuses - shown as the small per-row status
 // badge (the sidebar's own section headers are the granular next-step
 // labels now, see SECTION_ORDER above).
 export const ROW_STATUS_LABELS = {
@@ -39,6 +45,7 @@ export const ROW_STATUS_LABELS = {
   in_progress: 'In Progress',
   ready:       'Ready',
   submitted:   'Submitted',
+  call_state:  'Call State',
   cancelled:   'Cancelled',
 };
 
