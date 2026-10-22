@@ -386,6 +386,20 @@ describe('filterAndSortApplications', () => {
     expect(filterAndSortApplications(applications, 'all', '222222222').map((a) => a.id)).toEqual(['b']);
   });
 
+  it('search matches owner names and phone numbers regardless of formatting', () => {
+    const apps = [
+      { id: 'x', contact_phone: '(732) 555-1234', owners_search: [{ first_name: 'Sarah', last_name: 'Levy', phone: '848.222.9999' }] },
+      { id: 'y', owners_search: [{ first_name: 'Moshe', last_name: 'Klein', phone: null }] }
+    ];
+    const ids = (q) => filterAndSortApplications(apps, 'all', q).map((a) => a.id);
+    expect(ids('sarah levy')).toEqual(['x']);
+    expect(ids('klein')).toEqual(['y']);
+    expect(ids('7325551234')).toEqual(['x']);
+    expect(ids('732-555')).toEqual(['x']);
+    expect(ids('(848) 222')).toEqual(['x']);
+    expect(ids('999-0000')).toEqual([]);
+  });
+
   it('filter narrows to one bucket', () => {
     expect(filterAndSortApplications(applications, 'needs', '').map((a) => a.id)).toEqual(['b']);
     expect(filterAndSortApplications(applications, 'waiting', '').map((a) => a.id)).toEqual(['a']);

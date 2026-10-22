@@ -388,18 +388,28 @@ export function ownerDraftFrom(owner = {}) {
 // the ordering rules (which bucket wins, then which rank within a bucket,
 // then oldest-first) are unit tested directly rather than only visible by
 // eyeballing the sidebar.
-export function filterAndSortApplications(applications, filter, search) {
+// Shared by the sidebar and filterAndSortApplications: business name, email,
+// EIN, owner names, and phone numbers (contact + owners). Phones are compared
+// digits-only, so "732-555" finds "(732) 555-1234".
+export function applicationMatchesSearch(app, search) {
   const q = String(search || '').trim().toLowerCase();
+  if (!q) return true;
+  const owners = app.owners_search || [];
+  const textValues = [
+    app.business_name_input, app.registered_business_name, app.contact_email, app.ein,
+    ...owners.flatMap((o) => [o.first_name, o.last_name, `${o.first_name || ''} ${o.last_name || ''}`.trim()])
+  ];
+  if (textValues.some((value) => String(value || '').toLowerCase().includes(q))) return true;
+  const qDigits = q.replace(/\D/g, '');
+  if (qDigits.length < 3 || !/^[\d\s()+.-]+$/.test(q)) return false;
+  return [app.contact_phone, ...owners.map((o) => o.phone)]
+    .some((phone) => String(phone || '').replace(/\D/g, '').includes(qDigits));
+}
+
+export function filterAndSortApplications(applications, filter, search) {
   return (applications || [])
     .filter((app) => {
-      const ownerTokens = (app.owners_search || []).flatMap((o) => [
-        o.first_name, o.last_name, `${o.first_name || ''} ${o.last_name || ''}`.trim(), o.phone
-      ]);
-      const matchesSearch = !q || [
-        app.business_name_input, app.registered_business_name, app.contact_email, app.ein,
-        ...ownerTokens
-      ].some((value) => String(value || '').toLowerCase().includes(q));
-      if (!matchesSearch) return false;
+      if (!applicationMatchesSearch(app, search)) return false;
       if (filter === 'all') return true;
       return adminQueueInfo(app).bucket === filter;
     })

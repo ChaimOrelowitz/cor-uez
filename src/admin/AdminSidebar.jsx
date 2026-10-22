@@ -1,5 +1,5 @@
 import React from 'react';
-import { displayBusinessName, nextStepStatus } from './caseLogic';
+import { applicationMatchesSearch, displayBusinessName, nextStepStatus } from './caseLogic';
 
 // The waterfall labels nextStepStatus() returns, in pipeline order, plus two
 // buckets pulled out separately and overriding the waterfall entirely:
@@ -75,14 +75,9 @@ function agingTone(days) {
 
 export default function AdminSidebar({ applications, selectedId, search, onSearchChange, onSelectApplication }) {
   const [collapsed, setCollapsed] = React.useState(() => new Set());
-  const q = String(search || '').trim().toLowerCase();
 
   // Filter by search
-  const matched = (applications || []).filter((app) => {
-    if (!q) return true;
-    return [app.business_name_input, app.registered_business_name, app.contact_email, app.ein]
-      .some((v) => String(v || '').toLowerCase().includes(q));
-  });
+  const matched = (applications || []).filter((app) => applicationMatchesSearch(app, search));
 
   // Group by granular pipeline position (Not started / Needs BRC / ... /
   // Complete, plus Cancelled) instead of the coarse 5-value status column -
@@ -104,7 +99,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
           <span>APPLICATIONS</span>
         </div>
         <input
-          placeholder="Search business, email, EIN"
+          placeholder="Search business, owner, phone, email, EIN"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
         />
