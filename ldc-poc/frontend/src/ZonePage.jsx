@@ -105,6 +105,8 @@ function SignIn() {
 
 // ---------------- Portal login setup ----------------
 function PortalSetup({ org, status, onSaved }) {
+  const [mynjUsername, setMynjUsername] = useState('');
+  const [mynjPassword, setMynjPassword] = useState('');
   const [username, setUsername] = useState(status?.login?.portal_user || '');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -114,9 +116,9 @@ function PortalSetup({ org, status, onSaved }) {
     e.preventDefault();
     setBusy(true); setMsg('');
     try {
-      const r = await zoneApi.savePortalLogin(org.id, username, password);
+      const r = await zoneApi.savePortalLogin(org.id, { mynjUsername, mynjPassword, username, password });
       setMsg(`Connected: ${r.zoneName} (logged in as ${r.portalUser}). Pulling your businesses now…`);
-      setPassword('');
+      setPassword(''); setMynjPassword('');
       onSaved();
     } catch (err) {
       setMsg(err.message);
@@ -129,16 +131,21 @@ function PortalSetup({ org, status, onSaved }) {
       <h2>{failed ? 'Your UEZ portal login needs updating' : 'Connect your UEZ portal login'}</h2>
       {failed && <div className="z-alert bad">{status.login.last_error}</div>}
       <p className="z-muted">
-        This is the login you use on the state's UEZ site (portal03.nj.gov). We use it to pull your zone's business list
-        and the state's due and late reports every night. It's stored encrypted and is never shown again.
+        The same two logins you use to get into the state's UEZ system: first myNJ, then the UEZ application.
+        We use them to pull your zone's business list and the state's due and late reports every night.
+        They're stored encrypted and never shown again. Testing takes about 30 seconds.
       </p>
       {canEdit ? (
         <form onSubmit={submit}>
           <div className="field-grid">
+            <div><label>myNJ login ID</label><input value={mynjUsername} onChange={(e) => setMynjUsername(e.target.value)} autoComplete="off" /></div>
+            <div><label>myNJ password</label><input type="password" value={mynjPassword} onChange={(e) => setMynjPassword(e.target.value)} autoComplete="new-password" /></div>
+          </div>
+          <div className="field-grid">
             <div><label>UEZ username</label><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" /></div>
             <div><label>UEZ password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></div>
           </div>
-          <button className="primary" disabled={busy || !username || !password}>{busy ? 'Testing login…' : 'Test & connect'}</button>
+          <button className="primary" disabled={busy || !username || !password || !mynjUsername || !mynjPassword}>{busy ? 'Logging in to myNJ and UEZ…' : 'Test & connect'}</button>
         </form>
       ) : (
         <div className="hint">Ask your organization's admin to connect the UEZ portal login.</div>

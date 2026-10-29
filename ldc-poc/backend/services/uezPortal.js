@@ -36,24 +36,37 @@ function checksumFor(html, item) {
 }
 
 class UezPortal {
-  constructor({ username, password, delayMs = 400 }) {
+  // cookies: optional [{ name, value, domain }] (e.g. the myNJ session from a headless browser)
+  constructor({ username, password, cookies = [], delayMs = 400 }) {
     this.username = username;
     this.password = password;
     this.delayMs = delayMs;
-    this.cookies = new Map();
+    this.cookies = new Map(); // key `${domain}|${name}` -> { name, value, domain }
+    for (const c of cookies) this.setCookie(c.name, c.value, c.domain);
     this.session = null;
   }
 
-  cookieHeader() {
-    return [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
+  setCookie(name, value, domain) {
+    const d = String(domain || '').replace(/^\./, '').toLowerCase();
+    this.cookies.set(`${d}|${name}`, { name, value, domain: d });
   }
 
-  storeCookies(res) {
+  cookieHeader(url) {
+    const host = new URL(url).hostname.toLowerCase();
+    return [...this.cookies.values()]
+      .filter((c) => host === c.domain || host.endsWith(`.${c.domain}`))
+      .map((c) => `${c.name}=${c.value}`).join('; ');
+  }
+
+  storeCookies(res, url) {
+    const host = new URL(url).hostname;
     const list = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
     for (const c of list) {
-      const [pair] = c.split(';');
+      const [pair, ...attrs] = c.split(';');
       const i = pair.indexOf('=');
-      if (i > 0) this.cookies.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+      if (i <= 0) continue;
+      const domainAttr = attrs.map((a) => a.trim()).find((a) => /^domain=/i.test(a));
+      this.setCookie(pair.slice(0, i).trim(), pair.slice(i + 1).trim(), domainAttr ? domainAttr.split('=')[1] : host);
     }
   }
 
@@ -67,13 +80,13 @@ class UezPortal {
           method: opts.method,
           body: opts.body,
           redirect: 'manual',
-          headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9', Cookie: this.cookieHeader(), ...headers },
+          headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9', Cookie: this.cookieHeader(current), ...headers },
           signal: AbortSignal.timeout(60000)
         });
       } catch (err) {
         throw new PortalError('http', `Network error reaching ${new URL(current).host}: ${err.cause?.code || err.cause?.message || err.message}`);
       }
-      this.storeCookies(res);
+      this.storeCookies(res, current);
       if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
         current = new URL(res.headers.get('location'), current).toString();
         opts = { method: 'GET', body: undefined };
@@ -81,7 +94,9 @@ class UezPortal {
         continue;
       }
       if (!res.ok) {
-        const snippet = (await res.text().catch(() => '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+        const raw = await res.text().catch(() => '');
+        if (/can't identify you|log in to myNJ/i.test(raw)) throw new PortalError('mynj_session', 'The UEZ portal requires a myNJ login first (myNJ session missing or expired).');
+        const snippet = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
         throw new PortalError('http', `Portal returned HTTP ${res.status} for ${current.replace(/:\d{6,}/g, ':…')}${snippet ? ` | ${snippet}` : ''}`);
       }
       const payload = binary ? Buffer.from(await res.arrayBuffer()) : await res.text();
@@ -94,6 +109,9 @@ class UezPortal {
   async login() {
     const page = await this.http('f?p=404:LOGIN');
     const html = page.body;
+    if (/can't identify you|log in to myNJ/i.test(html) && !html.includes('P101_USERNAME')) {
+      throw new PortalError('mynj_session', 'The UEZ portal requires a myNJ login first.');
+    }
     const instance = inputValue(html, 'pInstance');
     const salt = inputValue(html, 'pSalt');
     const submissionId = inputValue(html, 'pPageSubmissionId');
@@ -220,4 +238,4 @@ function pdfToText(buffer) {
   });
 }
 
-module.exports = { UezPortal, PortalError, pdfToText, decodeEntities };
+module.exports = { UezPortal, PortalError, pdfToText, decodeEntities, UA };

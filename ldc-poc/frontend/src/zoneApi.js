@@ -22,7 +22,7 @@ async function request(path, options = {}) {
 export const zoneApi = {
   me: () => request('/me'),
   status: (orgId) => request(`/orgs/${orgId}/status`),
-  savePortalLogin: (orgId, username, password) => request(`/orgs/${orgId}/portal-login`, { method: 'PUT', body: { username, password } }),
+  savePortalLogin: (orgId, creds) => request(`/orgs/${orgId}/portal-login`, { method: 'PUT', body: creds }),
   sync: (orgId) => request(`/orgs/${orgId}/sync`, { method: 'POST', body: {} }),
   businesses: (orgId, zone) => request(`/orgs/${orgId}/businesses${zone ? `?zone=${encodeURIComponent(zone)}` : ''}`),
   business: (orgId, fileNo) => request(`/orgs/${orgId}/businesses/${encodeURIComponent(fileNo)}`),

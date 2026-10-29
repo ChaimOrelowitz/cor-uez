@@ -132,3 +132,7 @@ insert into uez_zones (name, state_zone_id) values ('LAKEWOOD', 19) on conflict 
 insert into uez_zone_orgs (name, zone_name)
 select 'LDC Lakewood', 'LAKEWOOD'
 where not exists (select 1 from uez_zone_orgs where name = 'LDC Lakewood');
+
+-- v2: myNJ login (required before the UEZ portal)
+alter table uez_zone_portal_logins add column if not exists mynj_username_enc bytea;
+alter table uez_zone_portal_logins add column if not exists mynj_password_enc bytea;

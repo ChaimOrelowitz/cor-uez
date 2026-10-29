@@ -2,6 +2,7 @@
 const supabase = require('../db/supabase');
 const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { UezPortal, PortalError, pdfToText } = require('./uezPortal');
+const { myNjLogin } = require('./uezMyNj');
 const { parseListing, parseDetail, parseDueReport, parseLateReport } = require('./uezParsers');
 
 const DETAIL_BATCH = Number(process.env.UEZ_DETAIL_BATCH || 400);   // detail pages per run
@@ -16,17 +17,32 @@ async function must(q) { const { data, error } = await q; if (error) throw error
 async function getPortalLogin(orgId) {
   const row = await must(supabase.from('uez_zone_portal_logins').select('*').eq('org_id', orgId).maybeSingle());
   if (!row) return null;
-  return { ...row, username: decryptText(row.username_enc), password: decryptText(row.password_enc) };
+  return {
+    ...row,
+    username: decryptText(row.username_enc),
+    password: decryptText(row.password_enc),
+    mynjUsername: row.mynj_username_enc ? decryptText(row.mynj_username_enc) : null,
+    mynjPassword: row.mynj_password_enc ? decryptText(row.mynj_password_enc) : null
+  };
+}
+
+// myNJ (headless browser) -> UEZ portal (fast HTTP client) -> logged-in portal.
+async function openPortal({ mynjUsername, mynjPassword, username, password }) {
+  const cookies = mynjUsername ? await myNjLogin(mynjUsername, mynjPassword) : [];
+  const portal = new UezPortal({ username, password, cookies });
+  const info = await portal.login();
+  return { portal, info };
 }
 
 // Test a login against the portal. Returns { zoneName, portalUser } or throws PortalError.
-async function testLogin(username, password) {
-  const portal = new UezPortal({ username, password });
-  try { return await portal.login(); } finally { await portal.logout(); }
+async function testLogin(creds) {
+  const { portal, info } = await openPortal(creds);
+  await portal.logout();
+  return info;
 }
 
-async function savePortalLogin(orgId, { username, password, userId }) {
-  const info = await testLogin(username, password);
+async function savePortalLogin(orgId, { mynjUsername, mynjPassword, username, password, userId }) {
+  const info = await testLogin({ mynjUsername, mynjPassword, username, password });
   const org = await must(supabase.from('uez_zone_orgs').select('*').eq('id', orgId).single());
   if (org.zone_name && org.zone_name !== info.zoneName) {
     const err = new PortalError('wrong_zone', `That login is set to ${info.zoneName}, but this organization is ${org.zone_name}. Change the zone in the UEZ portal or use the ${org.zone_name} login.`);
@@ -38,6 +54,8 @@ async function savePortalLogin(orgId, { username, password, userId }) {
     org_id: orgId,
     username_enc: encryptText(username),
     password_enc: encryptText(password),
+    mynj_username_enc: mynjUsername ? encryptText(mynjUsername) : null,
+    mynj_password_enc: mynjPassword ? encryptText(mynjPassword) : null,
     portal_user: info.portalUser,
     status: 'ok',
     last_checked_at: nowIso(),
@@ -184,9 +202,8 @@ async function runZoneSync(orgId, trigger = 'manual') {
   try {
     const login = await getPortalLogin(orgId);
     if (!login) throw new PortalError('no_login', 'No UEZ portal login saved for this organization.');
-    const portal = new UezPortal({ username: login.username, password: login.password });
+    const { portal, info } = await openPortal(login);
     try {
-      const info = await portal.login();
       if (org.zone_name && info.zoneName !== org.zone_name) {
         throw new PortalError('wrong_zone', `The saved login is currently set to ${info.zoneName}, not ${org.zone_name}. Switch it back in the UEZ portal.`);
       }
@@ -203,7 +220,7 @@ async function runZoneSync(orgId, trigger = 'manual') {
     return { ok: true, stats };
   } catch (e) {
     const message = e.message || String(e);
-    if (e.code === 'bad_credentials' || e.code === 'wrong_zone') {
+    if (['bad_credentials', 'bad_mynj', 'wrong_zone'].includes(e.code)) {
       await supabase.from('uez_zone_portal_logins').update({ status: 'failed', last_checked_at: nowIso(), last_error: message }).eq('org_id', orgId);
     }
     await supabase.from('uez_zone_sync_runs').update({ status: 'failed', stats, error: message, finished_at: nowIso() }).eq('id', run.id);

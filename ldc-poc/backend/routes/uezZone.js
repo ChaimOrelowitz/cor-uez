@@ -123,14 +123,20 @@ router.put('/orgs/:orgId/portal-login', wrap(async (req, res) => {
   if (org.role !== 'admin') throw httpError(403, 'Only your organization admin can change the portal login.');
   const username = String(req.body.username || '').trim();
   const password = String(req.body.password || '');
+  const mynjUsername = String(req.body.mynjUsername || '').trim();
+  const mynjPassword = String(req.body.mynjPassword || '');
+  if (!mynjUsername || !mynjPassword) throw httpError(400, 'Enter the myNJ login ID and password.');
   if (!username || !password) throw httpError(400, 'Enter the UEZ portal username and password.');
   try {
-    const info = await savePortalLogin(org.id, { username, password, userId: req.user.id });
+    const info = await savePortalLogin(org.id, { mynjUsername, mynjPassword, username, password, userId: req.user.id });
     runZoneSync(org.id, 'connect').catch((e) => console.error('initial sync failed', e));
     res.json({ ok: true, ...info });
   } catch (e) {
     const messages = {
       bad_credentials: 'The UEZ portal rejected that username or password.',
+      bad_mynj: 'myNJ rejected that login ID or password.',
+      blocked: 'myNJ\'s bot protection blocked the server login.',
+      mynj_session: 'Logged into myNJ, but the UEZ portal did not accept it.',
       layout: 'Reached the UEZ portal, but the page looked different than expected. Tell COR Solutions.',
       http: 'Could not reach the UEZ portal right now. Try again in a few minutes.'
     };
