@@ -134,7 +134,9 @@ router.put('/orgs/:orgId/portal-login', wrap(async (req, res) => {
       layout: 'Reached the UEZ portal, but the page looked different than expected. Tell COR Solutions.',
       http: 'Could not reach the UEZ portal right now. Try again in a few minutes.'
     };
-    throw httpError(e.code ? 400 : 500, messages[e.code] || e.message);
+    console.error('portal login test failed:', e.code, e.message);
+    const friendly = messages[e.code] || 'Something went wrong talking to the UEZ portal.';
+    throw httpError(e.code ? 400 : 500, `${friendly} (Details: ${e.message})`);
   }
 }));
 

@@ -61,12 +61,18 @@ class UezPortal {
     let current = url.startsWith('http') ? url : `${APEX}/${url.replace(/^\//, '')}`;
     let opts = { method, body };
     for (let hop = 0; hop < 10; hop++) {
-      const res = await fetch(current, {
-        method: opts.method,
-        body: opts.body,
-        redirect: 'manual',
-        headers: { 'User-Agent': UA, Cookie: this.cookieHeader(), ...headers }
-      });
+      let res;
+      try {
+        res = await fetch(current, {
+          method: opts.method,
+          body: opts.body,
+          redirect: 'manual',
+          headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9', Cookie: this.cookieHeader(), ...headers },
+          signal: AbortSignal.timeout(60000)
+        });
+      } catch (err) {
+        throw new PortalError('http', `Network error reaching ${new URL(current).host}: ${err.cause?.code || err.cause?.message || err.message}`);
+      }
       this.storeCookies(res);
       if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
         current = new URL(res.headers.get('location'), current).toString();
@@ -74,7 +80,10 @@ class UezPortal {
         headers = {};
         continue;
       }
-      if (!res.ok) throw new PortalError('http', `Portal returned HTTP ${res.status} for ${current}`);
+      if (!res.ok) {
+        const snippet = (await res.text().catch(() => '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+        throw new PortalError('http', `Portal returned HTTP ${res.status} for ${current.replace(/:\d{6,}/g, ':…')}${snippet ? ` | ${snippet}` : ''}`);
+      }
       const payload = binary ? Buffer.from(await res.arrayBuffer()) : await res.text();
       if (this.delayMs) await new Promise((r) => setTimeout(r, this.delayMs));
       return { url: current, body: payload, contentType: res.headers.get('content-type') || '' };
