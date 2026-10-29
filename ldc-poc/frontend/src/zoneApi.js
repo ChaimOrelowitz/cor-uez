@@ -1,0 +1,35 @@
+import supabase from './supabaseClient';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4100';
+
+async function request(path, options = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Please sign in to continue.');
+  const res = await fetch(`${API_BASE}/api/uez/zone${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {})
+    },
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+  return data;
+}
+
+export const zoneApi = {
+  me: () => request('/me'),
+  status: (orgId) => request(`/orgs/${orgId}/status`),
+  savePortalLogin: (orgId, username, password) => request(`/orgs/${orgId}/portal-login`, { method: 'PUT', body: { username, password } }),
+  sync: (orgId) => request(`/orgs/${orgId}/sync`, { method: 'POST', body: {} }),
+  businesses: (orgId, zone) => request(`/orgs/${orgId}/businesses${zone ? `?zone=${encodeURIComponent(zone)}` : ''}`),
+  business: (orgId, fileNo) => request(`/orgs/${orgId}/businesses/${encodeURIComponent(fileNo)}`),
+  addOutreach: (orgId, fileNo, body) => request(`/orgs/${orgId}/businesses/${encodeURIComponent(fileNo)}/outreach`, { method: 'POST', body }),
+  activity: (orgId) => request(`/orgs/${orgId}/activity`),
+  statewide: (orgId) => request(`/orgs/${orgId}/statewide`),
+  adminOrgs: () => request('/admin/orgs'),
+  adminCreateOrg: (name) => request('/admin/orgs', { method: 'POST', body: { name } }),
+  adminAddMember: (orgId, email, role) => request(`/admin/orgs/${orgId}/members`, { method: 'POST', body: { email, role } })
+};
