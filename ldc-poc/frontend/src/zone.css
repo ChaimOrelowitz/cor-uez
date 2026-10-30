@@ -178,3 +178,20 @@ button.z-stat:hover{border-color:#c9cdf0}
   .z-orgpick{margin:0} .field-grid{grid-template-columns:1fr}
 }
 @media(max-width:620px){.z-hide-sm{display:none}}
+
+/* v3: reframed home + connection + sync button */
+.z-reason{font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px;white-space:nowrap;flex:0 0 auto;min-width:92px;text-align:center}
+.z-reason.red{background:var(--red-soft);color:var(--red)}
+.z-reason.amber{background:var(--amber-soft);color:var(--amber)}
+.z-reason.blue{background:var(--blue-soft);color:var(--blue-ink)}
+.z-tiny{font-size:11px;color:var(--mut);font-weight:500}
+.z-late.z-soon{color:var(--amber)}
+.z-count.amber{color:var(--amber);background:var(--amber-soft)}
+.z-overdue-strip{display:flex;align-items:center;gap:9px;width:100%;text-align:left;margin-top:14px;padding:13px 16px;border:1px solid var(--line);border-radius:12px;background:#fff;font-size:13px;color:var(--ink2);font-family:inherit;cursor:pointer}
+.z-overdue-strip:hover{border-color:#e0b9b4;background:#fffafa}
+.z-overdue-strip strong{color:var(--red)}
+.z-syncbtn{display:inline-flex;align-items:center;gap:7px}
+.z-spin{animation:zspin 1s linear infinite}
+@keyframes zspin{to{transform:rotate(360deg)}}
+.z-conn{display:flex;gap:12px;align-items:flex-start;background:var(--green-soft);border:1px solid #cde9d9;border-radius:12px;padding:14px 16px;font-size:14px}
+.z-conn-dot{width:10px;height:10px;border-radius:50%;background:var(--green);flex:0 0 10px;margin-top:5px}

@@ -209,20 +209,32 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
 }
 
 // ---------------- Home (Concept A) ----------------
+const REASON = {
+  no_email: { label: 'No email on file', cls: 'red' },
+  final_stretch: { label: 'Final stretch', cls: 'amber' },
+  first_timer: { label: 'First-time filer', cls: 'blue' }
+};
+function whyText(b) {
+  if (b.reason === 'no_email') return "No email on file — reminders can't reach them, call";
+  if (b.reason === 'first_timer') return 'Never filed before — highest-risk, personal touch';
+  if (b.reason === 'final_stretch') return b.reminders_sent > 0 ? `${b.reminders_sent} reminder${b.reminders_sent > 1 ? 's' : ''} sent, due within 2 weeks — nudge` : 'Due within 2 weeks — time for a personal nudge';
+  return '';
+}
 function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
   const [d, setD] = useState(null); const [err, setErr] = useState('');
   useEffect(() => { setD(null); zoneApi.home(org.id).then(setD).catch((e) => setErr(e.message)); }, [org.id, refreshKey]);
   if (err) return <div className="z-alert bad">{err}</div>;
   if (!d) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading…</div>;
   const c = d.counts || {};
+  const attention = d.needs_attention || [];
   return (
     <>
       <div className="z-stats">
-        <button className="z-stat red" onClick={() => onGoBusinesses('late')}>
-          <div className="k"><span className="pip red" />Overdue</div><div className="v">{c.late || 0}</div><div className="m">Reminders done — need a call</div>
-        </button>
-        <button className="z-stat amber" onClick={() => onGoBusinesses('due_30')}>
-          <div className="k"><span className="pip amber" />Due in 30 days</div><div className="v">{c.due_30 || 0}</div><div className="m">Reminders sending automatically</div>
+        <div className="z-stat amber">
+          <div className="k"><span className="pip amber" />Needs your attention</div><div className="v">{attention.length}</div><div className="m">Upcoming the emails can't carry alone</div>
+        </div>
+        <button className="z-stat" onClick={() => onGoBusinesses('due_30')}>
+          <div className="k"><span className="pip blue" />Due in 30 days</div><div className="v">{c.due_30 || 0}</div><div className="m">Reminders sending automatically</div>
         </button>
         <div className="z-stat green">
           <div className="k"><span className="pip green" />Recertified this month</div><div className="v">{d.recertified_this_month || 0}</div><div className="m">Thank-you emails sent</div>
@@ -233,21 +245,32 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
       </div>
 
       <div className="z-grid">
-        <section className="z-panel">
-          <div className="z-panel-h"><h2>Needs your call</h2><span className="z-count">{d.needs_call.length} overdue</span></div>
-          {d.needs_call.length === 0 && <div className="z-empty">🎉 Nobody's overdue. EZMinder is emailing the {c.due_30 || 0} due soon — nothing for you to chase today.</div>}
-          {d.needs_call.slice(0, 40).map((b) => (
-            <div className="z-crow" key={b.file_no} onClick={() => onOpen(b.file_no)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.file_no)}>
-              <span className="z-type RCRT">{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>
-              <div className="z-cbiz">
-                <div className="n">{title(b.name)}</div>
-                <div className="d">{title(b.contact_name) || '—'}{b.contact_phone ? ` · ${b.contact_phone}` : ''}{b.last_outreach ? ` · last: ${OUTCOME_LABEL[b.last_outreach.outcome] || b.last_outreach.channel}` : ''}</div>
-              </div>
-              <span className="z-late">{daysText(b.days)}</span>
-              <button className="btn compact" onClick={(e) => { e.stopPropagation(); onOpen(b.file_no); }}>Log call</button>
-            </div>
-          ))}
-        </section>
+        <div>
+          <section className="z-panel">
+            <div className="z-panel-h"><h2>Needs your attention</h2><span className="z-count amber">{attention.length}</span></div>
+            {attention.length === 0 && <div className="z-empty">✓ You're all caught up. EZMinder is emailing the {c.due_30 || 0} businesses due soon — the ones that need a human will surface here.</div>}
+            {attention.slice(0, 50).map((b) => {
+              const r = REASON[b.reason] || {};
+              return (
+                <div className="z-crow" key={b.file_no} onClick={() => onOpen(b.file_no)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.file_no)}>
+                  <span className={`z-reason ${r.cls}`}>{r.label}</span>
+                  <div className="z-cbiz">
+                    <div className="n">{title(b.name)} <span className="z-tiny">· {b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span></div>
+                    <div className="d">{whyText(b)}{b.contact_phone ? ` · ${b.contact_phone}` : b.contact_name ? ` · ${title(b.contact_name)}` : ''}</div>
+                  </div>
+                  <span className={`z-late ${b.days <= 14 ? '' : 'z-soon'}`}>{daysText(b.days)}</span>
+                  <button className="btn compact" onClick={(e) => { e.stopPropagation(); onOpen(b.file_no); }}>Open</button>
+                </div>
+              );
+            })}
+          </section>
+
+          {(d.overdue || []).length > 0 && (
+            <button className="z-overdue-strip" onClick={() => onGoBusinesses('late')}>
+              <span className="pip red" /><strong>{d.overdue.length} long-overdue</strong> — mostly years past due and likely closed. Review and clean up →
+            </button>
+          )}
+        </div>
 
         <aside className="z-rail">
           <div className="z-win">
@@ -440,10 +463,35 @@ function Settings({ org, status, onReconnect, me }) {
         </div>
       </div>
 
-      <div className="z-card z-pad">
-        <h2 className="z-h2">State portal connection</h2>
-        <PortalSetup org={org} status={status} onSaved={onReconnect} embedded />
-      </div>
+      <ConnectionCard org={org} status={status} onReconnect={onReconnect} />
+    </div>
+  );
+}
+
+function ConnectionCard({ org, status, onReconnect }) {
+  const [editing, setEditing] = useState(false);
+  const login = status?.login;
+  const connected = login?.status === 'ok';
+  return (
+    <div className="z-card z-pad">
+      <h2 className="z-h2">State portal connection</h2>
+      {connected && !editing ? (
+        <>
+          <div className="z-conn">
+            <span className="z-conn-dot" />
+            <div>
+              <div><strong>Connected</strong> — logged in as {login.portal_user || 'your UEZ user'}, myNJ linked.</div>
+              <div className="z-muted small">Credentials are stored encrypted and used only to sync. {login.last_checked_at ? `Last verified ${fmtWhen(login.last_checked_at)}.` : ''}</div>
+            </div>
+          </div>
+          {org.role === 'admin' && <button className="btn ghost" style={{ marginTop: 14 }} onClick={() => setEditing(true)}>Update login</button>}
+        </>
+      ) : (
+        <>
+          {connected && <button className="z-link" style={{ marginBottom: 10 }} onClick={() => setEditing(false)}>← Keep current login</button>}
+          <PortalSetup org={org} status={status} onSaved={() => { setEditing(false); onReconnect(); }} embedded />
+        </>
+      )}
     </div>
   );
 }
@@ -540,8 +588,11 @@ export default function ZonePage() {
               </div>
               <div className="z-synced">
                 <span className={`z-dot ${status.syncing ? 'syncing' : lastRun?.status === 'failed' ? 'failed' : 'ok'}`} />
-                {status.syncing ? 'Syncing…' : lastRun?.status === 'failed' ? 'Last sync failed' : lastOk ? `Synced ${fmtWhen(lastOk.finished_at)}` : 'Not synced'}
-                <button className="z-link" disabled={status.syncing} onClick={() => zoneApi.sync(org.id).then(loadStatus).catch((e) => setErr(e.message))}>Sync now</button>
+                <span>{status.syncing ? 'Syncing…' : lastRun?.status === 'failed' ? 'Last sync failed' : lastOk ? `Synced ${fmtWhen(lastOk.finished_at)}` : 'Not synced'}</span>
+                <button className="btn ghost compact z-syncbtn" disabled={status.syncing} onClick={() => zoneApi.sync(org.id).then(loadStatus).catch((e) => setErr(e.message))}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true" className={status.syncing ? 'z-spin' : ''}><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v4h-4" /></svg>
+                  {status.syncing ? 'Syncing…' : 'Sync now'}
+                </button>
               </div>
             </div>
 

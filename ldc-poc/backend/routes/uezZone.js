@@ -92,7 +92,7 @@ function deadlineFor(b, now = today()) {
   };
 }
 
-const LIST_COLUMNS = 'file_no, zone_name, permit_no, name, trade_name, status, cert_date, last_annual_date, last_recert_date, next_annual_due, next_recert_due, email, phone, owner_name, street, sic_code, naics_code, naics_desc, report_type, report_next_due, report_days_late, on_due_report, on_late_report, ft_orig, ft_curr, report_contact_name, report_contact_phone, report_contact_email, in_zone_listing, detail_synced_at';
+const LIST_COLUMNS = 'file_no, zone_name, permit_no, name, trade_name, status, cert_date, last_annual_date, last_recert_date, next_annual_due, next_recert_due, email, phone, owner_name, street, sic_code, naics_code, naics_desc, report_type, report_next_due, report_days_late, on_due_report, on_late_report, ft_orig, ft_curr, report_contact_name, report_contact_phone, report_contact_email, new_business, in_zone_listing, detail_synced_at';
 
 function shape(b, ownZone) {
   return {
@@ -260,13 +260,34 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
   const counts = { late: 0, due_30: 0, due_60: 0, due_90: 0, ok: 0 };
   for (const b of active) counts[b.bucket] = (counts[b.bucket] || 0) + 1;
 
-  // Needs-a-call list: overdue, worst first. (Dormant handling can filter here later.)
   const today = new Date().toISOString().slice(0, 10);
-  const needsCall = active.filter((b) => b.bucket === 'late')
-    .sort((a, b) => (a.days ?? 0) - (b.days ?? 0))
-    .map((b) => ({ file_no: b.file_no, name: b.trade_name || b.name, deadline_type: b.deadline_type, days: b.days,
-      contact_name: b.contact_name, contact_phone: b.contact_phone, contact_email: b.contact_email,
-      last_outreach: b.last_outreach, has_email: !!b.contact_email }));
+
+  // How many reminders have actually gone out per business (from the email log).
+  const sent = new Map();
+  const emailLog = await fetchAll(() => supabase.from('uez_zone_email_log').select('file_no, kind').eq('org_id', org.id).like('kind', 'reminder%'));
+  for (const e of emailLog) if (e.file_no) sent.set(e.file_no, (sent.get(e.file_no) || 0) + 1);
+
+  const row = (b, reason) => ({
+    file_no: b.file_no, name: b.trade_name || b.name, deadline_type: b.deadline_type, deadline: b.deadline, days: b.days,
+    contact_name: b.contact_name, contact_phone: b.contact_phone, contact_email: b.contact_email,
+    last_outreach: b.last_outreach, has_email: !!b.contact_email, reminders_sent: sent.get(b.file_no) || 0, reason
+  });
+
+  // Upcoming businesses the automation can't carry on its own — Moshe's real worklist.
+  const isFirstTimer = (b) => b.new_business || (!b.last_annual_date && !b.last_recert_date);
+  const needsAttention = active
+    .filter((b) => (b.days != null && b.days >= 0 && b.days <= 60))
+    .map((b) => {
+      if (!b.contact_email) return row(b, 'no_email');
+      if (b.days <= 14) return row(b, 'final_stretch');
+      if (isFirstTimer(b)) return row(b, 'first_timer');
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
+
+  // Overdue, demoted. Mostly the long-dead backlog.
+  const overdue = active.filter((b) => b.bucket === 'late').sort((a, b) => (a.days ?? 0) - (b.days ?? 0)).map((b) => row(b, 'overdue'));
 
   const monthStart = startOfMonthIso();
   const events = await must(supabase.from('uez_zone_business_events')
@@ -283,7 +304,8 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     zone,
     active_count: active.length,
     counts,
-    needs_call: needsCall,
+    needs_attention: needsAttention,
+    overdue,
     recertified_this_month: recerts.length,
     recert_names: recerts.slice(0, 12).map((e) => e.uez_zone_businesses?.trade_name || e.uez_zone_businesses?.name).filter(Boolean),
     new_this_month: newBiz.length,
