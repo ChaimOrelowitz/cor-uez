@@ -4,12 +4,13 @@ const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { UezPortal, PortalError, pdfToText } = require('./uezPortal');
 const { myNjLogin } = require('./uezMyNj');
 const { parseListing, parseDetail, parseDueReport, parseLateReport } = require('./uezParsers');
-const { thankYouEmail, sendBusinessEmail } = require('./uezEmail');
+const { thankYouEmail, sendBusinessEmail, loadTemplates } = require('./uezEmail');
 
 // After a sync, email an automatic thank-you for each business that recertified since the run began.
 // Gated on the zone's settings: nothing goes out unless send_thankyou AND email_live are on.
 async function sendRecertThankYous(org, since) {
   if (!org.send_thankyou || !org.email_live) return 0;
+  org = { ...org, templates: await loadTemplates(org.id) };
   const events = await must(supabase.from('uez_zone_business_events')
     .select('file_no').eq('zone_name', org.zone_name).eq('kind', 'recertified').gte('detected_at', since));
   if (!events.length) return 0;

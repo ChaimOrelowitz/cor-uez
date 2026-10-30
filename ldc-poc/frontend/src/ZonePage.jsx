@@ -108,7 +108,6 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
   }
 
   const b = data?.business;
-  const jobs = (b?.employment || []).filter((r) => r.program_year && r.program_year !== 'OS');
   const recertCount = (b?.employment || []).filter((r) => r.app_status === 'A').length;
   return (
     <div className="z-drawer-backdrop" onClick={onClose}>
@@ -153,19 +152,9 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
                 <span>Industry</span><strong>{title(b.naics_desc || b.sic_desc) || b.naics_code || '—'}</strong>
               </div>
               {b.can_contact && b.status !== 'I' && b.contact_email && (
-                <button className="btn ghost z-btn" onClick={sendReminder} disabled={sending}>{sending ? 'Sending…' : '✉ Send reminder now'}</button>
+                <button className="btn z-btn" onClick={sendReminder} disabled={sending}>{sending ? 'Sending…' : '✉ Send reminder now'}</button>
               )}
             </section>
-
-            {jobs.length > 0 && (
-              <section>
-                <h3>Jobs reported</h3>
-                <table className="z-mini">
-                  <thead><tr><th>Year</th><th>FT proj</th><th>FT actual</th><th>New hires</th></tr></thead>
-                  <tbody>{jobs.map((r, i) => <tr key={i}><td>{r.program_year}</td><td>{r.ft_projected ?? '—'}</td><td>{r.ft_actual ?? '—'}</td><td>{r.new_hires ?? '—'}</td></tr>)}</tbody>
-                </table>
-              </section>
-            )}
 
             {b.can_contact ? (
               <section>
@@ -208,6 +197,31 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
   );
 }
 
+// Collapsible "recently inactivated" card (default collapsed).
+function LostCard({ lost, onOpen }) {
+  const [open, setOpen] = useState(false);
+  if (!lost.length) return null;
+  return (
+    <div className="z-lost">
+      <button className="z-lost-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="pip red" />
+        <strong>{lost.length} inactivated in the last 30 days</strong>
+        <span className="z-muted small">— the state dropped these</span>
+        <span className="z-chev">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="z-lost-body">
+          {lost.map((l) => (
+            <div className="z-lost-row" key={l.file_no} onClick={() => onOpen(l.file_no)}>
+              <span>{title(l.name)}</span><span className="z-muted small">{fmtWhen(l.detected_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------- Home ----------------
 function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
   const [d, setD] = useState(null); const [err, setErr] = useState('');
@@ -234,6 +248,8 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
 
       <div className="z-grid">
         <div>
+          <LostCard lost={d.lost_recently || []} onOpen={onOpen} />
+
           <section className="z-panel">
             <div className="z-panel-h"><h2>Call this week</h2><span className={`z-count ${calls.length ? 'amber' : 'green'}`}>{calls.length}</span></div>
             {calls.length === 0 && <div className="z-empty">✓ No calls today. Every business due in the next 2 weeks is handled — EZMinder is emailing the {d.due_30 || 0} due this month.</div>}
@@ -451,7 +467,48 @@ function Settings({ org, status, onReconnect, me }) {
         </div>
       </div>
 
+      <TemplatesCard org={org} />
+
       <ConnectionCard org={org} status={status} onReconnect={onReconnect} />
+    </div>
+  );
+}
+
+const TPL_LABEL = { reminder_ar: 'Annual report reminder', reminder_recert: 'Recertification reminder', thankyou: 'Thank-you (after recert)' };
+function TemplatesCard({ org }) {
+  const [data, setData] = useState(null); const [kind, setKind] = useState('reminder_recert');
+  const [draft, setDraft] = useState(null); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
+  const canEdit = org.role === 'admin';
+  const load = () => zoneApi.templates(org.id).then((r) => { setData(r); }).catch((e) => setMsg(e.message));
+  useEffect(() => { load(); }, [org.id]);
+  useEffect(() => { if (data) { const t = data.templates.find((x) => x.kind === kind); setDraft({ subject: t.subject, body: t.body, preview: t.preview, is_default: t.is_default }); } }, [data, kind]);
+
+  async function save() { setBusy(true); setMsg(''); try { const r = await zoneApi.saveTemplate(org.id, kind, draft.subject, draft.body); setDraft((d) => ({ ...d, preview: r.preview, is_default: false })); setMsg('Saved.'); load(); } catch (e) { setMsg(e.message); } setBusy(false); }
+  async function reset() { setBusy(true); try { await zoneApi.resetTemplate(org.id, kind); await load(); setMsg('Reset to default.'); } catch (e) { setMsg(e.message); } setBusy(false); }
+  function insertField(f) { setDraft((d) => ({ ...d, body: `${d.body}{{${f}}}` })); }
+
+  if (!data || !draft) return <div className="z-card z-pad z-muted">Loading templates…</div>;
+  return (
+    <div className="z-card z-pad">
+      <h2 className="z-h2">Email templates</h2>
+      <p className="z-muted small">Edit what your reminders say. The buttons and links are built in — just place a field where you want it.</p>
+      <div className="z-seg" style={{ marginBottom: 12 }}>
+        {data.templates.map((t) => <button key={t.kind} className={kind === t.kind ? 'on' : ''} onClick={() => setKind(t.kind)}>{TPL_LABEL[t.kind]}</button>)}
+      </div>
+      <label>Subject</label>
+      <input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} disabled={!canEdit} />
+      <label>Body</label>
+      <textarea style={{ minHeight: 160 }} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} disabled={!canEdit} />
+      <div className="z-fields">
+        <span className="z-muted small">Insert:</span>
+        {data.merge_fields.map((f) => <button key={f} className="z-field-chip" onClick={() => insertField(f)} disabled={!canEdit} title={`{{${f}}}`}>{f}</button>)}
+      </div>
+      {canEdit && <div className="z-row"><button className="btn" onClick={save} disabled={busy}>Save template</button>{!draft.is_default && <button className="btn ghost" onClick={reset} disabled={busy}>Reset to default</button>}</div>}
+      <div className="z-preview">
+        <div className="z-muted small" style={{ marginBottom: 6 }}>Preview · <strong>{draft.preview?.subject}</strong></div>
+        <div className="z-preview-body" dangerouslySetInnerHTML={{ __html: draft.preview?.html || '' }} />
+      </div>
+      {msg && <div className="hint">{msg}</div>}
     </div>
   );
 }

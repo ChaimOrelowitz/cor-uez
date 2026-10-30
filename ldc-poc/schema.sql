@@ -185,3 +185,15 @@ update uez_zone_orgs set from_name = 'Lakewood UEZ'
 -- Pilot defaults: Lakewood recert how-to video
 update uez_zone_orgs set recert_video_url = 'https://thelcsc.org/uezrecert'
   where name = 'LDC Lakewood' and recert_video_url is null;
+
+-- v4: editable email templates per zone (subject + body, with {{merge}} fields)
+create table if not exists uez_zone_email_templates (
+  org_id uuid not null references uez_zone_orgs(id) on delete cascade,
+  kind text not null,                       -- reminder_ar, reminder_recert, thankyou
+  subject text not null,
+  body text not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  primary key (org_id, kind)
+);
+alter table uez_zone_email_templates enable row level security;

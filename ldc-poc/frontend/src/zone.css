@@ -200,3 +200,18 @@ button.z-stat:hover{border-color:#c9cdf0}
 .z-badge{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;margin-left:7px;vertical-align:middle;white-space:nowrap}
 .z-badge.red{background:var(--red-soft);color:var(--red)}
 .z-badge.blue{background:var(--blue-soft);color:var(--blue-ink)}
+
+/* v6: lost card, template editor */
+.z-lost{border:1px solid var(--line);border-radius:12px;background:#fff;margin-bottom:14px;overflow:hidden}
+.z-lost-head{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:12px 16px;border:0;background:none;font-size:13.5px;color:var(--ink2);font-family:inherit;cursor:pointer}
+.z-lost-head strong{color:var(--ink)}
+.z-chev{margin-left:auto;color:var(--mut)}
+.z-lost-body{border-top:1px solid var(--line2)}
+.z-lost-row{display:flex;justify-content:space-between;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line2);font-size:13.5px;cursor:pointer}
+.z-lost-row:last-child{border-bottom:0}
+.z-lost-row:hover{background:#fafbff}
+.z-fields{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0}
+.z-field-chip{font-size:12px;font-family:ui-monospace,Menlo,monospace;background:#eef1f6;border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--blue-ink);cursor:pointer}
+.z-field-chip:hover{background:var(--blue-soft)}
+.z-preview{margin-top:16px;border:1px solid var(--line);border-radius:12px;background:#fafbfd;padding:16px}
+.z-preview-body{background:#fff;border:1px solid var(--line2);border-radius:10px;padding:18px;max-height:340px;overflow:auto}

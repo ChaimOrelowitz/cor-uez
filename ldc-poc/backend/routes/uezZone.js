@@ -4,7 +4,7 @@ const express = require('express');
 const supabase = require('../db/supabase');
 const { requireUezAuth } = require('../middleware/uezAuth');
 const { runZoneSync, savePortalLogin, isSyncRunning } = require('../services/uezZoneSync');
-const { reminderEmail, sendBusinessEmail, sendViaResend } = require('../services/uezEmail');
+const { reminderEmail, sendBusinessEmail, sendViaResend, loadTemplates, previewTemplate, DEFAULT_TEMPLATES, MERGE_FIELDS } = require('../services/uezEmail');
 
 const router = express.Router();
 router.use(requireUezAuth);
@@ -247,6 +247,13 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
     .eq('zone_name', zone).order('detected_at', { ascending: false }).limit(8));
 
+  // Businesses the state inactivated in the last 30 days — recent churn.
+  const thirtyAgo = new Date(Date.now() - 30 * DAY).toISOString();
+  const lostEvents = await must(supabase.from('uez_zone_business_events')
+    .select('file_no, detected_at, uez_zone_businesses(name, trade_name, cert_date, last_annual_date, last_recert_date)')
+    .eq('zone_name', zone).eq('kind', 'inactivated').gte('detected_at', thirtyAgo).order('detected_at', { ascending: false }));
+  const lostRecently = lostEvents.map((e) => ({ file_no: e.file_no, name: e.uez_zone_businesses?.trade_name || e.uez_zone_businesses?.name, detected_at: e.detected_at }));
+
   // Emails the platform processed this week (sent, or logged in test mode) — proof it's working.
   const weekEmails = await fetchAll(() => supabase.from('uez_zone_email_log').select('id, kind').eq('org_id', org.id).gte('created_at', weekAgo));
   const remindersThisWeek = weekEmails.filter((e) => String(e.kind).startsWith('reminder')).length;
@@ -267,6 +274,7 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     recert_names: recerts.slice(0, 12).map((e) => e.uez_zone_businesses?.trade_name || e.uez_zone_businesses?.name).filter(Boolean),
     reminders_this_week: remindersThisWeek,
     retention_rate: retentionRate,
+    lost_recently: lostRecently,
     follow_ups_due: active.filter((b) => b.last_outreach?.follow_up_on && b.last_outreach.follow_up_on <= today).length,
     recent_activity: recentActivity,
     last_synced: last[0]?.finished_at || null
@@ -294,6 +302,42 @@ router.put('/orgs/:orgId/settings', wrap(async (req, res) => {
   res.json({ settings: row });
 }));
 
+// ---------- Editable email templates ----------
+const TEMPLATE_KINDS = ['reminder_ar', 'reminder_recert', 'thankyou'];
+
+router.get('/orgs/:orgId/templates', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const settings = await must(supabase.from('uez_zone_orgs').select('*').eq('id', org.id).single());
+  const stored = await loadTemplates(org.id);
+  const templates = TEMPLATE_KINDS.map((kind) => {
+    const t = stored[kind] || DEFAULT_TEMPLATES[kind];
+    const preview = previewTemplate(kind, { ...settings, templates: stored });
+    return { kind, subject: t.subject, body: t.body, is_default: !stored[kind], preview };
+  });
+  res.json({ templates, merge_fields: MERGE_FIELDS, can_edit: org.role === 'admin', defaults: DEFAULT_TEMPLATES });
+}));
+
+router.put('/orgs/:orgId/templates/:kind', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  if (org.role !== 'admin') throw httpError(403, 'Only your organization admin can edit templates.');
+  const kind = req.params.kind;
+  if (!TEMPLATE_KINDS.includes(kind)) throw httpError(400, 'Unknown template.');
+  const subject = String(req.body.subject || '').trim();
+  const body = String(req.body.body || '').trim();
+  if (!subject || !body) throw httpError(400, 'Subject and body are required.');
+  await must(supabase.from('uez_zone_email_templates').upsert({ org_id: org.id, kind, subject, body, updated_at: new Date().toISOString(), updated_by: req.user.id }, { onConflict: 'org_id,kind' }));
+  const settings = await must(supabase.from('uez_zone_orgs').select('*').eq('id', org.id).single());
+  const preview = previewTemplate(kind, { ...settings, templates: await loadTemplates(org.id) });
+  res.json({ ok: true, preview });
+}));
+
+router.delete('/orgs/:orgId/templates/:kind', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  if (org.role !== 'admin') throw httpError(403, 'Admin only.');
+  await must(supabase.from('uez_zone_email_templates').delete().eq('org_id', org.id).eq('kind', req.params.kind));
+  res.json({ ok: true });
+}));
+
 // ---------- My profile ----------
 router.get('/me/profile', wrap(async (req, res) => {
   const row = await must(supabase.from('uez_zone_members').select('org_id, role, first_name, last_name, phone, email').eq('user_id', req.user.id));
@@ -316,6 +360,7 @@ router.post('/orgs/:orgId/businesses/:fileNo/send-reminder', wrap(async (req, re
   if (!b) throw httpError(404, 'Business not found.');
   if (b.zone_name !== org.zone_name) throw httpError(403, `This business is in ${b.zone_name}. You can only email businesses in ${org.zone_name}.`);
   const biz = shape(b, org.zone_name);
+  settings.templates = await loadTemplates(org.id);
   const built = reminderEmail(biz, settings);
   const sender = { user_id: req.user.id, email: req.user.email };
   const result = await sendBusinessEmail({ org: settings, biz, built, sender });

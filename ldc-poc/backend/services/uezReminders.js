@@ -4,7 +4,7 @@
 // checkpoint once. This is what makes the platform "do the chasing."
 const supabase = require('../db/supabase');
 const { deadlineFor, DAY } = require('./uezDeadline');
-const { reminderEmail, sendBusinessEmail, logEmail } = require('./uezEmail');
+const { reminderEmail, sendBusinessEmail, logEmail, loadTemplates } = require('./uezEmail');
 
 const COOLDOWN_DAYS = 18; // don't nudge the same business twice inside this window
 
@@ -18,6 +18,7 @@ function checkpointFor(days, windows) {
 }
 
 async function sendDueReminders(org) {
+  org = { ...org, templates: await loadTemplates(org.id) };
   const windows = (Array.isArray(org.reminder_days) && org.reminder_days.length ? org.reminder_days : [60, 30, 7]).map(Number);
   const rows = await (async () => {
     const out = [];
