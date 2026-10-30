@@ -229,6 +229,21 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
   if (err) return <div className="z-alert bad">{err}</div>;
   if (!d) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading…</div>;
   const calls = d.call_this_week || [];
+  const recentOverdue = d.recently_overdue || [];
+  const CallRow = (b, overdue) => (
+    <div className="z-crow" key={b.file_no} onClick={() => onOpen(b.file_no)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.file_no)}>
+      <span className={`z-type ${b.deadline_type}`}>{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>
+      <div className="z-cbiz">
+        <div className="n">{title(b.name)}
+          {!b.has_email && <span className="z-badge red" title="No email on file">⚠ no email</span>}
+          {b.first_timer && <span className="z-badge blue" title="First-time filer">★ first filing</span>}
+        </div>
+        <div className="d">{b.contact_phone || (b.contact_name ? title(b.contact_name) : 'No contact on file')}{b.other ? ` · ${b.other.type === 'RCRT' ? 'recert' : 'annual'} in ${b.other.days}d` : ''}{b.last_outreach ? ` · last: ${OUTCOME_LABEL[b.last_outreach.outcome] || b.last_outreach.channel}` : ''}</div>
+      </div>
+      <span className="z-late">{daysText(b.days)}</span>
+      <button className="btn compact" onClick={(e) => { e.stopPropagation(); onOpen(b.file_no); }}>Open</button>
+    </div>
+  );
   return (
     <>
       <div className="z-stats">
@@ -250,28 +265,22 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
         <div>
           <LostCard lost={d.lost_recently || []} onOpen={onOpen} />
 
+          {recentOverdue.length > 0 && (
+            <section className="z-panel z-panel-urgent">
+              <div className="z-panel-h"><h2>Recently overdue — call now</h2><span className="z-count red">{recentOverdue.length}</span></div>
+              {recentOverdue.map((b) => CallRow(b, true))}
+            </section>
+          )}
+
           <section className="z-panel">
             <div className="z-panel-h"><h2>Call this week</h2><span className={`z-count ${calls.length ? 'amber' : 'green'}`}>{calls.length}</span></div>
-            {calls.length === 0 && <div className="z-empty">✓ No calls today. Every business due in the next 2 weeks is handled — EZMinder is emailing the {d.due_30 || 0} due this month.</div>}
-            {calls.map((b) => (
-              <div className="z-crow" key={b.file_no} onClick={() => onOpen(b.file_no)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.file_no)}>
-                <span className={`z-type ${b.deadline_type}`}>{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>
-                <div className="z-cbiz">
-                  <div className="n">{title(b.name)}
-                    {!b.has_email && <span className="z-badge red" title="No email on file">⚠ no email</span>}
-                    {b.first_timer && <span className="z-badge blue" title="First-time filer">★ first filing</span>}
-                  </div>
-                  <div className="d">{b.contact_phone || (b.contact_name ? title(b.contact_name) : 'No contact on file')}{b.other ? ` · ${b.other.type === 'RCRT' ? 'recert' : 'annual'} in ${b.other.days}d` : ''}{b.last_outreach ? ` · last: ${OUTCOME_LABEL[b.last_outreach.outcome] || b.last_outreach.channel}` : ''}</div>
-                </div>
-                <span className="z-late">{daysText(b.days)}</span>
-                <button className="btn compact" onClick={(e) => { e.stopPropagation(); onOpen(b.file_no); }}>Open</button>
-              </div>
-            ))}
+            {calls.length === 0 && <div className="z-empty">✓ No upcoming calls. Every business due in the next 2 weeks is handled — EZMinder is emailing the {d.due_30 || 0} due this month.</div>}
+            {calls.map((b) => CallRow(b, false))}
           </section>
 
-          {(d.overdue || []).length > 0 && (
+          {(d.long_overdue || []).length > 0 && (
             <button className="z-overdue-strip" onClick={() => onGoBusinesses('late')}>
-              <span className="pip red" /><strong>{d.overdue.length} long-overdue</strong> — years past due, likely closed. Review and clean up →
+              <span className="pip red" /><strong>{d.long_overdue.length} long-overdue</strong> — 90+ days past due, likely closed. Review and clean up →
             </button>
           )}
         </div>
@@ -311,7 +320,9 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
   const [data, setData] = useState(null); const [err, setErr] = useState('');
   const [bucket, setBucket] = useState(initialBucket || 'action');
   const [type, setType] = useState('all'); const [q, setQ] = useState(''); const [sort, setSort] = useState('deadline');
+  const [page, setPage] = useState(0); const PAGE = 50;
   useEffect(() => { setBucket(initialBucket || 'action'); }, [initialBucket, zone]);
+  useEffect(() => { setPage(0); }, [bucket, type, q, sort, zone]);
   useEffect(() => { setData(null); setErr(''); zoneApi.businesses(org.id, zone).then(setData).catch((e) => setErr(e.message)); }, [org.id, zone, refreshKey]);
 
   const all = data?.businesses || [];
@@ -352,7 +363,7 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
         <table className="z-table">
           <thead><tr><th>Business</th><th>Type</th><th>Deadline</th><th className="z-hide-sm">Contact</th>{ownZone && <th className="z-hide-sm">Last outreach</th>}</tr></thead>
           <tbody>
-            {rows.slice(0, 500).map((b) => (
+            {rows.slice(page * PAGE, (page + 1) * PAGE).map((b) => (
               <tr key={b.file_no} onClick={() => onOpen(b.file_no)}>
                 <td><strong>{title(b.trade_name || b.name)}</strong><div className="z-muted small">#{b.file_no}</div></td>
                 <td>{b.bucket === 'inactive' ? <span className="z-pill inactive">Inactive</span> : <span className={`z-type ${b.deadline_type}`}>{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>}</td>
@@ -364,7 +375,13 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
             {!rows.length && <tr><td colSpan={5} className="z-muted" style={{ padding: 16 }}>Nothing here.</td></tr>}
           </tbody>
         </table>
-        {rows.length > 500 && <div className="z-muted small z-pad">Showing first 500 of {rows.length}. Search to narrow.</div>}
+        {rows.length > PAGE && (
+          <div className="z-pager">
+            <button className="btn ghost compact" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← Prev</button>
+            <span className="z-muted small">{page * PAGE + 1}–{Math.min((page + 1) * PAGE, rows.length)} of {rows.length}</span>
+            <button className="btn ghost compact" disabled={(page + 1) * PAGE >= rows.length} onClick={() => setPage((p) => p + 1)}>Next →</button>
+          </div>
+        )}
       </div>
     </>
   );

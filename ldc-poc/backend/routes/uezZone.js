@@ -234,7 +234,17 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     .sort((a, b) => (a.days ?? 0) - (b.days ?? 0))
     .map(row);
 
-  const overdue = active.filter((b) => b.bucket === 'late').sort((a, b) => (a.days ?? 0) - (b.days ?? 0)).map(row);
+  // Just missed the deadline (1–90 days late, not yet on the state's late list) — call these now, they're savable.
+  const recentlyOverdue = active
+    .filter((b) => b.days != null && b.days < 0 && b.days >= -90 && !b.on_late_report)
+    .sort((a, b) => (b.days ?? 0) - (a.days ?? 0)) // freshest miss first
+    .map(row);
+
+  // Long overdue (90+ days, or on the state's late report) — mostly closed, cleanup.
+  const longOverdue = active
+    .filter((b) => b.on_late_report || (b.days != null && b.days < -90))
+    .sort((a, b) => (a.days ?? 0) - (b.days ?? 0))
+    .map(row);
 
   const monthStart = startOfMonthIso();
   const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
@@ -267,7 +277,8 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     active_count: active.length,
     counts,
     call_this_week: callThisWeek,
-    overdue,
+    recently_overdue: recentlyOverdue,
+    long_overdue: longOverdue,
     due_30: counts.due_30,
     signups_this_month: newBiz.length,
     recertified_this_month: recerts.length,

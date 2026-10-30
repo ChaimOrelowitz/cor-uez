@@ -215,3 +215,9 @@ button.z-stat:hover{border-color:#c9cdf0}
 .z-field-chip:hover{background:var(--blue-soft)}
 .z-preview{margin-top:16px;border:1px solid var(--line);border-radius:12px;background:#fafbfd;padding:16px}
 .z-preview-body{background:#fff;border:1px solid var(--line2);border-radius:10px;padding:18px;max-height:340px;overflow:auto}
+
+/* v7: urgent panel, pager */
+.z-panel-urgent{border-color:#e6b9b4;margin-bottom:16px}
+.z-panel-urgent .z-panel-h{background:#fdf2f1;border-bottom-color:#f1d9d6}
+.z-count.red{color:var(--red);background:var(--red-soft)}
+.z-pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--line2)}
