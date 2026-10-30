@@ -44,53 +44,8 @@ async function loadOrg(req) {
   return org;
 }
 
-// ---------- Deadline math ----------
-const DAY = 864e5;
-function today() { const d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
-function parse(d) { return d ? new Date(`${d}T00:00:00Z`) : null; }
-function iso(d) { return d ? d.toISOString().slice(0, 10) : null; }
-
-// Estimate when detail pages haven't synced: reports are due on the certification anniversary.
-// The first one is a year after certification, and an anniversary already covered by an early filing is skipped.
-function nextAnniversary(b, from) {
-  const c = parse(b.cert_date);
-  if (!c) return null;
-  const d = new Date(Date.UTC(from.getUTCFullYear(), c.getUTCMonth(), c.getUTCDate()));
-  if (d < from) d.setUTCFullYear(d.getUTCFullYear() + 1);
-  while (d <= c) d.setUTCFullYear(d.getUTCFullYear() + 1);
-  const filed = [parse(b.last_annual_date), parse(b.last_recert_date)].filter(Boolean).sort((x, y) => y - x)[0];
-  if (filed && (d - filed) / DAY < 300) d.setUTCFullYear(d.getUTCFullYear() + 1);
-  return d;
-}
-
-function deadlineFor(b, now = today()) {
-  if (b.status === 'I') return { bucket: 'inactive', deadline: null, deadline_type: null, days: null };
-  let deadline = null; let type = null; let source = null;
-  if (b.on_late_report || b.on_due_report) {
-    deadline = parse(b.report_next_due); type = b.report_type; source = 'state_report';
-  } else {
-    const a = parse(b.next_annual_due); const r = parse(b.next_recert_due);
-    if (a || r) {
-      if (r && (!a || r <= a)) { deadline = r; type = 'RCRT'; } else { deadline = a; type = 'AR'; }
-      source = 'detail';
-    } else {
-      deadline = nextAnniversary(b, now); type = 'AR'; source = 'estimate';
-    }
-  }
-  const days = deadline ? Math.round((deadline - now) / DAY) : null;
-  let bucket = 'ok';
-  if (b.on_late_report || (days !== null && days < 0)) bucket = 'late';
-  else if (days !== null && days <= 30) bucket = 'due_30';
-  else if ((days !== null && days <= 60) || b.on_due_report) bucket = 'due_60';
-  else if (days !== null && days <= 90) bucket = 'due_90';
-  return {
-    bucket,
-    deadline: iso(deadline),
-    deadline_type: type,
-    deadline_source: source,
-    days: b.on_late_report && b.report_days_late != null ? -b.report_days_late : days
-  };
-}
+// ---------- Deadline math (shared) ----------
+const { DAY, deadlineFor, isFirstTimer } = require('../services/uezDeadline');
 
 const LIST_COLUMNS = 'file_no, zone_name, permit_no, name, trade_name, status, cert_date, last_annual_date, last_recert_date, next_annual_due, next_recert_due, email, phone, owner_name, street, sic_code, naics_code, naics_desc, report_type, report_next_due, report_days_late, on_due_report, on_late_report, ft_orig, ft_curr, report_contact_name, report_contact_phone, report_contact_email, new_business, in_zone_listing, detail_synced_at';
 
@@ -267,29 +222,22 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
   const emailLog = await fetchAll(() => supabase.from('uez_zone_email_log').select('file_no, kind').eq('org_id', org.id).like('kind', 'reminder%'));
   for (const e of emailLog) if (e.file_no) sent.set(e.file_no, (sent.get(e.file_no) || 0) + 1);
 
-  const row = (b, reason) => ({
+  const row = (b) => ({
     file_no: b.file_no, name: b.trade_name || b.name, deadline_type: b.deadline_type, deadline: b.deadline, days: b.days,
-    contact_name: b.contact_name, contact_phone: b.contact_phone, contact_email: b.contact_email,
-    last_outreach: b.last_outreach, has_email: !!b.contact_email, reminders_sent: sent.get(b.file_no) || 0, reason
+    other: b.other, contact_name: b.contact_name, contact_phone: b.contact_phone, contact_email: b.contact_email,
+    last_outreach: b.last_outreach, has_email: !!b.contact_email, first_timer: isFirstTimer(b), reminders_sent: sent.get(b.file_no) || 0
   });
 
-  // Upcoming businesses the automation can't carry on its own — Moshe's real worklist.
-  const isFirstTimer = (b) => b.new_business || (!b.last_annual_date && !b.last_recert_date);
-  const needsAttention = active
-    .filter((b) => (b.days != null && b.days >= 0 && b.days <= 60))
-    .map((b) => {
-      if (!b.contact_email) return row(b, 'no_email');
-      if (b.days <= 14) return row(b, 'final_stretch');
-      if (isFirstTimer(b)) return row(b, 'first_timer');
-      return null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
+  // THE worklist: next UEZ filing due within 14 days, most pressing first. That's Moshe's day.
+  const callThisWeek = active
+    .filter((b) => b.days != null && b.days >= 0 && b.days <= 14)
+    .sort((a, b) => (a.days ?? 0) - (b.days ?? 0))
+    .map(row);
 
-  // Overdue, demoted. Mostly the long-dead backlog.
-  const overdue = active.filter((b) => b.bucket === 'late').sort((a, b) => (a.days ?? 0) - (b.days ?? 0)).map((b) => row(b, 'overdue'));
+  const overdue = active.filter((b) => b.bucket === 'late').sort((a, b) => (a.days ?? 0) - (b.days ?? 0)).map(row);
 
   const monthStart = startOfMonthIso();
+  const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
   const events = await must(supabase.from('uez_zone_business_events')
     .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
     .eq('zone_name', zone).gte('detected_at', monthStart).order('detected_at', { ascending: false }));
@@ -299,16 +247,26 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
     .eq('zone_name', zone).order('detected_at', { ascending: false }).limit(8));
 
+  // Emails the platform processed this week (sent, or logged in test mode) — proof it's working.
+  const weekEmails = await fetchAll(() => supabase.from('uez_zone_email_log').select('id, kind').eq('org_id', org.id).gte('created_at', weekAgo));
+  const remindersThisWeek = weekEmails.filter((e) => String(e.kind).startsWith('reminder')).length;
+
+  // Retention: active businesses currently in good standing (not overdue).
+  const retentionRate = active.length ? Math.round(((active.length - counts.late) / active.length) * 100) : null;
+
   const last = await must(supabase.from('uez_zone_sync_runs').select('finished_at, status, stats').eq('org_id', org.id).eq('status', 'ok').order('started_at', { ascending: false }).limit(1));
   res.json({
     zone,
     active_count: active.length,
     counts,
-    needs_attention: needsAttention,
+    call_this_week: callThisWeek,
     overdue,
+    due_30: counts.due_30,
+    signups_this_month: newBiz.length,
     recertified_this_month: recerts.length,
     recert_names: recerts.slice(0, 12).map((e) => e.uez_zone_businesses?.trade_name || e.uez_zone_businesses?.name).filter(Boolean),
-    new_this_month: newBiz.length,
+    reminders_this_week: remindersThisWeek,
+    retention_rate: retentionRate,
     follow_ups_due: active.filter((b) => b.last_outreach?.follow_up_on && b.last_outreach.follow_up_on <= today).length,
     recent_activity: recentActivity,
     last_synced: last[0]?.finished_at || null

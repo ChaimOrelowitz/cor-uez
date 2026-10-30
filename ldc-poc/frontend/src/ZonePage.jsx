@@ -208,66 +208,54 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
   );
 }
 
-// ---------------- Home (Concept A) ----------------
-const REASON = {
-  no_email: { label: 'No email on file', cls: 'red' },
-  final_stretch: { label: 'Final stretch', cls: 'amber' },
-  first_timer: { label: 'First-time filer', cls: 'blue' }
-};
-function whyText(b) {
-  if (b.reason === 'no_email') return "No email on file — reminders can't reach them, call";
-  if (b.reason === 'first_timer') return 'Never filed before — highest-risk, personal touch';
-  if (b.reason === 'final_stretch') return b.reminders_sent > 0 ? `${b.reminders_sent} reminder${b.reminders_sent > 1 ? 's' : ''} sent, due within 2 weeks — nudge` : 'Due within 2 weeks — time for a personal nudge';
-  return '';
-}
+// ---------------- Home ----------------
 function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
   const [d, setD] = useState(null); const [err, setErr] = useState('');
   useEffect(() => { setD(null); zoneApi.home(org.id).then(setD).catch((e) => setErr(e.message)); }, [org.id, refreshKey]);
   if (err) return <div className="z-alert bad">{err}</div>;
   if (!d) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading…</div>;
-  const c = d.counts || {};
-  const attention = d.needs_attention || [];
+  const calls = d.call_this_week || [];
   return (
     <>
       <div className="z-stats">
-        <div className="z-stat amber">
-          <div className="k"><span className="pip amber" />Needs your attention</div><div className="v">{attention.length}</div><div className="m">Upcoming the emails can't carry alone</div>
-        </div>
-        <button className="z-stat" onClick={() => onGoBusinesses('due_30')}>
-          <div className="k"><span className="pip blue" />Due in 30 days</div><div className="v">{c.due_30 || 0}</div><div className="m">Reminders sending automatically</div>
-        </button>
         <div className="z-stat green">
-          <div className="k"><span className="pip green" />Recertified this month</div><div className="v">{d.recertified_this_month || 0}</div><div className="m">Thank-you emails sent</div>
+          <div className="k"><span className="pip green" />Signups this month</div><div className="v">{d.signups_this_month || 0}</div><div className="m">New businesses in your zone</div>
         </div>
-        <button className="z-stat" onClick={() => onGoBusinesses('all')}>
-          <div className="k"><span className="pip blue" />Active businesses</div><div className="v">{(d.active_count || 0).toLocaleString()}</div><div className="m">{d.new_this_month ? `+${d.new_this_month} new this month` : 'In your zone'}</div>
-        </button>
+        <div className="z-stat green">
+          <div className="k"><span className="pip green" />Recertified this month</div><div className="v">{d.recertified_this_month || 0}</div><div className="m">Thank-you emails sent automatically</div>
+        </div>
+        <div className="z-stat">
+          <div className="k"><span className="pip blue" />Reminders sent this week</div><div className="v">{d.reminders_this_week || 0}</div><div className="m">EZMinder chasing them for you</div>
+        </div>
+        <div className="z-stat">
+          <div className="k"><span className="pip blue" />Retention rate</div><div className="v">{d.retention_rate != null ? `${d.retention_rate}%` : '—'}</div><div className="m">Active businesses in good standing</div>
+        </div>
       </div>
 
       <div className="z-grid">
         <div>
           <section className="z-panel">
-            <div className="z-panel-h"><h2>Needs your attention</h2><span className="z-count amber">{attention.length}</span></div>
-            {attention.length === 0 && <div className="z-empty">✓ You're all caught up. EZMinder is emailing the {c.due_30 || 0} businesses due soon — the ones that need a human will surface here.</div>}
-            {attention.slice(0, 50).map((b) => {
-              const r = REASON[b.reason] || {};
-              return (
-                <div className="z-crow" key={b.file_no} onClick={() => onOpen(b.file_no)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.file_no)}>
-                  <span className={`z-reason ${r.cls}`}>{r.label}</span>
-                  <div className="z-cbiz">
-                    <div className="n">{title(b.name)} <span className="z-tiny">· {b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span></div>
-                    <div className="d">{whyText(b)}{b.contact_phone ? ` · ${b.contact_phone}` : b.contact_name ? ` · ${title(b.contact_name)}` : ''}</div>
+            <div className="z-panel-h"><h2>Call this week</h2><span className={`z-count ${calls.length ? 'amber' : 'green'}`}>{calls.length}</span></div>
+            {calls.length === 0 && <div className="z-empty">✓ No calls today. Every business due in the next 2 weeks is handled — EZMinder is emailing the {d.due_30 || 0} due this month.</div>}
+            {calls.map((b) => (
+              <div className="z-crow" key={b.file_no} onClick={() => onOpen(b.file_no)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(b.file_no)}>
+                <span className={`z-type ${b.deadline_type}`}>{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>
+                <div className="z-cbiz">
+                  <div className="n">{title(b.name)}
+                    {!b.has_email && <span className="z-badge red" title="No email on file">⚠ no email</span>}
+                    {b.first_timer && <span className="z-badge blue" title="First-time filer">★ first filing</span>}
                   </div>
-                  <span className={`z-late ${b.days <= 14 ? '' : 'z-soon'}`}>{daysText(b.days)}</span>
-                  <button className="btn compact" onClick={(e) => { e.stopPropagation(); onOpen(b.file_no); }}>Open</button>
+                  <div className="d">{b.contact_phone || (b.contact_name ? title(b.contact_name) : 'No contact on file')}{b.other ? ` · ${b.other.type === 'RCRT' ? 'recert' : 'annual'} in ${b.other.days}d` : ''}{b.last_outreach ? ` · last: ${OUTCOME_LABEL[b.last_outreach.outcome] || b.last_outreach.channel}` : ''}</div>
                 </div>
-              );
-            })}
+                <span className="z-late">{daysText(b.days)}</span>
+                <button className="btn compact" onClick={(e) => { e.stopPropagation(); onOpen(b.file_no); }}>Open</button>
+              </div>
+            ))}
           </section>
 
           {(d.overdue || []).length > 0 && (
             <button className="z-overdue-strip" onClick={() => onGoBusinesses('late')}>
-              <span className="pip red" /><strong>{d.overdue.length} long-overdue</strong> — mostly years past due and likely closed. Review and clean up →
+              <span className="pip red" /><strong>{d.overdue.length} long-overdue</strong> — years past due, likely closed. Review and clean up →
             </button>
           )}
         </div>

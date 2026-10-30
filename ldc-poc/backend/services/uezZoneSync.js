@@ -238,6 +238,7 @@ async function runZoneSync(orgId, trigger = 'manual') {
       await portal.logout();
     }
     try { stats.thankyous = await sendRecertThankYous(org, run.startedAt); } catch (e) { console.error('thank-you pass failed', e.message); }
+    try { const { sendDueReminders } = require('./uezReminders'); stats.reminders = await sendDueReminders(org); } catch (e) { console.error('reminder pass failed', e.message); }
     await must(supabase.from('uez_zone_portal_logins').update({ status: 'ok', last_checked_at: nowIso(), last_error: null }).eq('org_id', orgId));
     await must(supabase.from('uez_zone_sync_runs').update({ status: 'ok', stats, finished_at: nowIso() }).eq('id', run.id));
     return { ok: true, stats };
