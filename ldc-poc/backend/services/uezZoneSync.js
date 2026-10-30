@@ -200,7 +200,7 @@ async function syncDetails(portal, zoneName, zoneId, stats) {
         sic_desc: d.sic_desc, naics_desc: d.naics_desc, nature: d.nature, entity_type: d.entity_type, business_size: d.business_size,
         began_date: d.began_date, minority_owned: d.minority_owned, women_owned: d.women_owned, new_business: d.new_business,
         next_annual_due: d.next_annual_due, next_recert_due: d.next_recert_due,
-        employment: d.employment, state_notes: d.state_notes,
+        employment: d.employment, state_notes: d.state_notes, inactivated_date: d.inactivated_date || undefined,
         detail_synced_at: nowIso(), updated_at: nowIso()
       }).eq('file_no', c.file_no));
       done++;
@@ -214,6 +214,52 @@ async function syncDetails(portal, zoneName, zoneId, stats) {
   stats.details_remaining = Math.max(0, candidates.length - done);
   return zoneId;
 }
+
+// One-time historical backfill: fetch INACTIVE businesses' detail pages to record when the
+// state inactivated each one (their employment history carries the date). Runs in the
+// background, resumable (only touches inactive businesses not yet detail-synced).
+const backfilling = new Set();
+async function runInactiveBackfill(orgId) {
+  if (backfilling.has(orgId)) return { alreadyRunning: true };
+  backfilling.add(orgId);
+  try {
+    const org = await must(supabase.from('uez_zone_orgs').select('*').eq('id', orgId).single());
+    const login = await getPortalLogin(orgId);
+    if (!login) throw new PortalError('no_login', 'No portal login saved.');
+    const zone = await must(supabase.from('uez_zones').select('*').eq('name', org.zone_name).maybeSingle());
+    const { portal } = await openPortal(login);
+    let done = 0; let failed = 0;
+    try {
+      for (let loop = 0; loop < 60; loop++) {
+        const batch = await must(supabase.from('uez_zone_businesses')
+          .select('file_no, status').eq('zone_name', org.zone_name).eq('status', 'I')
+          .is('detail_synced_at', null).limit(300));
+        if (!batch.length) break;
+        for (const c of batch) {
+          try {
+            const d = parseDetail(await portal.fetchDetailHtml(c.file_no, zone?.state_zone_id, 'I'));
+            await must(supabase.from('uez_zone_businesses').update({
+              trade_name: d.trade_name, phone: d.phone, email: d.email || undefined, owner_name: d.owner_name,
+              street: d.street, city: d.city, state: d.state, zip: d.zip, mailing_address: d.mailing_address,
+              sic_desc: d.sic_desc, naics_desc: d.naics_desc, nature: d.nature, entity_type: d.entity_type,
+              began_date: d.began_date, employment: d.employment, inactivated_date: d.inactivated_date,
+              detail_synced_at: nowIso(), updated_at: nowIso()
+            }).eq('file_no', c.file_no));
+            done++;
+          } catch (e) { failed++; if (e.code === 'http' && failed > 20) throw e; }
+        }
+        console.log(`[backfill ${org.zone_name}] ${done} done, ${failed} failed`);
+      }
+    } finally { await portal.logout(); }
+    return { ok: true, done, failed };
+  } catch (e) {
+    console.error('inactive backfill failed:', e.message);
+    return { ok: false, error: e.message };
+  } finally {
+    backfilling.delete(orgId);
+  }
+}
+function isBackfilling(orgId) { return backfilling.has(orgId); }
 
 async function runZoneSync(orgId, trigger = 'manual') {
   if (running.has(orgId)) return { alreadyRunning: true };
@@ -278,4 +324,4 @@ function startZoneSyncScheduler() {
 
 function isSyncRunning(orgId) { return running.has(orgId); }
 
-module.exports = { runZoneSync, savePortalLogin, startZoneSyncScheduler, isSyncRunning, getPortalLogin };
+module.exports = { runZoneSync, savePortalLogin, startZoneSyncScheduler, isSyncRunning, getPortalLogin, runInactiveBackfill, isBackfilling };

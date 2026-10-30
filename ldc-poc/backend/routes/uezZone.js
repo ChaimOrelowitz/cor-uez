@@ -3,7 +3,7 @@
 const express = require('express');
 const supabase = require('../db/supabase');
 const { requireUezAuth } = require('../middleware/uezAuth');
-const { runZoneSync, savePortalLogin, isSyncRunning } = require('../services/uezZoneSync');
+const { runZoneSync, savePortalLogin, isSyncRunning, runInactiveBackfill, isBackfilling } = require('../services/uezZoneSync');
 const { reminderEmail, sendBusinessEmail, sendViaResend, loadTemplates, previewTemplate, DEFAULT_TEMPLATES, MERGE_FIELDS } = require('../services/uezEmail');
 
 const router = express.Router();
@@ -107,6 +107,24 @@ router.post('/orgs/:orgId/sync', wrap(async (req, res) => {
   if (isSyncRunning(org.id)) return res.status(202).json({ started: false, syncing: true });
   runZoneSync(org.id, 'manual').catch((e) => console.error('manual sync failed', e));
   res.status(202).json({ started: true, syncing: true });
+}));
+
+// One-time historical backfill of inactive businesses' inactivation dates.
+router.post('/orgs/:orgId/backfill-inactive', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  if (org.role !== 'admin') throw httpError(403, 'Admin only.');
+  if (isBackfilling(org.id)) return res.status(202).json({ started: false, running: true });
+  runInactiveBackfill(org.id).catch((e) => console.error('backfill failed', e));
+  res.status(202).json({ started: true, running: true });
+}));
+
+router.get('/orgs/:orgId/backfill-inactive/status', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const countOf = async (q) => { const { count, error } = await q; if (error) throw error; return count || 0; };
+  const total = await countOf(supabase.from('uez_zone_businesses').select('file_no', { count: 'exact', head: true }).eq('zone_name', org.zone_name).eq('status', 'I'));
+  const done = await countOf(supabase.from('uez_zone_businesses').select('file_no', { count: 'exact', head: true }).eq('zone_name', org.zone_name).eq('status', 'I').not('detail_synced_at', 'is', null));
+  const withDate = await countOf(supabase.from('uez_zone_businesses').select('file_no', { count: 'exact', head: true }).eq('zone_name', org.zone_name).eq('status', 'I').not('inactivated_date', 'is', null));
+  res.json({ running: isBackfilling(org.id), total, done, with_date: withDate });
 }));
 
 router.get('/orgs/:orgId/businesses', wrap(async (req, res) => {
@@ -257,12 +275,12 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
     .eq('zone_name', zone).order('detected_at', { ascending: false }).limit(8));
 
-  // Businesses the state inactivated in the last 30 days — recent churn.
-  const thirtyAgo = new Date(Date.now() - 30 * DAY).toISOString();
-  const lostEvents = await must(supabase.from('uez_zone_business_events')
-    .select('file_no, detected_at, uez_zone_businesses(name, trade_name, cert_date, last_annual_date, last_recert_date)')
-    .eq('zone_name', zone).eq('kind', 'inactivated').gte('detected_at', thirtyAgo).order('detected_at', { ascending: false }));
-  const lostRecently = lostEvents.map((e) => ({ file_no: e.file_no, name: e.uez_zone_businesses?.trade_name || e.uez_zone_businesses?.name, detected_at: e.detected_at }));
+  // Businesses the state inactivated in the last 30 days (from the real inactivation date).
+  const thirtyAgoDate = new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10);
+  const lostRows = await must(supabase.from('uez_zone_businesses')
+    .select('file_no, name, trade_name, inactivated_date')
+    .eq('zone_name', zone).gte('inactivated_date', thirtyAgoDate).order('inactivated_date', { ascending: false }).limit(50));
+  const lostRecently = lostRows.map((b) => ({ file_no: b.file_no, name: b.trade_name || b.name, detected_at: b.inactivated_date }));
 
   // Emails the platform processed this week (sent, or logged in test mode) — proof it's working.
   const weekEmails = await fetchAll(() => supabase.from('uez_zone_email_log').select('id, kind').eq('org_id', org.id).gte('created_at', weekAgo));

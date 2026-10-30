@@ -197,3 +197,7 @@ create table if not exists uez_zone_email_templates (
   primary key (org_id, kind)
 );
 alter table uez_zone_email_templates enable row level security;
+
+-- v5: historical inactivation date (from inactive businesses' detail pages)
+alter table uez_zone_businesses add column if not exists inactivated_date date;
+create index if not exists uez_zone_businesses_inact_idx on uez_zone_businesses (zone_name, inactivated_date);

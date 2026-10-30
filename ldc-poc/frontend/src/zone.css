@@ -221,3 +221,7 @@ button.z-stat:hover{border-color:#c9cdf0}
 .z-panel-urgent .z-panel-h{background:#fdf2f1;border-bottom-color:#f1d9d6}
 .z-count.red{color:var(--red);background:var(--red-soft)}
 .z-pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--line2)}
+
+/* v8: backfill progress */
+.z-progress{height:8px;background:#eef0f5;border-radius:99px;overflow:hidden;margin-top:12px}
+.z-progress-bar{height:100%;background:var(--blue);transition:width .4s}

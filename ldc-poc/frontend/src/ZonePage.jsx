@@ -486,6 +486,8 @@ function Settings({ org, status, onReconnect, me }) {
 
       <TemplatesCard org={org} />
 
+      <BackfillCard org={org} />
+
       <ConnectionCard org={org} status={status} onReconnect={onReconnect} />
     </div>
   );
@@ -525,6 +527,27 @@ function TemplatesCard({ org }) {
         <div className="z-muted small" style={{ marginBottom: 6 }}>Preview · <strong>{draft.preview?.subject}</strong></div>
         <div className="z-preview-body" dangerouslySetInnerHTML={{ __html: draft.preview?.html || '' }} />
       </div>
+      {msg && <div className="hint">{msg}</div>}
+    </div>
+  );
+}
+
+function BackfillCard({ org }) {
+  const [s, setS] = useState(null); const [msg, setMsg] = useState('');
+  const canEdit = org.role === 'admin';
+  const load = () => zoneApi.backfillStatus(org.id).then(setS).catch(() => {});
+  useEffect(() => { load(); const t = setInterval(load, 8000); return () => clearInterval(t); }, [org.id]);
+  async function start() { setMsg(''); try { await zoneApi.startBackfill(org.id); setMsg('Started — this runs in the background and can take an hour. Keep this tab open.'); load(); } catch (e) { setMsg(e.message); } }
+  if (!s) return null;
+  const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
+  const complete = s.total > 0 && s.done >= s.total;
+  return (
+    <div className="z-card z-pad">
+      <h2 className="z-h2">Historical data</h2>
+      <p className="z-muted small">Load inactivation dates for your {s.total.toLocaleString()} inactive businesses. This powers the "recently inactivated" card and attrition metrics. One-time, runs in the background.</p>
+      <div className="z-progress"><div className="z-progress-bar" style={{ width: `${pct}%` }} /></div>
+      <div className="z-muted small" style={{ margin: '8px 0' }}>{s.done.toLocaleString()} of {s.total.toLocaleString()} loaded ({s.with_date?.toLocaleString() || 0} with inactivation dates){s.running ? ' · running…' : complete ? ' · complete ✓' : ''}</div>
+      {canEdit && !complete && <button className="btn" onClick={start} disabled={s.running}>{s.running ? 'Running…' : s.done > 0 ? 'Resume backfill' : 'Start backfill'}</button>}
       {msg && <div className="hint">{msg}</div>}
     </div>
   );

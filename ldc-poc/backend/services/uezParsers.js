@@ -134,6 +134,11 @@ function parseDetail(html) {
     new_business: yes(field('P3_NEW_BUS_FLG')),
     employment,
     state_notes: notes,
+    // When the state inactivated it: the date on the latest employment row marked Inactive (app_status 'I').
+    inactivated_date: (() => {
+      const rows = employment.filter((r) => r.app_status === 'I' && r.date).sort((a, b) => (a.date < b.date ? 1 : -1));
+      return rows[0]?.date || null;
+    })(),
     portal_modified_at: val('P3_MDFD_DATE') || null,
     portal_modified_by: val('P3_MDFD_ID') || null
   };
