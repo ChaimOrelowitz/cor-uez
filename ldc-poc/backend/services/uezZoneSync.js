@@ -4,6 +4,27 @@ const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { UezPortal, PortalError, pdfToText } = require('./uezPortal');
 const { myNjLogin } = require('./uezMyNj');
 const { parseListing, parseDetail, parseDueReport, parseLateReport } = require('./uezParsers');
+const { thankYouEmail, sendBusinessEmail } = require('./uezEmail');
+
+// After a sync, email an automatic thank-you for each business that recertified since the run began.
+// Gated on the zone's settings: nothing goes out unless send_thankyou AND email_live are on.
+async function sendRecertThankYous(org, since) {
+  if (!org.send_thankyou || !org.email_live) return 0;
+  const events = await must(supabase.from('uez_zone_business_events')
+    .select('file_no').eq('zone_name', org.zone_name).eq('kind', 'recertified').gte('detected_at', since));
+  if (!events.length) return 0;
+  const files = [...new Set(events.map((e) => e.file_no))];
+  let sent = 0;
+  for (const file_no of files) {
+    const b = await must(supabase.from('uez_zone_businesses').select('*').eq('file_no', file_no).maybeSingle());
+    if (!b) continue;
+    const biz = { ...b, contact_email: b.email || b.report_contact_email, contact_name: b.owner_name || b.report_contact_name };
+    const built = thankYouEmail(biz, org, null);
+    const r = await sendBusinessEmail({ org, biz, built, sender: null });
+    if (r.status === 'sent') sent++;
+  }
+  return sent;
+}
 
 const DETAIL_BATCH = Number(process.env.UEZ_DETAIL_BATCH || 400);   // detail pages per run
 const DETAIL_MAX_AGE_DAYS = 7;
@@ -197,7 +218,8 @@ async function runZoneSync(orgId, trigger = 'manual') {
   if (running.has(orgId)) return { alreadyRunning: true };
   running.add(orgId);
   const org = await must(supabase.from('uez_zone_orgs').select('*').eq('id', orgId).single());
-  const run = await must(supabase.from('uez_zone_sync_runs').insert({ org_id: orgId, zone_name: org.zone_name, trigger }).select('id').single());
+  const run = await must(supabase.from('uez_zone_sync_runs').insert({ org_id: orgId, zone_name: org.zone_name, trigger, started_at: nowIso() }).select('id, started_at').single());
+  run.startedAt = run.started_at;
   const stats = {};
   try {
     const login = await getPortalLogin(orgId);
@@ -215,6 +237,7 @@ async function runZoneSync(orgId, trigger = 'manual') {
     } finally {
       await portal.logout();
     }
+    try { stats.thankyous = await sendRecertThankYous(org, run.startedAt); } catch (e) { console.error('thank-you pass failed', e.message); }
     await must(supabase.from('uez_zone_portal_logins').update({ status: 'ok', last_checked_at: nowIso(), last_error: null }).eq('org_id', orgId));
     await must(supabase.from('uez_zone_sync_runs').update({ status: 'ok', stats, finished_at: nowIso() }).eq('id', run.id));
     return { ok: true, stats };

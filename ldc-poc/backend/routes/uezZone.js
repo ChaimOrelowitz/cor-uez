@@ -4,6 +4,7 @@ const express = require('express');
 const supabase = require('../db/supabase');
 const { requireUezAuth } = require('../middleware/uezAuth');
 const { runZoneSync, savePortalLogin, isSyncRunning } = require('../services/uezZoneSync');
+const { reminderEmail, sendBusinessEmail, sendViaResend } = require('../services/uezEmail');
 
 const router = express.Router();
 router.use(requireUezAuth);
@@ -240,6 +241,134 @@ router.get('/orgs/:orgId/statewide', wrap(async (req, res) => {
   list.sort((a, b) => b.due_60 - a.due_60);
   const last = await must(supabase.from('uez_zone_businesses').select('report_synced_at').not('report_synced_at', 'is', null).order('report_synced_at', { ascending: false }).limit(1));
   res.json({ zones: list, as_of: last[0]?.report_synced_at || null });
+}));
+
+// ---------- Home summary (Concept A) ----------
+function startOfMonthIso() { const d = new Date(); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString(); }
+
+router.get('/orgs/:orgId/home', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const zone = org.zone_name;
+  if (!zone) return res.json({ zone: null });
+  const rows = await fetchAll(() => supabase.from('uez_zone_businesses').select(LIST_COLUMNS).eq('zone_name', zone));
+  const touches = await fetchAll(() => supabase.from('uez_zone_outreach').select('file_no, created_at, outcome, channel, follow_up_on').eq('org_id', org.id).order('created_at', { ascending: false }));
+  const lastTouch = new Map();
+  for (const t of touches) if (!lastTouch.has(t.file_no)) lastTouch.set(t.file_no, t);
+
+  const shaped = rows.map((b) => ({ ...shape(b, zone), last_outreach: lastTouch.get(b.file_no) || null }));
+  const active = shaped.filter((b) => b.status !== 'I');
+  const counts = { late: 0, due_30: 0, due_60: 0, due_90: 0, ok: 0 };
+  for (const b of active) counts[b.bucket] = (counts[b.bucket] || 0) + 1;
+
+  // Needs-a-call list: overdue, worst first. (Dormant handling can filter here later.)
+  const today = new Date().toISOString().slice(0, 10);
+  const needsCall = active.filter((b) => b.bucket === 'late')
+    .sort((a, b) => (a.days ?? 0) - (b.days ?? 0))
+    .map((b) => ({ file_no: b.file_no, name: b.trade_name || b.name, deadline_type: b.deadline_type, days: b.days,
+      contact_name: b.contact_name, contact_phone: b.contact_phone, contact_email: b.contact_email,
+      last_outreach: b.last_outreach, has_email: !!b.contact_email }));
+
+  const monthStart = startOfMonthIso();
+  const events = await must(supabase.from('uez_zone_business_events')
+    .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
+    .eq('zone_name', zone).gte('detected_at', monthStart).order('detected_at', { ascending: false }));
+  const recerts = events.filter((e) => e.kind === 'recertified');
+  const newBiz = events.filter((e) => e.kind === 'new_business');
+  const recentActivity = await must(supabase.from('uez_zone_business_events')
+    .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
+    .eq('zone_name', zone).order('detected_at', { ascending: false }).limit(8));
+
+  const last = await must(supabase.from('uez_zone_sync_runs').select('finished_at, status, stats').eq('org_id', org.id).eq('status', 'ok').order('started_at', { ascending: false }).limit(1));
+  res.json({
+    zone,
+    active_count: active.length,
+    counts,
+    needs_call: needsCall,
+    recertified_this_month: recerts.length,
+    recert_names: recerts.slice(0, 12).map((e) => e.uez_zone_businesses?.trade_name || e.uez_zone_businesses?.name).filter(Boolean),
+    new_this_month: newBiz.length,
+    follow_ups_due: active.filter((b) => b.last_outreach?.follow_up_on && b.last_outreach.follow_up_on <= today).length,
+    recent_activity: recentActivity,
+    last_synced: last[0]?.finished_at || null
+  });
+}));
+
+// ---------- Zone settings (email identity) ----------
+const SETTINGS_FIELDS = ['from_name', 'reply_to', 'signature', 'recert_video_url', 'pbs_login_url', 'send_thankyou', 'email_live', 'test_recipient'];
+
+router.get('/orgs/:orgId/settings', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const row = await must(supabase.from('uez_zone_orgs').select(`id, name, zone_name, ${SETTINGS_FIELDS.join(', ')}, reminder_days`).eq('id', org.id).single());
+  res.json({ settings: row, can_edit: org.role === 'admin', resend_configured: !!process.env.RESEND_API_KEY });
+}));
+
+router.put('/orgs/:orgId/settings', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  if (org.role !== 'admin') throw httpError(403, 'Only your organization admin can change settings.');
+  const patch = {};
+  for (const f of SETTINGS_FIELDS) if (f in req.body) patch[f] = req.body[f] === '' ? null : req.body[f];
+  if ('reminder_days' in req.body && Array.isArray(req.body.reminder_days)) {
+    patch.reminder_days = req.body.reminder_days.map(Number).filter((n) => n > 0 && n < 400);
+  }
+  const row = await must(supabase.from('uez_zone_orgs').update(patch).eq('id', org.id).select(`id, name, zone_name, ${SETTINGS_FIELDS.join(', ')}, reminder_days`).single());
+  res.json({ settings: row });
+}));
+
+// ---------- My profile ----------
+router.get('/me/profile', wrap(async (req, res) => {
+  const row = await must(supabase.from('uez_zone_members').select('org_id, role, first_name, last_name, phone, email').eq('user_id', req.user.id));
+  res.json({ email: req.user.email, memberships: row });
+}));
+
+router.put('/me/profile', wrap(async (req, res) => {
+  const patch = {};
+  for (const f of ['first_name', 'last_name', 'phone']) if (f in req.body) patch[f] = String(req.body[f] || '').slice(0, 120) || null;
+  patch.email = req.user.email;
+  await must(supabase.from('uez_zone_members').update(patch).eq('user_id', req.user.id));
+  res.json({ ok: true });
+}));
+
+// ---------- Send a reminder now ----------
+router.post('/orgs/:orgId/businesses/:fileNo/send-reminder', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const settings = await must(supabase.from('uez_zone_orgs').select('*').eq('id', org.id).single());
+  const b = await must(supabase.from('uez_zone_businesses').select('*').eq('file_no', req.params.fileNo).maybeSingle());
+  if (!b) throw httpError(404, 'Business not found.');
+  if (b.zone_name !== org.zone_name) throw httpError(403, `This business is in ${b.zone_name}. You can only email businesses in ${org.zone_name}.`);
+  const biz = shape(b, org.zone_name);
+  const built = reminderEmail(biz, settings);
+  const sender = { user_id: req.user.id, email: req.user.email };
+  const result = await sendBusinessEmail({ org: settings, biz, built, sender });
+  if (result.status === 'failed') throw httpError(400, result.error);
+  // Log it on the outreach timeline too.
+  await supabase.from('uez_zone_outreach').insert({
+    file_no: b.file_no, org_id: org.id, user_id: req.user.id, user_email: req.user.email,
+    channel: 'email', outcome: result.status === 'sent' ? 'reminder_sent' : 'reminder_test',
+    note: `${built.kind === 'reminder_recert' ? 'Recert' : 'Annual'} reminder ${result.status === 'sent' ? 'emailed' : 'tested'} → ${result.to}`
+  });
+  res.json(result);
+}));
+
+// ---------- Send a test email to yourself ----------
+router.post('/orgs/:orgId/test-email', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const settings = await must(supabase.from('uez_zone_orgs').select('*').eq('id', org.id).single());
+  const to = String(req.body.to || req.user.email || '').trim();
+  if (!to) throw httpError(400, 'No email address to send the test to.');
+  try {
+    const id = await sendViaResend({
+      to,
+      subject: `EZMinder test — ${settings.from_name || org.name}`,
+      html: `<div style="font-family:system-ui,sans-serif;font-size:15px;color:#1e2733">This is a test email from EZMinder for <strong>${(settings.from_name || org.name).replace(/[<>&]/g, '')}</strong>. If you can read this, sending works. Replies go to ${settings.reply_to || req.user.email}.</div>`,
+      fromName: settings.from_name || org.name,
+      replyTo: settings.reply_to || req.user.email
+    });
+    await supabase.from('uez_zone_email_log').insert({ org_id: org.id, kind: 'test', to_email: to, subject: 'EZMinder test', status: 'sent', provider_id: id, sent_by: req.user.id });
+    res.json({ ok: true, to, id });
+  } catch (e) {
+    await supabase.from('uez_zone_email_log').insert({ org_id: org.id, kind: 'test', to_email: to, subject: 'EZMinder test', status: 'failed', error: e.message, sent_by: req.user.id });
+    throw httpError(400, e.message);
+  }
 }));
 
 // ---------- Platform admin (COR) ----------

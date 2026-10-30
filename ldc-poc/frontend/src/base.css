@@ -11,7 +11,7 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 .app-shell { min-height: 100vh; }
 .topbar { min-height: 78px; display: flex; align-items: center; gap: 12px; padding: 0 34px; border-bottom: 1px solid #e8eaf4; background: rgba(255,255,255,.88); backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 10; }
-.brand-mark { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-weight: 800; font-size: 14px; letter-spacing: .04em; color: white; background: linear-gradient(135deg,#5d65e8,#8c63e8); box-shadow: 0 8px 22px rgba(91,94,220,.26); }
+/* .brand-mark and .primary are defined in zone.css (EZMinder blue). */
 .brand-name { font-weight: 800; font-size: 15px; }
 .brand-subtitle { color: #7a8198; font-size: 12px; margin-top: 2px; }
 .signin-link { margin-left: auto; border: 0; background: transparent; color: #626bd7; font-weight: 700; }
@@ -22,7 +22,6 @@ textarea { min-height: 94px; resize: vertical; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
 .hint { margin-top: 12px; color: #6f7690; font-size: 12px; background: #f7f8fc; border-radius: 12px; padding: 11px 13px; line-height: 1.55; }
 .primary, .secondary { border: 0; border-radius: 13px; padding: 13px 18px; font-weight: 800; }
-.primary { margin-top: 18px; background: linear-gradient(135deg,#616ae0,#7e64df); color: white; box-shadow: 0 9px 22px rgba(96,104,218,.22); }
 .primary:disabled { opacity: .55; cursor: default; }
 .primary.compact { margin: 0; }
 .secondary { background: #f2f3f8; color: #5f667a; }

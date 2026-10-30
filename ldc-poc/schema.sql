@@ -136,3 +136,52 @@ where not exists (select 1 from uez_zone_orgs where name = 'LDC Lakewood');
 -- v2: myNJ login (required before the UEZ portal)
 alter table uez_zone_portal_logins add column if not exists mynj_username_enc bytea;
 alter table uez_zone_portal_logins add column if not exists mynj_password_enc bytea;
+
+-- v3: email (Resend), per-zone settings, per-user profile
+-- Per-user profile + their own portal logins (optional; org login is the fallback).
+alter table uez_zone_members add column if not exists first_name text;
+alter table uez_zone_members add column if not exists last_name text;
+alter table uez_zone_members add column if not exists phone text;
+alter table uez_zone_members add column if not exists email text;
+alter table uez_zone_members add column if not exists mynj_username_enc bytea;
+alter table uez_zone_members add column if not exists mynj_password_enc bytea;
+alter table uez_zone_members add column if not exists uez_username_enc bytea;
+alter table uez_zone_members add column if not exists uez_password_enc bytea;
+
+-- Per-zone email identity + reminder settings.
+alter table uez_zone_orgs add column if not exists from_name text;          -- e.g. "Lakewood UEZ"
+alter table uez_zone_orgs add column if not exists reply_to text;           -- zone inbox replies go to
+alter table uez_zone_orgs add column if not exists signature text;          -- closing line in emails
+alter table uez_zone_orgs add column if not exists recert_video_url text;   -- how-to-recertify video
+alter table uez_zone_orgs add column if not exists pbs_login_url text default 'https://portal03.nj.gov/ords_apex_oit/f?p=404:LOGIN';
+alter table uez_zone_orgs add column if not exists reminder_days int[] default '{60,30,7}';
+alter table uez_zone_orgs add column if not exists send_thankyou boolean default true;
+-- Safety: emails only reach real businesses when live. Off = log only (test mode).
+alter table uez_zone_orgs add column if not exists email_live boolean default false;
+alter table uez_zone_orgs add column if not exists test_recipient text;     -- where test/suppressed mail goes
+
+create table if not exists uez_zone_email_log (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references uez_zone_orgs(id) on delete cascade,
+  file_no text references uez_zone_businesses(file_no) on delete set null,
+  kind text not null,                       -- reminder_ar, reminder_recert, thankyou, test
+  to_email text,
+  subject text,
+  status text not null,                      -- sent, suppressed, failed
+  provider_id text,                          -- Resend message id
+  error text,
+  sent_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+create index if not exists uez_zone_email_log_idx on uez_zone_email_log (org_id, created_at desc);
+create index if not exists uez_zone_email_log_file_idx on uez_zone_email_log (file_no, created_at desc);
+
+alter table uez_zone_email_log enable row level security;
+
+-- Default identity for the pilot org
+update uez_zone_orgs set from_name = 'Lakewood UEZ'
+  where name = 'LDC Lakewood' and from_name is null;
+
+-- Pilot defaults: Lakewood recert how-to video
+update uez_zone_orgs set recert_video_url = 'https://thelcsc.org/uezrecert'
+  where name = 'LDC Lakewood' and recert_video_url is null;
