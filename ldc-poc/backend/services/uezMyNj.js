@@ -67,4 +67,55 @@ async function myNjLogin(username, password) {
   }
 }
 
-module.exports = { myNjLogin };
+// Verify a BUSINESS's own myNJ login (how they get into PBS to recertify).
+// Unlike myNjLogin, this doesn't require the UEZ coordinator app — it just confirms
+// myNJ accepts the credentials. Returns { ok: true } or throws PortalError.
+async function verifyBusinessMyNj(username, password) {
+  let chromium;
+  try { ({ chromium } = require('playwright')); } catch (_) {
+    throw new PortalError('setup', 'Headless browser is not installed on the server.');
+  }
+  const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'] });
+  try {
+    const context = await browser.newContext({ userAgent: UA, locale: 'en-US', timezoneId: 'America/New_York', viewport: { width: 1280, height: 860 } });
+    await context.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
+    const page = await context.newPage();
+
+    await page.goto(MYNJ_LOGIN, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    try {
+      await page.waitForSelector('#IDToken1', { timeout: 45000 });
+    } catch (_) {
+      throw new PortalError('blocked', 'myNJ login page did not load (bot check).');
+    }
+    await page.fill('#IDToken1', username);
+    await page.fill('#IDToken2', password);
+    let nav = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null);
+    await page.click('input[name="Login.Submit"]').catch(() => {});
+    if (!(await nav)) {
+      try {
+        nav = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null);
+        await page.evaluate(() => document.forms.Login && document.forms.Login.submit());
+        await nav;
+      } catch (_) { /* already navigating */ }
+    }
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+
+    const after = visibleText(await page.content());
+    if (/unable to log you on|Invalid ID or Password/i.test(after)) {
+      throw new PortalError('bad_mynj', 'myNJ rejected that login ID or password.');
+    }
+    if (/won't be able to log in for a few minutes|locked/i.test(after)) {
+      throw new PortalError('bad_mynj', 'myNJ temporarily locked this login after failed attempts. Wait a few minutes.');
+    }
+    // Success means we left the login form.
+    if (await page.$('#IDToken1')) {
+      throw new PortalError('bad_mynj', 'myNJ did not accept that login. Double-check the ID and password.');
+    }
+    return { ok: true };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+module.exports = { myNjLogin, verifyBusinessMyNj };

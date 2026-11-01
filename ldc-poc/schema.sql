@@ -201,3 +201,27 @@ alter table uez_zone_email_templates enable row level security;
 -- v5: historical inactivation date (from inactive businesses' detail pages)
 alter table uez_zone_businesses add column if not exists inactivated_date date;
 create index if not exists uez_zone_businesses_inact_idx on uez_zone_businesses (zone_name, inactivated_date);
+
+-- v6: business-shared PBS logins. A business hands its myNJ login (how it gets into PBS)
+-- to its UEZ zone so the coordinator can help it recertify. Captured via a one-time emailed
+-- link; credentials AES-256-GCM encrypted, NEVER shown to the zone (office sees status only).
+create table if not exists uez_zone_business_logins (
+  file_no text primary key references uez_zone_businesses(file_no) on delete cascade,
+  org_id uuid not null references uez_zone_orgs(id) on delete cascade,
+  zone_name text,
+  mynj_username_enc bytea,                   -- encrypted; never returned to the client
+  mynj_password_enc bytea,                   -- encrypted; never returned to the client
+  status text not null default 'invited',    -- invited, ok, failed
+  last_error text,
+  last_verified_at timestamptz,
+  token text,                                -- one-time capture-link token (cleared after success)
+  token_expires_at timestamptz,
+  invited_to text,                           -- email the capture link was sent to
+  invited_by uuid references auth.users(id),
+  submitted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists uez_zone_business_logins_token_idx on uez_zone_business_logins (token);
+create index if not exists uez_zone_business_logins_org_idx on uez_zone_business_logins (org_id);
+alter table uez_zone_business_logins enable row level security;

@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const zoneRoutes = require('./routes/uezZone');
+const enrollRoutes = require('./routes/uezEnroll');
 const { startZoneSyncScheduler } = require('./services/uezZoneSync');
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'ldc-poc-api' }));
 app.use('/api/uez/zone', zoneRoutes);
+app.use('/api/uez/enroll', enrollRoutes);
 
 // Reachability check (no login): can this server load the UEZ login page?
 app.get('/health/portal', async (_req, res) => {

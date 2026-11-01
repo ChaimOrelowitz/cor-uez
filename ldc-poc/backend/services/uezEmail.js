@@ -5,6 +5,8 @@ const supabase = require('../db/supabase');
 
 const RESEND_URL = 'https://api.resend.com/emails';
 const FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || 'office@corsolutions.io';
+// Fallback recert how-to video if a zone hasn't set its own in Settings.
+const DEFAULT_RECERT_VIDEO = 'https://thelcsc.org/uezrecert';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -96,11 +98,12 @@ function buildEmail(kind, biz, org) {
   const late = biz.days != null && biz.days < 0;
   const duePhrase = late ? 'is now past due' : (due ? `is due ${due}` : 'is coming up');
   const pbs = org.pbs_login_url || 'https://portal03.nj.gov/ords_apex_oit/f?p=404:LOGIN';
+  const video = org.recert_video_url || DEFAULT_RECERT_VIDEO;
   const vars = { business, first_name: first, due_date: due, due_phrase: duePhrase, zone: org.from_name || 'Urban Enterprise Zone' };
   const links = {
     login_button: `<a href="${esc(pbs)}" style="display:inline-block;background:#2f6fb0;color:#fff;text-decoration:none;font-weight:700;padding:11px 20px;border-radius:9px">Log in to ${kind === 'reminder_recert' ? 'recertify' : 'file'} →</a>`,
     login_link: `<a href="${esc(pbs)}" style="color:#2f6fb0;font-weight:600">${esc(pbs)}</a>`,
-    video_link: org.recert_video_url ? `<a href="${esc(org.recert_video_url)}" style="color:#2f6fb0;font-weight:600">▶ Watch the 2-minute how-to video</a>` : ''
+    video_link: video ? `<a href="${esc(video)}" style="color:#2f6fb0;font-weight:600">▶ Watch the 2-minute how-to video</a>` : ''
   };
   const t = tplFor(org, kind);
   return { kind, subject: renderBody(t.subject, vars, {}).replace(/<[^>]+>/g, ''), html: layout(renderBody(t.body, vars, links), org) };

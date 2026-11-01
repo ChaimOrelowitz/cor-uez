@@ -261,6 +261,54 @@ async function runInactiveBackfill(orgId) {
 }
 function isBackfilling(orgId) { return backfilling.has(orgId); }
 
+// Load full detail profiles for EVERY business in the zone listing that hasn't been
+// detail-synced yet (active and inactive). One-time, resumable, runs in the background —
+// so every business has owner, address, industry, employment history, etc. for the demo.
+async function runDetailBackfill(orgId) {
+  if (backfilling.has(orgId)) return { alreadyRunning: true };
+  backfilling.add(orgId);
+  try {
+    const org = await must(supabase.from('uez_zone_orgs').select('*').eq('id', orgId).single());
+    const login = await getPortalLogin(orgId);
+    if (!login) throw new PortalError('no_login', 'No portal login saved.');
+    const zone = await must(supabase.from('uez_zones').select('*').eq('name', org.zone_name).maybeSingle());
+    const { portal } = await openPortal(login);
+    let zoneId = zone?.state_zone_id;
+    let done = 0; let failed = 0;
+    try {
+      for (let loop = 0; loop < 120; loop++) {
+        const batch = await must(supabase.from('uez_zone_businesses')
+          .select('file_no, status').eq('zone_name', org.zone_name).eq('in_zone_listing', true)
+          .is('detail_synced_at', null).limit(300));
+        if (!batch.length) break;
+        for (const c of batch) {
+          try {
+            const d = parseDetail(await portal.fetchDetailHtml(c.file_no, zoneId, c.status));
+            if (d.zone_id && !zoneId) zoneId = d.zone_id;
+            await must(supabase.from('uez_zone_businesses').update({
+              trade_name: d.trade_name, phone: d.phone, email: d.email || undefined, owner_name: d.owner_name, owner_title: d.owner_title,
+              street: d.street, city: d.city, state: d.state, zip: d.zip, block: d.block, lot: d.lot, mailing_address: d.mailing_address,
+              sic_desc: d.sic_desc, naics_desc: d.naics_desc, nature: d.nature, entity_type: d.entity_type, business_size: d.business_size,
+              began_date: d.began_date, minority_owned: d.minority_owned, women_owned: d.women_owned, new_business: d.new_business,
+              next_annual_due: d.next_annual_due, next_recert_due: d.next_recert_due,
+              employment: d.employment, state_notes: d.state_notes, inactivated_date: d.inactivated_date || undefined,
+              detail_synced_at: nowIso(), updated_at: nowIso()
+            }).eq('file_no', c.file_no));
+            done++;
+          } catch (e) { failed++; if (e.code === 'http' && failed > 20) throw e; }
+        }
+        console.log(`[detail-backfill ${org.zone_name}] ${done} done, ${failed} failed`);
+      }
+    } finally { await portal.logout(); }
+    return { ok: true, done, failed };
+  } catch (e) {
+    console.error('detail backfill failed:', e.message);
+    return { ok: false, error: e.message };
+  } finally {
+    backfilling.delete(orgId);
+  }
+}
+
 async function runZoneSync(orgId, trigger = 'manual') {
   if (running.has(orgId)) return { alreadyRunning: true };
   running.add(orgId);
@@ -324,4 +372,4 @@ function startZoneSyncScheduler() {
 
 function isSyncRunning(orgId) { return running.has(orgId); }
 
-module.exports = { runZoneSync, savePortalLogin, startZoneSyncScheduler, isSyncRunning, getPortalLogin, runInactiveBackfill, isBackfilling };
+module.exports = { runZoneSync, savePortalLogin, startZoneSyncScheduler, isSyncRunning, getPortalLogin, runInactiveBackfill, runDetailBackfill, isBackfilling };

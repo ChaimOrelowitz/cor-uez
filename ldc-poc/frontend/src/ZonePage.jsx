@@ -9,12 +9,13 @@ const OUTCOMES = [
   ['reached', 'Reached them'], ['left_message', 'Left voicemail'], ['no_answer', 'No answer'],
   ['helped_file', 'Helped them file'], ['already_filed', 'Says already filed'], ['wrong_contact', 'Wrong contact info'], ['other', 'Other']
 ];
-const OUTCOME_LABEL = Object.fromEntries([...OUTCOMES, ['reminder_sent', 'Reminder emailed'], ['reminder_test', 'Reminder tested']]);
+const OUTCOME_LABEL = Object.fromEntries([...OUTCOMES, ['reminder_sent', 'Reminder emailed'], ['reminder_test', 'Reminder tested'], ['login_invite', 'Login link sent']]);
 const EVENT_LABEL = { new_business: 'New to zone', annual_filed: 'Annual report filed', recertified: 'Recertified', inactivated: 'Inactivated', reactivated: 'Reactivated' };
 
 function fmtDate(d) { if (!d) return '—'; const [y, m, day] = String(d).slice(0, 10).split('-'); return `${m}/${day}/${y}`; }
 function fmtWhen(ts) { if (!ts) return '—'; return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 function daysText(d) { if (d == null) return ''; if (d < 0) return `${Math.abs(d).toLocaleString()}d late`; if (d === 0) return 'today'; return `in ${d}d`; }
+function money(n) { return n == null ? '—' : `$${Number(n).toLocaleString()}`; }
 function title(s) {
   return String(s || '').toLowerCase().replace(/(^|[\s\-/&(.,#])([a-z])/g, (_, p, c) => p + c.toUpperCase()).replace(/\bLlc\b/g, 'LLC').replace(/\bInc\b/g, 'Inc');
 }
@@ -23,6 +24,7 @@ const ICONS = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
   biz: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /></>,
   state: <><path d="M4 19V5M4 19h16M8 15l4-5 3 3 4-6" /></>,
+  stats: <><path d="M4 20V4M4 20h16M8 20v-6M12.5 20V8M17 20v-9" /></>,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1 2 2 0 0 1-4 0 1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4.6 15a2 2 0 0 1 0-4 1.6 1.6 0 0 0-1.1-2.7 2 2 0 0 1 2.8-2.8 1.6 1.6 0 0 0 2.7-1.1 2 2 0 0 1 4 0A1.6 1.6 0 0 0 18.4 5.4a2 2 0 0 1 2.8 2.8A1.6 1.6 0 0 0 20.4 11a2 2 0 0 1 0 4Z" /></>,
   admin: <><path d="M12 3l8 4v5c0 4.4-3.1 7.9-8 9-4.9-1.1-8-4.6-8-9V7z" /></>
 };
@@ -90,7 +92,7 @@ function PortalSetup({ org, status, onSaved, embedded }) {
 function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
   const [data, setData] = useState(null); const [err, setErr] = useState('');
   const [form, setForm] = useState({ channel: 'call', outcome: 'reached', note: '', follow_up_on: '' });
-  const [saving, setSaving] = useState(false); const [sending, setSending] = useState(false);
+  const [saving, setSaving] = useState(false); const [sending, setSending] = useState(false); const [requesting, setRequesting] = useState(false);
   const load = useCallback(() => { zoneApi.business(org.id, fileNo).then(setData).catch((e) => setErr(e.message)); }, [org.id, fileNo]);
   useEffect(() => { setData(null); setErr(''); load(); }, [load]);
 
@@ -105,6 +107,12 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
     try { const r = await zoneApi.sendReminder(org.id, fileNo); setErr(r.status === 'sent' ? `✓ Reminder emailed to ${r.to}` : `✓ Test sent to ${r.to} (live sending is off)`); load(); onChanged?.(); }
     catch (e2) { setErr(e2.message); }
     setSending(false);
+  }
+  async function requestLogin() {
+    setRequesting(true); setErr('');
+    try { const r = await zoneApi.requestLogin(org.id, fileNo); setErr(r.live ? `✓ Login link sent to ${r.to}` : `✓ Test link sent to ${r.to} (live sending is off — the business was not emailed)`); load(); onChanged?.(); }
+    catch (e2) { setErr(e2.message); }
+    setRequesting(false);
   }
 
   const b = data?.business;
@@ -155,6 +163,83 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
                 <button className="btn z-btn" onClick={sendReminder} disabled={sending}>{sending ? 'Sending…' : '✉ Send reminder now'}</button>
               )}
             </section>
+
+            {(() => {
+              const pf = [];
+              if (b.entity_type) pf.push(['Entity type', title(b.entity_type)]);
+              if (b.business_size) pf.push(['Business size', title(b.business_size)]);
+              if (b.began_date) pf.push(['In business since', fmtDate(b.began_date)]);
+              if (b.permit_no) pf.push(['UEZ permit #', b.permit_no]);
+              if (b.nature) pf.push(['Nature of business', title(b.nature)]);
+              if (b.mailing_address) pf.push(['Mailing address', title(b.mailing_address)]);
+              if (b.block || b.lot) pf.push(['Block / Lot', `${b.block || '—'} / ${b.lot || '—'}`]);
+              const flags = [b.minority_owned && 'Minority-owned', b.women_owned && 'Women-owned', b.new_business && 'New business'].filter(Boolean);
+              if (!pf.length && !flags.length) return null;
+              return (
+                <section>
+                  <h3>Business profile</h3>
+                  {pf.length > 0 && <div className="z-kv">{pf.map(([k, v]) => <React.Fragment key={k}><span>{k}</span><strong>{v}</strong></React.Fragment>)}</div>}
+                  {flags.length > 0 && <div className="z-flags">{flags.map((f) => <span className="z-flag" key={f}>{f}</span>)}</div>}
+                </section>
+              );
+            })()}
+
+            {Array.isArray(b.employment) && b.employment.length > 0 && (
+              <section>
+                <h3>Employment &amp; tax savings</h3>
+                <div className="z-table-wrap z-emp">
+                  <table className="z-table z-emp-table">
+                    <thead><tr><th>Year</th><th>Full-time</th><th>New hires</th><th>Capital</th><th>Tax savings</th></tr></thead>
+                    <tbody>
+                      {[...b.employment]
+                        .sort((a, c) => String(c.program_year || c.date || '').localeCompare(String(a.program_year || a.date || '')))
+                        .slice(0, 12)
+                        .map((r, i) => {
+                          const ts = (r.uz4_savings || 0) + (r.uz5_savings || 0);
+                          return (
+                            <tr key={i}>
+                              <td>{r.program_year || (r.date ? fmtDate(r.date) : '—')}{r.app_status === 'I' && <span className="z-muted small"> · inactive</span>}</td>
+                              <td>{r.ft_actual ?? '—'}{r.pct_25 ? <span className="z-muted small"> · {r.pct_25}</span> : ''}</td>
+                              <td>{r.new_hires ?? '—'}</td>
+                              <td>{money(r.capital_actual)}</td>
+                              <td>{ts ? money(ts) : '—'}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {b.can_contact && b.status !== 'I' && (
+              <section>
+                <h3>PBS login (assisted recert)</h3>
+                {(() => {
+                  const st = data.login?.status;
+                  if (st === 'ok') return (
+                    <div className="z-login on">
+                      <div><span className="z-login-key">🔑</span> <strong>Login on file</strong> — you can recertify with them on a call.</div>
+                      {data.login.last_verified_at && <div className="z-muted small">Verified {fmtWhen(data.login.last_verified_at)}. Stored encrypted — the password is never shown.</div>}
+                    </div>
+                  );
+                  if (st === 'invited') return (
+                    <div className="z-login wait">
+                      <div><strong>Link sent</strong> — waiting for {b.contact_name ? title(b.contact_name) : 'the business'} to enter their login.{data.login.invited_to ? ` (${data.login.invited_to})` : ''}</div>
+                    </div>
+                  );
+                  if (st === 'failed') return (
+                    <div className="z-login bad">
+                      <div><strong>Their login didn't verify yet.</strong> They can try again from the link, or resend it.</div>
+                    </div>
+                  );
+                  return <div className="z-muted small" style={{ marginBottom: 10 }}>No PBS login on file. Send a secure link and the business enters its own myNJ login — you never see the password.</div>;
+                })()}
+                {b.contact_email
+                  ? <button className="btn ghost z-btn" onClick={requestLogin} disabled={requesting}>{requesting ? 'Sending…' : data.login?.status === 'ok' ? 'Resend link to update' : data.login ? 'Resend login link' : '🔑 Request PBS login'}</button>
+                  : <div className="hint">No email on file to send the link to.</div>}
+              </section>
+            )}
 
             {b.can_contact ? (
               <section>
@@ -248,7 +333,7 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
     <>
       <div className="z-stats">
         <div className="z-stat green">
-          <div className="k"><span className="pip green" />Signups this month</div><div className="v">{d.signups_this_month || 0}</div><div className="m">New businesses in your zone</div>
+          <div className="k"><span className="pip green" />Signups</div><div className="v">{d.signups_this_month || 0}</div><div className="m">New businesses · last 30 days</div>
         </div>
         <div className="z-stat green">
           <div className="k"><span className="pip green" />Recertified this month</div><div className="v">{d.recertified_this_month || 0}</div><div className="m">Thank-you emails sent automatically</div>
@@ -279,7 +364,7 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
           </section>
 
           {(d.long_overdue || []).length > 0 && (
-            <button className="z-overdue-strip" onClick={() => onGoBusinesses('late')}>
+            <button className="z-overdue-strip" onClick={() => onGoBusinesses('active')}>
               <span className="pip red" /><strong>{d.long_overdue.length} long-overdue</strong> — 90+ days past due, likely closed. Review and clean up →
             </button>
           )}
@@ -318,24 +403,26 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
 // ---------------- Business list ----------------
 function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
   const [data, setData] = useState(null); const [err, setErr] = useState('');
-  const [bucket, setBucket] = useState(initialBucket || 'action');
+  const [bucket, setBucket] = useState(initialBucket || 'active');
   const [type, setType] = useState('all'); const [q, setQ] = useState(''); const [sort, setSort] = useState('deadline');
   const [page, setPage] = useState(0); const PAGE = 50;
-  useEffect(() => { setBucket(initialBucket || 'action'); }, [initialBucket, zone]);
+  useEffect(() => { setBucket(initialBucket || 'active'); }, [initialBucket, zone]);
   useEffect(() => { setPage(0); }, [bucket, type, q, sort, zone]);
   useEffect(() => { setData(null); setErr(''); zoneApi.businesses(org.id, zone).then(setData).catch((e) => setErr(e.message)); }, [org.id, zone, refreshKey]);
 
   const all = data?.businesses || [];
-  const active = all.filter((b) => b.status !== 'I');
-  const today = new Date().toISOString().slice(0, 10);
+  const counts = useMemo(() => ({
+    all: all.length,
+    active: all.filter((b) => b.status !== 'I').length,
+    inactive: all.filter((b) => b.status === 'I').length
+  }), [all]);
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let r = all.filter((b) => {
-      if (bucket === 'action' && !['late', 'due_30', 'due_60'].includes(b.bucket)) return false;
-      if (bucket === 'followup' && !(b.last_outreach?.follow_up_on && b.last_outreach.follow_up_on <= today)) return false;
-      if (!['action', 'all', 'followup'].includes(bucket) && b.bucket !== bucket) return false;
-      if (bucket === 'all' && b.bucket === 'inactive') return false;
-      if (type !== 'all' && b.deadline_type !== type) return false;
+      if (bucket === 'active' && b.status === 'I') return false;
+      if (bucket === 'inactive' && b.status !== 'I') return false;
+      if (type !== 'all' && b.status !== 'I' && b.deadline_type !== type) return false;
+      if (type !== 'all' && b.status === 'I') return false;
       if (needle && !`${b.name} ${b.trade_name} ${b.file_no} ${b.contact_name} ${b.contact_email}`.toLowerCase().includes(needle)) return false;
       return true;
     });
@@ -343,7 +430,7 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
     r = [...r].sort((a, b2) => (key(a) < key(b2) ? -1 : key(a) > key(b2) ? 1 : 0));
     if (sort === 'touched') r.reverse();
     return r;
-  }, [all, bucket, type, q, sort, today]);
+  }, [all, bucket, type, q, sort]);
 
   if (err) return <div className="z-alert bad">{err}</div>;
   if (!data) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading businesses…</div>;
@@ -354,25 +441,26 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
     <>
       {!data.has_full_roster && <div className="hint">This zone isn't connected, so only businesses on the statewide due/late reports show.</div>}
       <div className="z-toolbar">
-        <div className="z-seg">{[['action', 'Needs action'], ['all', 'All active'], ['inactive', 'Inactive']].map(([k, l]) => <button key={k} className={bucket === k ? 'on' : ''} onClick={() => setBucket(k)}>{l}</button>)}</div>
+        <div className="z-seg">{[['all', 'All'], ['active', 'Active'], ['inactive', 'Inactive']].map(([k, l]) => <button key={k} className={bucket === k ? 'on' : ''} onClick={() => setBucket(k)}>{l} <span className="z-seg-n">{counts[k]}</span></button>)}</div>
         <div className="z-seg">{[['all', 'All types'], ['AR', 'Annual'], ['RCRT', 'Recert']].map(([k, l]) => <button key={k} className={type === k ? 'on' : ''} onClick={() => setType(k)}>{l}</button>)}</div>
         <input className="z-search" placeholder="Search name, file #, contact…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="z-sort" value={sort} onChange={(e) => setSort(e.target.value)}><option value="deadline">Sort: deadline</option><option value="name">Sort: name</option>{ownZone && <option value="touched">Sort: last contacted</option>}</select>
       </div>
       <div className="z-card z-table-wrap">
         <table className="z-table">
-          <thead><tr><th>Business</th><th>Type</th><th>Deadline</th><th className="z-hide-sm">Contact</th>{ownZone && <th className="z-hide-sm">Last outreach</th>}</tr></thead>
+          <thead><tr><th>Business</th><th>Status</th><th>Type</th><th>Deadline</th><th className="z-hide-sm">Contact</th>{ownZone && <th className="z-hide-sm">Last outreach</th>}</tr></thead>
           <tbody>
             {rows.slice(page * PAGE, (page + 1) * PAGE).map((b) => (
               <tr key={b.file_no} onClick={() => onOpen(b.file_no)}>
-                <td><strong>{title(b.trade_name || b.name)}</strong><div className="z-muted small">#{b.file_no}</div></td>
-                <td>{b.bucket === 'inactive' ? <span className="z-pill inactive">Inactive</span> : <span className={`z-type ${b.deadline_type}`}>{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>}</td>
-                <td>{b.deadline ? <>{fmtDate(b.deadline)} <span className={`z-days ${b.bucket}`}>{daysText(b.days)}</span></> : '—'}</td>
+                <td><strong>{title(b.trade_name || b.name)}</strong>{b.login_status === 'ok' && <span className="z-key-badge" title="PBS login on file">🔑</span>}<div className="z-muted small">#{b.file_no}</div></td>
+                <td>{b.status === 'I' ? <span className="z-pill inactive">Inactive</span> : <span className="z-pill ok">Active</span>}</td>
+                <td>{b.status === 'I' ? <span className="z-muted small">—</span> : <span className={`z-type ${b.deadline_type}`}>{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>}</td>
+                <td>{b.status !== 'I' && b.deadline ? <>{fmtDate(b.deadline)} <span className={`z-days ${b.bucket}`}>{daysText(b.days)}</span></> : '—'}</td>
                 <td className="z-hide-sm">{title(b.contact_name) || '—'}<div className="z-muted small">{b.contact_phone || b.contact_email || ''}</div></td>
                 {ownZone && <td className="z-hide-sm">{b.last_outreach ? <>{OUTCOME_LABEL[b.last_outreach.outcome] || b.last_outreach.channel}<div className="z-muted small">{fmtWhen(b.last_outreach.created_at)}</div></> : <span className="z-muted">—</span>}</td>}
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={5} className="z-muted" style={{ padding: 16 }}>Nothing here.</td></tr>}
+            {!rows.length && <tr><td colSpan={6} className="z-muted" style={{ padding: 16 }}>Nothing here.</td></tr>}
           </tbody>
         </table>
         {rows.length > PAGE && (
@@ -412,6 +500,57 @@ function Statewide({ org, onPickZone }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ---------------- Stats board ----------------
+function StatBlock({ label, m, tone }) {
+  return (
+    <div className={`z-sb-block ${tone || ''}`}>
+      <div className="z-sb-label">{label}</div>
+      <div className="z-sb-nums">
+        <div><span className="n">{m?.rolling_30 ?? 0}</span><span className="l">30 days</span></div>
+        <div><span className="n">{m?.rolling_7 ?? 0}</span><span className="l">7 days</span></div>
+        <div><span className="n">{m?.ytd ?? 0}</span><span className="l">YTD</span></div>
+      </div>
+    </div>
+  );
+}
+
+function StatsBoard({ org }) {
+  const [d, setD] = useState(null); const [err, setErr] = useState('');
+  useEffect(() => { setD(null); zoneApi.stats(org.id).then(setD).catch((e) => setErr(e.message)); }, [org.id]);
+  if (err) return <div className="z-alert bad">{err}</div>;
+  if (!d) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading stats…</div>;
+  const months = d.months || [];
+  const max = Math.max(1, ...months.map((x) => x.filings));
+  const m = d.metrics || {};
+  return (
+    <div className="z-statsboard">
+      <div className="z-sb-grid">
+        <StatBlock label="UEZ filings" m={m.filings} tone="blue" />
+        <StatBlock label="Recertifications" m={m.recerts} tone="green" />
+        <StatBlock label="Annual reports" m={m.annuals} />
+        <StatBlock label="New signups" m={m.signups} tone="green" />
+        <StatBlock label="Reminders sent" m={m.reminders} />
+        <StatBlock label="Inactivations" m={m.inactivations} tone="red" />
+      </div>
+
+      <div className="z-card z-pad">
+        <h2 className="z-h2">UEZ filings by month</h2>
+        <p className="z-muted small">Recertifications and annual reports completed each month, last 12 months.</p>
+        <div className="z-chart">
+          {months.map((x, i) => (
+            <div className="z-chart-col" key={i} title={`${x.label}: ${x.filings} filings`}>
+              <div className="z-chart-bar" style={{ height: `${Math.round((x.filings / max) * 100)}%` }}>
+                <span className="z-chart-val">{x.filings || ''}</span>
+              </div>
+              <div className="z-chart-x">{x.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -535,19 +674,19 @@ function TemplatesCard({ org }) {
 function BackfillCard({ org }) {
   const [s, setS] = useState(null); const [msg, setMsg] = useState('');
   const canEdit = org.role === 'admin';
-  const load = () => zoneApi.backfillStatus(org.id).then(setS).catch(() => {});
+  const load = () => zoneApi.detailBackfillStatus(org.id).then(setS).catch(() => {});
   useEffect(() => { load(); const t = setInterval(load, 8000); return () => clearInterval(t); }, [org.id]);
-  async function start() { setMsg(''); try { await zoneApi.startBackfill(org.id); setMsg('Started — this runs in the background and can take an hour. Keep this tab open.'); load(); } catch (e) { setMsg(e.message); } }
+  async function start() { setMsg(''); try { await zoneApi.startDetailBackfill(org.id); setMsg('Started — this runs in the background and can take a while for a large zone. You can leave this page.'); load(); } catch (e) { setMsg(e.message); } }
   if (!s) return null;
   const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
   const complete = s.total > 0 && s.done >= s.total;
   return (
     <div className="z-card z-pad">
-      <h2 className="z-h2">Historical data</h2>
-      <p className="z-muted small">Load inactivation dates for your {s.total.toLocaleString()} inactive businesses. This powers the "recently inactivated" card and attrition metrics. One-time, runs in the background.</p>
+      <h2 className="z-h2">Business details</h2>
+      <p className="z-muted small">Load full profiles — owner, address, industry, and employment &amp; tax-savings history — for all {s.total.toLocaleString()} businesses in your zone. This normally fills in over nightly syncs; run it once to complete everything now (inactivation dates included).</p>
       <div className="z-progress"><div className="z-progress-bar" style={{ width: `${pct}%` }} /></div>
-      <div className="z-muted small" style={{ margin: '8px 0' }}>{s.done.toLocaleString()} of {s.total.toLocaleString()} loaded ({s.with_date?.toLocaleString() || 0} with inactivation dates){s.running ? ' · running…' : complete ? ' · complete ✓' : ''}</div>
-      {canEdit && !complete && <button className="btn" onClick={start} disabled={s.running}>{s.running ? 'Running…' : s.done > 0 ? 'Resume backfill' : 'Start backfill'}</button>}
+      <div className="z-muted small" style={{ margin: '8px 0' }}>{s.done.toLocaleString()} of {s.total.toLocaleString()} profiles loaded{s.running ? ' · running…' : complete ? ' · complete ✓' : ''}</div>
+      {canEdit && !complete && <button className="btn" onClick={start} disabled={s.running}>{s.running ? 'Running…' : s.done > 0 ? 'Finish loading' : 'Load all profiles'}</button>}
       {msg && <div className="hint">{msg}</div>}
     </div>
   );
@@ -614,7 +753,7 @@ export default function ZonePage() {
   const [status, setStatus] = useState(null);
   const [view, setView] = useState('home');
   const [viewZone, setViewZone] = useState(null);
-  const [listBucket, setListBucket] = useState('action');
+  const [listBucket, setListBucket] = useState('active');
   const [open, setOpen] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [err, setErr] = useState('');
@@ -645,7 +784,7 @@ export default function ZonePage() {
   const needsSetup = status && (!status.login || status.login.status === 'failed');
   const goBusinesses = (bucket) => { setListBucket(bucket); setViewZone(null); setView('businesses'); };
 
-  const NAV = [['home', 'Home', ICONS.home], ['businesses', 'Businesses', ICONS.biz], ['state', 'All zones', ICONS.state], ['settings', 'Settings', ICONS.settings]];
+  const NAV = [['home', 'Home', ICONS.home], ['businesses', 'Businesses', ICONS.biz], ['stats', 'Stats', ICONS.stats], ['state', 'All zones', ICONS.state], ['settings', 'Settings', ICONS.settings]];
   if (me?.isPlatformAdmin) NAV.push(['admin', 'Admin', ICONS.admin]);
 
   return (
@@ -668,7 +807,7 @@ export default function ZonePage() {
           <>
             <div className="z-top">
               <div>
-                <h1 className="z-h1">{viewZone ? title(viewZone) : view === 'home' ? 'Good morning, Moshe' : view === 'businesses' ? 'Businesses' : view === 'state' ? 'All zones' : view === 'settings' ? 'Settings' : 'Admin'}</h1>
+                <h1 className="z-h1">{viewZone ? title(viewZone) : view === 'home' ? 'Good morning, Moshe' : view === 'businesses' ? 'Businesses' : view === 'stats' ? 'Stats' : view === 'state' ? 'All zones' : view === 'settings' ? 'Settings' : 'Admin'}</h1>
                 {view === 'home' && !viewZone && <p className="z-sub">{status.syncing ? 'Syncing with the state portal…' : `${(status.runs?.find((r) => r.status === 'ok')?.stats?.details_remaining) ? 'Loading business details…' : "Here's your zone today."}`}</p>}
               </div>
               <div className="z-synced">
@@ -685,6 +824,7 @@ export default function ZonePage() {
 
             {!needsSetup && !viewZone && view === 'home' && <Home org={org} refreshKey={refreshKey} onOpen={setOpen} onGoBusinesses={goBusinesses} />}
             {!needsSetup && !viewZone && view === 'businesses' && <BusinessList org={org} zone={org.zone_name} initialBucket={listBucket} refreshKey={refreshKey} onOpen={setOpen} />}
+            {!needsSetup && !viewZone && view === 'stats' && <StatsBoard org={org} />}
             {!needsSetup && view === 'state' && !viewZone && <Statewide org={org} onPickZone={(z) => (z === org.zone_name ? setView('businesses') : setViewZone(z))} />}
             {viewZone && <><button className="z-link" style={{ marginBottom: 12 }} onClick={() => setViewZone(null)}>← All zones</button><BusinessList org={org} zone={viewZone} refreshKey={refreshKey} onOpen={setOpen} /></>}
             {view === 'settings' && !viewZone && <Settings org={org} status={status} me={me} onReconnect={() => { loadStatus(); loadMe(); }} />}

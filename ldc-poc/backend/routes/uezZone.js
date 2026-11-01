@@ -3,8 +3,9 @@
 const express = require('express');
 const supabase = require('../db/supabase');
 const { requireUezAuth } = require('../middleware/uezAuth');
-const { runZoneSync, savePortalLogin, isSyncRunning, runInactiveBackfill, isBackfilling } = require('../services/uezZoneSync');
+const { runZoneSync, savePortalLogin, isSyncRunning, runInactiveBackfill, runDetailBackfill, isBackfilling } = require('../services/uezZoneSync');
 const { reminderEmail, sendBusinessEmail, sendViaResend, loadTemplates, previewTemplate, DEFAULT_TEMPLATES, MERGE_FIELDS } = require('../services/uezEmail');
+const { createInvite, loginStatusMap } = require('../services/uezBusinessLogin');
 
 const router = express.Router();
 router.use(requireUezAuth);
@@ -118,6 +119,23 @@ router.post('/orgs/:orgId/backfill-inactive', wrap(async (req, res) => {
   res.status(202).json({ started: true, running: true });
 }));
 
+// Load full detail profiles for every business in the zone listing (active + inactive).
+router.post('/orgs/:orgId/backfill-details', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  if (org.role !== 'admin') throw httpError(403, 'Admin only.');
+  if (isBackfilling(org.id)) return res.status(202).json({ started: false, running: true });
+  runDetailBackfill(org.id).catch((e) => console.error('detail backfill failed', e));
+  res.status(202).json({ started: true, running: true });
+}));
+
+router.get('/orgs/:orgId/backfill-details/status', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const countOf = async (q) => { const { count, error } = await q; if (error) throw error; return count || 0; };
+  const total = await countOf(supabase.from('uez_zone_businesses').select('file_no', { count: 'exact', head: true }).eq('zone_name', org.zone_name).eq('in_zone_listing', true));
+  const done = await countOf(supabase.from('uez_zone_businesses').select('file_no', { count: 'exact', head: true }).eq('zone_name', org.zone_name).eq('in_zone_listing', true).not('detail_synced_at', 'is', null));
+  res.json({ running: isBackfilling(org.id), total, done });
+}));
+
 router.get('/orgs/:orgId/backfill-inactive/status', wrap(async (req, res) => {
   const org = await loadOrg(req);
   const countOf = async (q) => { const { count, error } = await q; if (error) throw error; return count || 0; };
@@ -134,16 +152,18 @@ router.get('/orgs/:orgId/businesses', wrap(async (req, res) => {
   const rows = await fetchAll(() => supabase.from('uez_zone_businesses').select(LIST_COLUMNS).eq('zone_name', zone).order('file_no'));
 
   let lastTouch = new Map();
+  let logins = new Map();
   if (zone === org.zone_name && rows.length) {
     const touches = await fetchAll(() => supabase.from('uez_zone_outreach').select('file_no, created_at, channel, outcome, follow_up_on')
       .eq('org_id', org.id).order('created_at', { ascending: false }));
     for (const t of touches) if (!lastTouch.has(t.file_no)) lastTouch.set(t.file_no, t);
+    logins = await loginStatusMap(org.id);
   }
   res.json({
     zone,
     own_zone: zone === org.zone_name,
     has_full_roster: rows.some((r) => r.in_zone_listing),
-    businesses: rows.map((b) => ({ ...shape(b, org.zone_name), last_outreach: lastTouch.get(b.file_no) || null }))
+    businesses: rows.map((b) => ({ ...shape(b, org.zone_name), last_outreach: lastTouch.get(b.file_no) || null, login_status: logins.get(b.file_no)?.status || null }))
   });
 }));
 
@@ -156,7 +176,13 @@ router.get('/orgs/:orgId/businesses/:fileNo', wrap(async (req, res) => {
   const outreach = own
     ? await must(supabase.from('uez_zone_outreach').select('*').eq('file_no', b.file_no).eq('org_id', org.id).order('created_at', { ascending: false }))
     : [];
-  res.json({ business: shape(b, org.zone_name), events, outreach });
+  let login = null;
+  if (own) {
+    const row = await must(supabase.from('uez_zone_business_logins')
+      .select('status, last_verified_at, invited_to, submitted_at, updated_at').eq('file_no', b.file_no).eq('org_id', org.id).maybeSingle());
+    login = row || null; // never includes credentials
+  }
+  res.json({ business: shape(b, org.zone_name), events, outreach, login });
 }));
 
 const CHANNELS = new Set(['call', 'email', 'text', 'visit', 'note']);
@@ -266,11 +292,14 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
 
   const monthStart = startOfMonthIso();
   const weekAgo = new Date(Date.now() - 7 * DAY).toISOString();
+  const thirtyAgo = new Date(Date.now() - 30 * DAY).toISOString();
+  const windowStart = monthStart < thirtyAgo ? monthStart : thirtyAgo;
   const events = await must(supabase.from('uez_zone_business_events')
     .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
-    .eq('zone_name', zone).gte('detected_at', monthStart).order('detected_at', { ascending: false }));
-  const recerts = events.filter((e) => e.kind === 'recertified');
-  const newBiz = events.filter((e) => e.kind === 'new_business');
+    .eq('zone_name', zone).gte('detected_at', windowStart).order('detected_at', { ascending: false }));
+  const recerts = events.filter((e) => e.kind === 'recertified' && e.detected_at >= monthStart);
+  // Signups: rolling 30 days (not calendar month).
+  const newBiz = events.filter((e) => e.kind === 'new_business' && e.detected_at >= thirtyAgo);
   const recentActivity = await must(supabase.from('uez_zone_business_events')
     .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
     .eq('zone_name', zone).order('detected_at', { ascending: false }).limit(8));
@@ -307,6 +336,65 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     follow_ups_due: active.filter((b) => b.last_outreach?.follow_up_on && b.last_outreach.follow_up_on <= today).length,
     recent_activity: recentActivity,
     last_synced: last[0]?.finished_at || null
+  });
+}));
+
+// ---------- Stats board (overall activity over time) ----------
+router.get('/orgs/:orgId/stats', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const zone = org.zone_name;
+  if (!zone) return res.json({ zone: null });
+  const now = new Date();
+  const thirtyAgo = new Date(now - 30 * DAY).toISOString();
+  const sevenAgo = new Date(now - 7 * DAY).toISOString();
+  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString();
+  // Go back 13 months so we always have 12 full calendar months behind us.
+  const monthsBack = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1)).toISOString();
+  const fetchStart = monthsBack < yearStart ? monthsBack : yearStart;
+
+  const events = await fetchAll(() => supabase.from('uez_zone_business_events')
+    .select('kind, detected_at').eq('zone_name', zone).gte('detected_at', fetchStart));
+  const emails = await fetchAll(() => supabase.from('uez_zone_email_log')
+    .select('kind, created_at').eq('org_id', org.id).gte('created_at', fetchStart).like('kind', 'reminder%'));
+
+  // Count a set of timestamps in each window.
+  const windows = (stamps) => ({
+    rolling_30: stamps.filter((t) => t >= thirtyAgo).length,
+    rolling_7: stamps.filter((t) => t >= sevenAgo).length,
+    ytd: stamps.filter((t) => t >= yearStart).length
+  });
+  const stampsFor = (pred) => events.filter(pred).map((e) => e.detected_at);
+  const recertStamps = stampsFor((e) => e.kind === 'recertified');
+  const annualStamps = stampsFor((e) => e.kind === 'annual_filed');
+  const signupStamps = stampsFor((e) => e.kind === 'new_business');
+  const inactivStamps = stampsFor((e) => e.kind === 'inactivated');
+  const filingStamps = [...recertStamps, ...annualStamps];
+  const reminderStamps = emails.map((e) => e.created_at);
+
+  // 12-month calendar series (oldest → newest) for filings, signups, recerts.
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+    const lo = d.toISOString(), hi = next.toISOString();
+    const inM = (stamps) => stamps.filter((t) => t >= lo && t < hi).length;
+    months.push({
+      label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
+      filings: inM(filingStamps), signups: inM(signupStamps), recerts: inM(recertStamps)
+    });
+  }
+
+  res.json({
+    zone,
+    metrics: {
+      filings: windows(filingStamps),
+      recerts: windows(recertStamps),
+      annuals: windows(annualStamps),
+      signups: windows(signupStamps),
+      inactivations: windows(inactivStamps),
+      reminders: windows(reminderStamps)
+    },
+    months
   });
 }));
 
@@ -399,6 +487,19 @@ router.post('/orgs/:orgId/businesses/:fileNo/send-reminder', wrap(async (req, re
     file_no: b.file_no, org_id: org.id, user_id: req.user.id, user_email: req.user.email,
     channel: 'email', outcome: result.status === 'sent' ? 'reminder_sent' : 'reminder_test',
     note: `${built.kind === 'reminder_recert' ? 'Recert' : 'Annual'} reminder ${result.status === 'sent' ? 'emailed' : 'tested'} → ${result.to}`
+  });
+  res.json(result);
+}));
+
+// ---------- Request a business's PBS login (sends the capture link) ----------
+router.post('/orgs/:orgId/businesses/:fileNo/request-login', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const settings = await must(supabase.from('uez_zone_orgs').select('*').eq('id', org.id).single());
+  const result = await createInvite({ org: settings, fileNo: req.params.fileNo, userId: req.user.id, userEmail: req.user.email });
+  // Log it on the outreach timeline so the office has a record.
+  await supabase.from('uez_zone_outreach').insert({
+    file_no: req.params.fileNo, org_id: org.id, user_id: req.user.id, user_email: req.user.email,
+    channel: 'email', outcome: 'login_invite', note: `Sent assisted-recert login link → ${result.to}`
   });
   res.json(result);
 }));

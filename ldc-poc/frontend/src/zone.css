@@ -225,3 +225,51 @@ button.z-stat:hover{border-color:#c9cdf0}
 /* v8: backfill progress */
 .z-progress{height:8px;background:#eef0f5;border-radius:99px;overflow:hidden;margin-top:12px}
 .z-progress-bar{height:100%;background:var(--blue);transition:width .4s}
+
+/* ---- Business list: seg counts + status pill in table ---- */
+.z-seg-n{display:inline-block;margin-left:5px;font-size:11px;font-weight:800;opacity:.6}
+.z-seg button.on .z-seg-n{opacity:.75}
+.z-table .z-pill.ok{margin-left:0}
+.z-pill.inactive{background:#eef0f5;color:#8b94a4}
+
+/* ---- Stats board ---- */
+.z-statsboard{display:flex;flex-direction:column;gap:20px}
+.z-sb-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.z-sb-block{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 17px;border-left:3px solid var(--line)}
+.z-sb-block.blue{border-left-color:var(--blue)} .z-sb-block.green{border-left-color:var(--green)} .z-sb-block.red{border-left-color:var(--red)}
+.z-sb-label{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.z-sb-nums{display:flex;gap:16px;margin-top:10px}
+.z-sb-nums>div{display:flex;flex-direction:column}
+.z-sb-nums .n{font-size:24px;font-weight:800;line-height:1.1}
+.z-sb-nums .l{font-size:11px;color:var(--mut);font-weight:600;margin-top:2px}
+
+/* ---- 12-month bar chart ---- */
+.z-chart{display:flex;align-items:flex-end;gap:8px;height:190px;margin-top:14px;padding-top:18px}
+.z-chart-col{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;min-width:0}
+.z-chart-bar{width:72%;max-width:38px;background:var(--blue);border-radius:6px 6px 0 0;min-height:3px;position:relative;transition:height .3s}
+.z-chart-val{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;color:var(--ink2)}
+.z-chart-x{font-size:10.5px;color:var(--mut);margin-top:7px;white-space:nowrap}
+
+@media (max-width:720px){ .z-sb-grid{grid-template-columns:1fr} }
+
+/* ---- PBS login (assisted recert) ---- */
+.z-login{border-radius:11px;padding:11px 13px;font-size:13.5px;line-height:1.5;margin-bottom:10px}
+.z-login.on{background:var(--green-soft);color:#1f6b45}
+.z-login.wait{background:var(--blue-soft);color:var(--blue-ink)}
+.z-login.bad{background:var(--amber-soft);color:var(--amber)}
+.z-login-key{font-size:15px}
+.z-key-badge{margin-left:6px;font-size:12px;vertical-align:middle}
+.z-btn{margin-top:12px}
+
+/* ---- Enrollment page (business-facing) ---- */
+.z-enroll{max-width:430px}
+.z-enroll-note{margin-top:16px;background:#f2f4f8;border-radius:10px;padding:11px 13px;font-size:12.5px;color:var(--ink2);line-height:1.5;text-align:left}
+.z-enroll-done{text-align:center}
+.z-enroll-check{width:56px;height:56px;border-radius:50%;background:var(--green-soft);color:var(--green);font-size:30px;font-weight:800;display:grid;place-items:center;margin:0 auto 14px}
+
+/* ---- Business profile flags + employment table (drawer) ---- */
+.z-flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.z-flag{font-size:11.5px;font-weight:700;color:var(--blue-ink);background:var(--blue-soft);padding:4px 9px;border-radius:999px}
+.z-emp{margin-top:4px}
+.z-emp-table th,.z-emp-table td{padding:7px 10px;font-size:12.5px;white-space:nowrap}
+.z-emp-table thead th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
