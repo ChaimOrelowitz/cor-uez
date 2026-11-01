@@ -19,7 +19,9 @@ function nextAnniversary(b, from) {
 
 // The next UEZ filing due: annual or recert, whichever comes first.
 function deadlineFor(b, now = today()) {
-  if (b.status === 'I') return { bucket: 'inactive', deadline: null, deadline_type: null, days: null, other: null };
+  // State status is authoritative: once the state inactivates a business, that supersedes
+  // any internal status we'd compute.
+  if (b.status === 'I') return { bucket: 'inactive', internal_status: 'inactive', deadline: null, deadline_type: null, days: null, other: null };
   let deadline = null; let type = null; let source = null;
   if (b.on_late_report || b.on_due_report) {
     deadline = parse(b.report_next_due); type = b.report_type; source = 'state_report';
@@ -48,8 +50,14 @@ function deadlineFor(b, now = today()) {
     const od = daysBetween(otherDate, now);
     if (od != null && od >= 0 && otherDate.getTime() !== deadline.getTime()) other = { type: otherType, days: od, date: iso(otherDate) };
   }
+  // EZMinder internal status — catches the in-betweeners the state still lists as Active.
+  const internal_status = bucket === 'late' ? 'overdue'
+    : bucket === 'due_30' ? 'due_soon'
+    : (bucket === 'due_60' || bucket === 'due_90') ? 'upcoming'
+    : 'current';
   return {
     bucket,
+    internal_status,
     deadline: iso(deadline),
     deadline_type: type,
     deadline_source: source,

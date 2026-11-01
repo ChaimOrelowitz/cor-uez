@@ -6,6 +6,8 @@ import './zone.css';
 
 const TYPE_LABEL = { AR: 'Annual report', RCRT: 'Recertification' };
 const BUCKET_LABEL = { late: 'Overdue', due_30: 'Due ≤30 days', due_60: 'Due 31–60', due_90: 'Due 61–90', ok: 'Up to date', inactive: 'Inactive' };
+// EZMinder internal status (for businesses the state still lists Active).
+const INTERNAL = { current: 'Current', upcoming: 'Upcoming', due_soon: 'Due soon', overdue: 'Overdue', inactive: 'Inactive' };
 const OUTCOMES = [
   ['reached', 'Reached them'], ['left_message', 'Left voicemail'], ['no_answer', 'No answer'],
   ['helped_file', 'Helped them file'], ['already_filed', 'Says already filed'], ['wrong_contact', 'Wrong contact info'], ['other', 'Other']
@@ -17,6 +19,18 @@ function fmtDate(d) { if (!d) return '—'; const [y, m, day] = String(d).slice(
 function fmtWhen(ts) { if (!ts) return '—'; return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 function daysText(d) { if (d == null) return ''; if (d < 0) return `${Math.abs(d).toLocaleString()}d late`; if (d === 0) return 'today'; return `in ${d}d`; }
 function money(n) { return n == null ? '—' : `$${Number(n).toLocaleString()}`; }
+function fmtCell(v, type) {
+  if (v == null || v === '') return '';
+  if (type === 'date') return fmtDate(v);
+  if (type === 'money') return typeof v === 'number' ? `$${v.toLocaleString()}` : v;
+  return v;
+}
+function toCsv(columns, rows) {
+  const esc = (s) => { s = s == null ? '' : String(s); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const head = columns.map((c) => esc(c.label)).join(',');
+  const body = rows.map((r) => columns.map((c) => esc(fmtCell(r[c.key], c.type))).join(',')).join('\n');
+  return `${head}\n${body}`;
+}
 function title(s) {
   return String(s || '').toLowerCase().replace(/(^|[\s\-/&(.,#])([a-z])/g, (_, p, c) => p + c.toUpperCase()).replace(/\bLlc\b/g, 'LLC').replace(/\bInc\b/g, 'Inc');
 }
@@ -26,6 +40,7 @@ const ICONS = {
   biz: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /></>,
   state: <><path d="M4 19V5M4 19h16M8 15l4-5 3 3 4-6" /></>,
   stats: <><path d="M4 20V4M4 20h16M8 20v-6M12.5 20V8M17 20v-9" /></>,
+  report: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" /></>,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1 2 2 0 0 1-4 0 1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4.6 15a2 2 0 0 1 0-4 1.6 1.6 0 0 0-1.1-2.7 2 2 0 0 1 2.8-2.8 1.6 1.6 0 0 0 2.7-1.1 2 2 0 0 1 4 0A1.6 1.6 0 0 0 18.4 5.4a2 2 0 0 1 2.8 2.8A1.6 1.6 0 0 0 20.4 11a2 2 0 0 1 0 4Z" /></>,
   admin: <><path d="M12 3l8 4v5c0 4.4-3.1 7.9-8 9-4.9-1.1-8-4.6-8-9V7z" /></>
 };
@@ -89,6 +104,19 @@ function PortalSetup({ org, status, onSaved, embedded }) {
   );
 }
 
+// Collapsible section (used for secondary detail in the drawer).
+function Collapsible({ title: heading, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="z-collapse">
+      <button className="z-collapse-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <h3>{heading}</h3><span className="z-chev">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && <div className="z-collapse-body">{children}</div>}
+    </section>
+  );
+}
+
 // ---------------- Business drawer ----------------
 function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
   const [data, setData] = useState(null); const [err, setErr] = useState('');
@@ -128,11 +156,14 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
           <>
             <div className="z-drawer-head">
               <div className="z-drawer-pills">
-                <span className={`z-pill ${b.status === 'I' ? 'inactive' : 'ok'}`}>{b.status === 'I' ? 'Inactive' : 'Active'}</span>
-                {b.status !== 'I' && b.bucket !== 'ok' && b.days != null && (
-                  <span className={`z-pill ${b.bucket}`}>{b.days < 0
-                    ? `${b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'} overdue ${Math.abs(b.days).toLocaleString()}d`
-                    : `${b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'} due in ${b.days}d`}</span>
+                <span className={`z-pill ${b.status === 'I' ? 'inactive' : 'ok'}`} title="State status">{b.status === 'I' ? 'Inactive' : 'Active'}</span>
+                {b.status !== 'I' && (
+                  <span className={`z-ipill ${b.internal_status}`} title="EZMinder status">
+                    {INTERNAL[b.internal_status] || 'Current'}
+                    {b.days != null && b.internal_status !== 'current'
+                      ? ` · ${b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'} ${b.days < 0 ? `overdue ${Math.abs(b.days).toLocaleString()}d` : `in ${b.days}d`}`
+                      : ''}
+                  </span>
                 )}
               </div>
               <h2>{title(b.trade_name || b.name)}</h2>
@@ -241,6 +272,54 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
                 </ul>
               </section>
             )}
+
+            <Collapsible title="Full business details">
+              {(() => {
+                const pf = [];
+                if (b.entity_type) pf.push(['Entity type', title(b.entity_type)]);
+                if (b.business_size) pf.push(['Business size', title(b.business_size)]);
+                if (b.began_date) pf.push(['In business since', fmtDate(b.began_date)]);
+                if (b.permit_no) pf.push(['UEZ permit #', b.permit_no]);
+                if (b.nj_tax) pf.push(['NJ Tax #', b.nj_tax]);
+                if (b.nature) pf.push(['Nature of business', title(b.nature)]);
+                if (b.mailing_address) pf.push(['Mailing address', title(b.mailing_address)]);
+                if (b.block || b.lot) pf.push(['Block / Lot', `${b.block || '—'} / ${b.lot || '—'}`]);
+                if (b.total_invest != null) pf.push(['Total investment', money(b.total_invest)]);
+                if (b.tax_status) pf.push(['Tax status', b.tax_status]);
+                const flags = [b.minority_owned && 'Minority-owned', b.women_owned && 'Women-owned', b.new_business && 'New business'].filter(Boolean);
+                return (
+                  <>
+                    {pf.length > 0 && <div className="z-kv">{pf.map(([k, v]) => <React.Fragment key={k}><span>{k}</span><strong>{v}</strong></React.Fragment>)}</div>}
+                    {flags.length > 0 && <div className="z-flags">{flags.map((f) => <span className="z-flag" key={f}>{f}</span>)}</div>}
+                    {Array.isArray(b.employment) && b.employment.length > 0 && (
+                      <div className="z-table-wrap z-emp" style={{ marginTop: 12 }}>
+                        <table className="z-table z-emp-table">
+                          <thead><tr><th>Year</th><th>Full-time</th><th>New hires</th><th>Capital</th><th>Tax savings</th></tr></thead>
+                          <tbody>
+                            {[...b.employment]
+                              .sort((a, c) => String(c.program_year || c.date || '').localeCompare(String(a.program_year || a.date || '')))
+                              .slice(0, 12)
+                              .map((r, i) => {
+                                const ts = (r.uz4_savings || 0) + (r.uz5_savings || 0);
+                                return (
+                                  <tr key={i}>
+                                    <td>{r.program_year || (r.date ? fmtDate(r.date) : '—')}{r.app_status === 'I' && <span className="z-muted small"> · inactive</span>}</td>
+                                    <td>{r.ft_actual ?? '—'}{r.pct_25 ? <span className="z-muted small"> · {r.pct_25}</span> : ''}</td>
+                                    <td>{r.new_hires ?? '—'}</td>
+                                    <td>{money(r.capital_actual)}</td>
+                                    <td>{ts ? money(ts) : '—'}</td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <button className="z-link" style={{ marginTop: 12 }} onClick={() => setShowSheet(true)}>Open the full summary sheet →</button>
+                  </>
+                );
+              })()}
+            </Collapsible>
           </>
         )}
       </aside>
@@ -418,7 +497,9 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
             {rows.slice(page * PAGE, (page + 1) * PAGE).map((b) => (
               <tr key={b.file_no} onClick={() => onOpen(b.file_no)}>
                 <td><strong>{title(b.trade_name || b.name)}</strong>{b.login_status === 'ok' && <span className="z-key-badge" title="PBS login on file">🔑</span>}<div className="z-muted small">#{b.file_no}</div></td>
-                <td>{b.status === 'I' ? <span className="z-pill inactive">Inactive</span> : <span className="z-pill ok">Active</span>}</td>
+                <td>{b.status === 'I'
+                  ? <span className="z-pill inactive">Inactive</span>
+                  : <div className="z-statuscell"><span className="z-pill ok">Active</span><span className={`z-ipill ${b.internal_status}`}>{INTERNAL[b.internal_status] || 'Current'}</span></div>}</td>
                 <td>{b.status === 'I' ? <span className="z-muted small">—</span> : <span className={`z-type ${b.deadline_type}`}>{b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'}</span>}</td>
                 <td>{b.status !== 'I' && b.deadline ? <>{fmtDate(b.deadline)} <span className={`z-days ${b.bucket}`}>{daysText(b.days)}</span></> : '—'}</td>
                 <td className="z-hide-sm">{title(b.contact_name) || '—'}<div className="z-muted small">{b.contact_phone || b.contact_email || ''}</div></td>
@@ -465,6 +546,64 @@ function Statewide({ org, onPickZone }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ---------------- Reports ----------------
+function ReportsPage({ org }) {
+  const [list, setList] = useState(null); const [sel, setSel] = useState(null);
+  const [data, setData] = useState(null); const [q, setQ] = useState(''); const [sort, setSort] = useState(null); const [err, setErr] = useState('');
+  useEffect(() => { zoneApi.reportsList(org.id).then((r) => { setList(r.reports); if (r.reports[0]) setSel(r.reports[0].key); }).catch((e) => setErr(e.message)); }, [org.id]);
+  useEffect(() => { if (!sel) return; setData(null); setQ(''); setSort(null); zoneApi.report(org.id, sel).then(setData).catch((e) => setErr(e.message)); }, [sel, org.id]);
+  const rows = useMemo(() => {
+    if (!data) return [];
+    let r = data.rows; const n = q.trim().toLowerCase();
+    if (n) r = r.filter((row) => data.columns.some((c) => String(row[c.key] ?? '').toLowerCase().includes(n)));
+    if (sort) { const { key, dir } = sort; r = [...r].sort((a, b) => { const x = a[key], y = b[key]; if (x == null || x === '') return 1; if (y == null || y === '') return -1; const c = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y)); return dir === 'desc' ? -c : c; }); }
+    return r;
+  }, [data, q, sort]);
+  function download() { if (!data) return; const blob = new Blob([toCsv(data.columns, rows)], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${sel}.csv`; a.click(); URL.revokeObjectURL(url); }
+  if (err) return <div className="z-alert bad">{err}</div>;
+  if (!list) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading reports…</div>;
+  const groups = [...new Set(list.map((r) => r.group))];
+  return (
+    <div className="z-reports">
+      <aside className="z-rep-list">
+        {groups.map((g) => (
+          <div key={g}>
+            <div className="z-rep-group">{g}</div>
+            {list.filter((r) => r.group === g).map((r) => (
+              <button key={r.key} className={`z-rep-item ${sel === r.key ? 'on' : ''}`} onClick={() => setSel(r.key)}>{r.label}</button>
+            ))}
+          </div>
+        ))}
+      </aside>
+      <div className="z-rep-main">
+        {!data ? <div className="z-card z-muted" style={{ padding: 20 }}>Loading…</div> : (
+          <>
+            <div className="z-toolbar">
+              <h2 className="z-h2" style={{ margin: 0, flex: 1 }}>{data.label} <span className="z-muted small">· {rows.length.toLocaleString()} rows</span></h2>
+              <input className="z-search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <button className="btn" onClick={download}>⬇ Download CSV</button>
+            </div>
+            <div className="z-card z-table-wrap">
+              <table className="z-table">
+                <thead><tr>{data.columns.map((c) => (
+                  <th key={c.key} className="z-sortable" onClick={() => setSort((s) => (s && s.key === c.key ? { key: c.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: c.key, dir: 'asc' }))}>
+                    {c.label}{sort && sort.key === c.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </th>
+                ))}</tr></thead>
+                <tbody>
+                  {rows.slice(0, 500).map((r, i) => <tr key={i}>{data.columns.map((c) => <td key={c.key}>{fmtCell(r[c.key], c.type)}</td>)}</tr>)}
+                  {!rows.length && <tr><td colSpan={data.columns.length} className="z-muted" style={{ padding: 16 }}>No rows.</td></tr>}
+                </tbody>
+              </table>
+              {rows.length > 500 && <div className="z-muted small" style={{ padding: '10px 14px' }}>Showing first 500 of {rows.length.toLocaleString()} — Download CSV for all.</div>}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -526,10 +665,10 @@ function Settings({ org, status, onReconnect, me }) {
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [testTo, setTestTo] = useState('');
   const canEdit = org.role === 'admin';
   useEffect(() => { zoneApi.settings(org.id).then((r) => setS(r)).catch((e) => setMsg(e.message)); }, [org.id]);
-  useEffect(() => { zoneApi.myProfile().then((r) => { const m = r.memberships.find((x) => x.org_id === org.id) || r.memberships[0] || {}; setProf({ first_name: m.first_name || '', last_name: m.last_name || '', phone: m.phone || '' }); setTestTo(r.email || ''); }).catch(() => {}); }, [org.id]);
+  useEffect(() => { zoneApi.myProfile().then((r) => { setProf({ first_name: r.first_name || '', last_name: r.last_name || '', phone: r.phone || '' }); setTestTo(r.email || ''); }).catch(() => {}); }, [org.id]);
 
   async function saveSettings(patch) { setBusy(true); setMsg(''); try { const r = await zoneApi.saveSettings(org.id, patch); setS((cur) => ({ ...cur, settings: r.settings })); setMsg('Saved.'); } catch (e) { setMsg(e.message); } setBusy(false); }
-  async function saveProfile() { setBusy(true); setMsg(''); try { await zoneApi.saveProfile(prof); setMsg('Profile saved.'); } catch (e) { setMsg(e.message); } setBusy(false); }
+  async function saveProfile() { setBusy(true); setMsg(''); try { await zoneApi.saveProfile(prof); setMsg('Profile saved.'); onReconnect?.(); } catch (e) { setMsg(e.message); } setBusy(false); }
   async function sendTest() { setBusy(true); setMsg(''); try { const r = await zoneApi.testEmail(org.id, testTo); setMsg(`Test sent to ${r.to}.`); } catch (e) { setMsg(e.message); } setBusy(false); }
 
   if (!s) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading settings…</div>;
@@ -749,7 +888,7 @@ export default function ZonePage() {
   const needsSetup = status && (!status.login || status.login.status === 'failed');
   const goBusinesses = (bucket) => { setListBucket(bucket); setViewZone(null); setView('businesses'); };
 
-  const NAV = [['home', 'Home', ICONS.home], ['businesses', 'Businesses', ICONS.biz], ['stats', 'Stats', ICONS.stats], ['state', 'All zones', ICONS.state], ['settings', 'Settings', ICONS.settings]];
+  const NAV = [['home', 'Home', ICONS.home], ['businesses', 'Businesses', ICONS.biz], ['reports', 'Reports', ICONS.report], ['stats', 'Stats', ICONS.stats], ['state', 'All zones', ICONS.state], ['settings', 'Settings', ICONS.settings]];
   if (me?.isPlatformAdmin) NAV.push(['admin', 'Admin', ICONS.admin]);
 
   return (
@@ -772,7 +911,7 @@ export default function ZonePage() {
           <>
             <div className="z-top">
               <div>
-                <h1 className="z-h1">{viewZone ? title(viewZone) : view === 'home' ? 'Good morning, Moshe' : view === 'businesses' ? 'Businesses' : view === 'stats' ? 'Stats' : view === 'state' ? 'All zones' : view === 'settings' ? 'Settings' : 'Admin'}</h1>
+                <h1 className="z-h1">{viewZone ? title(viewZone) : view === 'home' ? `Good morning${me?.first_name ? `, ${me.first_name}` : ''}` : view === 'businesses' ? 'Businesses' : view === 'reports' ? 'Reports' : view === 'stats' ? 'Stats' : view === 'state' ? 'All zones' : view === 'settings' ? 'Settings' : 'Admin'}</h1>
                 {view === 'home' && !viewZone && <p className="z-sub">{status.syncing ? 'Syncing with the state portal…' : `${(status.runs?.find((r) => r.status === 'ok')?.stats?.details_remaining) ? 'Loading business details…' : "Here's your zone today."}`}</p>}
               </div>
               <div className="z-synced">
@@ -789,6 +928,7 @@ export default function ZonePage() {
 
             {!needsSetup && !viewZone && view === 'home' && <Home org={org} refreshKey={refreshKey} onOpen={setOpen} onGoBusinesses={goBusinesses} />}
             {!needsSetup && !viewZone && view === 'businesses' && <BusinessList org={org} zone={org.zone_name} initialBucket={listBucket} refreshKey={refreshKey} onOpen={setOpen} />}
+            {!needsSetup && !viewZone && view === 'reports' && <ReportsPage org={org} />}
             {!needsSetup && !viewZone && view === 'stats' && <StatsBoard org={org} />}
             {!needsSetup && view === 'state' && !viewZone && <Statewide org={org} onPickZone={(z) => (z === org.zone_name ? setView('businesses') : setViewZone(z))} />}
             {viewZone && <><button className="z-link" style={{ marginBottom: 12 }} onClick={() => setViewZone(null)}>← All zones</button><BusinessList org={org} zone={viewZone} refreshKey={refreshKey} onOpen={setOpen} /></>}

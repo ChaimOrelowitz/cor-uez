@@ -278,3 +278,30 @@ button.z-stat:hover{border-color:#c9cdf0}
 .z-drawer-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 .z-drawer-pills .z-pill.ok{margin-left:0}
 .z-sheet-btn{width:100%;font-weight:700}
+
+/* ---- Internal status pill (EZMinder's own status) ---- */
+.z-ipill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.z-ipill.current{background:var(--green-soft);color:var(--green)}
+.z-ipill.upcoming{background:var(--blue-soft);color:var(--blue-ink)}
+.z-ipill.due_soon{background:var(--amber-soft);color:var(--amber)}
+.z-ipill.overdue{background:var(--red-soft);color:var(--red)}
+.z-ipill.inactive{background:#eef0f5;color:#8b94a4}
+.z-statuscell{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+
+/* ---- Collapsible drawer section ---- */
+.z-collapse{border-top:1px solid var(--line2);margin-top:4px}
+.z-collapse-head{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:0;padding:14px 0 10px;cursor:pointer;font-family:inherit}
+.z-collapse-head h3{margin:0}
+.z-collapse-body{padding-bottom:12px}
+
+/* ---- Reports ---- */
+.z-reports{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
+.z-rep-list{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;position:sticky;top:16px}
+.z-rep-group{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);padding:10px 10px 4px}
+.z-rep-item{display:block;width:100%;text-align:left;border:0;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--ink2);padding:8px 10px;border-radius:8px;cursor:pointer}
+.z-rep-item:hover{background:#f3f5f9}
+.z-rep-item.on{background:var(--blue-soft);color:var(--blue-ink)}
+.z-rep-main{min-width:0}
+.z-table th.z-sortable{cursor:pointer;user-select:none;white-space:nowrap}
+.z-table th.z-sortable:hover{color:var(--blue-ink)}
+@media (max-width:760px){ .z-reports{grid-template-columns:1fr} .z-rep-list{position:static} }

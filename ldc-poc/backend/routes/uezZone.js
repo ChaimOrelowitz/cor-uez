@@ -6,6 +6,7 @@ const { requireUezAuth } = require('../middleware/uezAuth');
 const { runZoneSync, savePortalLogin, isSyncRunning, runInactiveBackfill, runDetailBackfill, isBackfilling } = require('../services/uezZoneSync');
 const { reminderEmail, sendBusinessEmail, sendViaResend, loadTemplates, previewTemplate, DEFAULT_TEMPLATES, MERGE_FIELDS } = require('../services/uezEmail');
 const { createInvite, loginStatusMap } = require('../services/uezBusinessLogin');
+const { listReports, buildReport } = require('../services/uezReports');
 
 const router = express.Router();
 router.use(requireUezAuth);
@@ -63,7 +64,20 @@ function shape(b, ownZone) {
 
 // ---------- Routes ----------
 router.get('/me', wrap(async (req, res) => {
-  res.json({ email: req.user.email, isPlatformAdmin: isPlatformAdmin(req), orgs: await myOrgs(req) });
+  res.json({ email: req.user.email, first_name: req.user.first_name || '', isPlatformAdmin: isPlatformAdmin(req), orgs: await myOrgs(req) });
+}));
+
+// ---------- Reports ----------
+router.get('/orgs/:orgId/reports', wrap(async (req, res) => {
+  await loadOrg(req);
+  res.json({ reports: listReports() });
+}));
+
+router.get('/orgs/:orgId/reports/:key', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  const report = await buildReport(org, req.params.key);
+  if (!report) throw httpError(404, 'Unknown report.');
+  res.json(report);
 }));
 
 router.get('/orgs/:orgId/status', wrap(async (req, res) => {
@@ -304,12 +318,27 @@ router.get('/orgs/:orgId/home', wrap(async (req, res) => {
     .select('kind, file_no, detected_at, uez_zone_businesses(name, trade_name)')
     .eq('zone_name', zone).order('detected_at', { ascending: false }).limit(8));
 
-  // Businesses the state inactivated in the last 30 days (from the real inactivation date).
+  // Recently inactivated (last 30 days). App-detected inactivation events are the primary
+  // signal — immediate, no state date needed (catches businesses the state just flipped to
+  // Inactive before an inactivation date exists) — plus any with a real state date.
   const thirtyAgoDate = new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10);
   const lostRows = await must(supabase.from('uez_zone_businesses')
     .select('file_no, name, trade_name, inactivated_date')
     .eq('zone_name', zone).gte('inactivated_date', thirtyAgoDate).order('inactivated_date', { ascending: false }).limit(50));
-  const lostRecently = lostRows.map((b) => ({ file_no: b.file_no, name: b.trade_name || b.name, detected_at: b.inactivated_date }));
+  const lostSeen = new Set();
+  const lostRecently = [];
+  for (const e of events.filter((ev) => ev.kind === 'inactivated' && ev.detected_at >= thirtyAgo)
+    .sort((a, b) => (a.detected_at < b.detected_at ? 1 : -1))) {
+    if (lostSeen.has(e.file_no)) continue;
+    lostSeen.add(e.file_no);
+    lostRecently.push({ file_no: e.file_no, name: e.uez_zone_businesses?.trade_name || e.uez_zone_businesses?.name, detected_at: e.detected_at });
+  }
+  for (const b of lostRows) {
+    if (lostSeen.has(b.file_no)) continue;
+    lostSeen.add(b.file_no);
+    lostRecently.push({ file_no: b.file_no, name: b.trade_name || b.name, detected_at: b.inactivated_date });
+  }
+  lostRecently.splice(50);
 
   // Emails the platform processed this week (sent, or logged in test mode) — proof it's working.
   const weekEmails = await fetchAll(() => supabase.from('uez_zone_email_log').select('id, kind').eq('org_id', org.id).gte('created_at', weekAgo));
@@ -455,18 +484,17 @@ router.delete('/orgs/:orgId/templates/:kind', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---------- My profile ----------
+// ---------- My profile (stored on the shared per-user `profiles` row, which is also
+// what identifies the user app-wide — so the name sticks and the greeting updates). ----------
 router.get('/me/profile', wrap(async (req, res) => {
-  const row = await must(supabase.from('uez_zone_members').select('org_id, role, first_name, last_name, phone, email').eq('user_id', req.user.id));
-  res.json({ email: req.user.email, memberships: row });
+  res.json({ email: req.user.email, first_name: req.user.first_name || '', last_name: req.user.last_name || '', phone: req.user.phone || '' });
 }));
 
 router.put('/me/profile', wrap(async (req, res) => {
-  const patch = {};
+  const patch = { id: req.user.id, email: req.user.email };
   for (const f of ['first_name', 'last_name', 'phone']) if (f in req.body) patch[f] = String(req.body[f] || '').slice(0, 120) || null;
-  patch.email = req.user.email;
-  await must(supabase.from('uez_zone_members').update(patch).eq('user_id', req.user.id));
-  res.json({ ok: true });
+  await must(supabase.from('profiles').upsert(patch, { onConflict: 'id' }));
+  res.json({ ok: true, first_name: patch.first_name, last_name: patch.last_name, phone: patch.phone });
 }));
 
 // ---------- Send a reminder now ----------
