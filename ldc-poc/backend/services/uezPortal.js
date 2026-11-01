@@ -199,6 +199,50 @@ class UezPortal {
     return res.body;
   }
 
+  // Bulk "Data Download" CSV from the Reports page (every business, all fields).
+  // Replicates the APEX page-13 submit (request SUBDOWNLD), same mechanism as login().
+  async fetchDataDownloadCsv(status = 'B') {
+    if (!this.session) await this.login();
+    const page = await this.http(`f?p=404:13:${this.session}`);
+    const html = page.body;
+    const instance = inputValue(html, 'pInstance') || this.session;
+    const salt = inputValue(html, 'pSalt');
+    const submissionId = inputValue(html, 'pPageSubmissionId');
+    const protectedItems = inputValue(html, 'pPageItemsProtected');
+    if (!salt) throw new PortalError('layout', 'Reports page did not load as expected.');
+    // Zone value (single-zone users have exactly one option).
+    const zoneSel = (html.match(/id="P13_ZONE_DL"[\s\S]*?<\/select>/i) || [])[0] || '';
+    const zoneVal = (zoneSel.match(/<option[^>]*value="(\d+)"/i) || [])[1] || '';
+
+    const item = (n, v) => { const ck = checksumFor(html, n); return { n, v, ...(ck ? { ck } : {}) }; };
+    const items = [
+      item('P13_DATA_DOWNLOAD', '1'),
+      item('P13_ZONE_DL', zoneVal),
+      item('P13_STATUS_DL', status),
+      item('P13_ADHOC_LIST', '0')
+    ];
+    const pJson = { salt, pageItems: { itemsToSubmit: items, protected: protectedItems, rowVersion: '', formRegionChecksums: [] } };
+    const form = new URLSearchParams({
+      p_json: JSON.stringify(pJson),
+      p_flow_id: '404',
+      p_flow_step_id: '13',
+      p_instance: instance,
+      p_page_submission_id: submissionId,
+      p_request: 'SUBDOWNLD',
+      p_reload_on_submit: 'A'
+    });
+    const res = await this.http(`wwv_flow.accept?p_context=404:13:${instance}`, {
+      method: 'POST',
+      body: form.toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: BASE, Referer: page.url, Accept: 'text/csv,*/*' }
+    });
+    if (!/UEZFILE#/i.test(res.body)) {
+      const snippet = String(res.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+      throw new PortalError('layout', `Data Download did not return the CSV. Got: ${snippet}`);
+    }
+    return res.body;
+  }
+
   async fetchDetailHtml(fileNo, zoneId, status = 'A') {
     if (!this.session) await this.login();
     const res = await this.http(`f?p=404:3:${this.session}:::2:P3_FILE_NUM,P3_ZONE_ID_HIDDEN,CURR_STATUS:${encodeURIComponent(fileNo)},${encodeURIComponent(zoneId || '')},${encodeURIComponent(status)}`);

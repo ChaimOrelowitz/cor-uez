@@ -236,3 +236,21 @@ alter table uez_zone_businesses add column if not exists salutation text;    -- 
 alter table uez_zone_businesses add column if not exists req_25 text;        -- 25% required (Y/N)
 alter table uez_zone_businesses add column if not exists met_25 text;        -- 25% met (Y/N)
 alter table uez_zone_businesses add column if not exists dl_25 date;         -- 25% deadline
+
+-- v8: Data Download (bulk CSV export) — the pristine, complete data source.
+-- One download fills every business with all fields; dl_raw keeps all 75 columns.
+alter table uez_zone_businesses add column if not exists fax text;
+alter table uez_zone_businesses add column if not exists nj_reg text;
+alter table uez_zone_businesses add column if not exists uz1 text;
+alter table uez_zone_businesses add column if not exists total_invest bigint;
+alter table uez_zone_businesses add column if not exists total_uz4 bigint;
+alter table uez_zone_businesses add column if not exists total_uz5 bigint;
+alter table uez_zone_businesses add column if not exists tax_status text;
+alter table uez_zone_businesses add column if not exists reduced_tax text;
+alter table uez_zone_businesses add column if not exists ft_start int;
+alter table uez_zone_businesses add column if not exists ft_last int;
+alter table uez_zone_businesses add column if not exists pt_start int;
+alter table uez_zone_businesses add column if not exists pt_last int;
+alter table uez_zone_businesses add column if not exists inactivated_flag text;
+alter table uez_zone_businesses add column if not exists dl_raw jsonb;
+alter table uez_zone_businesses add column if not exists dl_synced_at timestamptz;

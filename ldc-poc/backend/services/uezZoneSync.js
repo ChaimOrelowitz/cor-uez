@@ -3,7 +3,7 @@ const supabase = require('../db/supabase');
 const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { UezPortal, PortalError, pdfToText } = require('./uezPortal');
 const { myNjLogin } = require('./uezMyNj');
-const { parseListing, parseDetail, parseDueReport, parseLateReport } = require('./uezParsers');
+const { parseListing, parseDetail, parseDueReport, parseLateReport, parseDataDownload } = require('./uezParsers');
 const { thankYouEmail, sendBusinessEmail, loadTemplates } = require('./uezEmail');
 
 // After a sync, email an automatic thank-you for each business that recertified since the run began.
@@ -176,6 +176,33 @@ async function syncReports(portal, stats) {
   for (const part of chunk(updatesKnown, 500)) await must(supabase.from('uez_zone_businesses').upsert(part, { onConflict: 'file_no' }));
 }
 
+// Bulk "Data Download" enrichment: one CSV fills every business with all fields.
+// Fast and complete — replaces per-business detail scraping for everything except the
+// year-by-year employment history (summary sheet). Owns all fields EXCEPT the event-driving
+// trio (status, last_annual_date, last_recert_date), which syncListing keeps authoritative.
+const DL_FIELDS = [
+  'name', 'trade_name', 'permit_no', 'cert_date', 'next_annual_due', 'next_recert_due', 'last_recert_date',
+  'req_25', 'met_25', 'dl_25', 'gfw', 're_entry', 'move_in', 'salutation', 'nj_tax', 'nj_reg', 'uz1',
+  'street', 'city', 'state', 'zip', 'owner_name', 'owner_title', 'phone', 'fax', 'mailing_address',
+  'nature', 'sic_code', 'sic_desc', 'naics_code', 'naics_desc', 'began_date', 'new_business',
+  'minority_owned', 'women_owned', 'entity_type', 'block', 'lot', 'total_invest', 'total_uz4', 'total_uz5',
+  'tax_status', 'reduced_tax', 'ft_start', 'ft_last', 'pt_start', 'pt_last', 'inactivated_flag', 'dl_raw'
+];
+async function syncDataDownload(portal, zoneName, stats) {
+  let csv;
+  try { csv = await portal.fetchDataDownloadCsv('B'); }
+  catch (e) { stats.data_download_error = e.message; console.error('data download failed:', e.message); return; }
+  const rows = parseDataDownload(csv);
+  stats.data_download = rows.length;
+  const upserts = rows.map((r) => {
+    const row = { file_no: r.file_no, zone_name: zoneName, in_zone_listing: true, dl_synced_at: nowIso(), updated_at: nowIso() };
+    for (const f of DL_FIELDS) if (r[f] !== undefined) row[f] = r[f];
+    if (r.email) row.email = r.email; // don't null out an existing email
+    return row;
+  });
+  for (const part of chunk(upserts, 500)) await must(supabase.from('uez_zone_businesses').upsert(part, { onConflict: 'file_no' }));
+}
+
 async function syncDetails(portal, zoneName, zoneId, stats) {
   const cutoff = new Date(Date.now() - DETAIL_MAX_AGE_DAYS * 864e5).toISOString();
   const candidates = await must(supabase.from('uez_zone_businesses')
@@ -329,6 +356,7 @@ async function runZoneSync(orgId, trigger = 'manual') {
       const zone = await must(supabase.from('uez_zones').select('*').eq('name', info.zoneName).maybeSingle());
       await syncListing(portal, info.zoneName, stats);
       await syncReports(portal, stats);
+      await syncDataDownload(portal, info.zoneName, stats);   // pristine bulk fill of all fields
       const zoneId = await syncDetails(portal, info.zoneName, zone?.state_zone_id, stats);
       if (zoneId && !zone?.state_zone_id) await must(supabase.from('uez_zones').update({ state_zone_id: zoneId }).eq('name', info.zoneName));
     } finally {

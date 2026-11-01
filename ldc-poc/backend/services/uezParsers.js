@@ -254,4 +254,112 @@ function parseLateReport(text) {
   return { runDate: reportRunDate(text), total: reportTotal(text), rows: out };
 }
 
-module.exports = { parseListing, parseDetail, parseDueReport, parseLateReport, isoDate };
+// ---------- Data Download CSV (bulk export: every business, 75 columns) ----------
+// RFC4180-ish CSV tokenizer: handles "quoted" fields, "" escapes, and \r\n / \r / \n.
+function parseCsv(text) {
+  const rows = []; let row = []; let field = ''; let inQ = false;
+  const s = String(text || '');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQ) {
+      if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\r') { if (s[i + 1] === '\n') i++; row.push(field); rows.push(row); row = []; field = ''; }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function usToIso(s) {
+  const iso = isoDate(s);
+  // The portal uses 06/06/1966 as a "no date" sentinel.
+  return iso === '1966-06-06' ? null : iso;
+}
+function money(s) {
+  const t = String(s ?? '').replace(/[$,\s]/g, '');
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+const yn = (s) => { const t = String(s ?? '').trim().toUpperCase(); return t === 'Y' || t === 'YES' ? true : t === 'N' || t === 'NO' ? false : null; };
+
+function parseDataDownload(csvText) {
+  const rows = parseCsv(csvText);
+  if (!rows.length) return [];
+  const header = rows[0].map((h) => h.trim());
+  const idx = {}; header.forEach((h, i) => { idx[h] = i; });
+  const col = (r, name) => clean(r[idx[name]]);
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const fileNo = col(r, 'UEZFILE#');
+    if (!fileNo) continue;
+    const met = col(r, '25%MET');
+    const owner = [col(r, 'CONTNAME1'), col(r, 'CONTNAME2'), col(r, 'CONTNAME3')].filter(Boolean).join(' ');
+    const mailing = [col(r, 'ML ADDRESS'), [col(r, 'ML CITY'), col(r, 'ML STATE')].filter(Boolean).join(', '), col(r, 'ML ZIP')].filter(Boolean).join(' ');
+    const lastAnnual = usToIso(col(r, 'ANNUAL DATE'));
+    out.push({
+      file_no: fileNo,
+      permit_no: col(r, 'PERMIT#') || null,
+      status: col(r, 'STATUS') || null,
+      name: col(r, 'CORPNAME') || null,
+      trade_name: col(r, 'TRADENAME') || null,
+      cert_date: usToIso(col(r, 'CERTDATE')),
+      last_annual_date: lastAnnual,
+      next_annual_due: lastAnnual ? (() => { const d = new Date(`${lastAnnual}T00:00:00Z`); d.setUTCFullYear(d.getUTCFullYear() + 1); return d.toISOString().slice(0, 10); })() : null,
+      next_recert_due: usToIso(col(r, 'RECERTDATE')),
+      last_recert_date: usToIso(col(r, 'RECERT PROC DATE')),
+      req_25: col(r, '25%REQ') || null,
+      met_25: met === 'NA' ? null : (met || null),
+      dl_25: usToIso(col(r, '25%DL')),
+      gfw: col(r, 'GFW') || null,
+      re_entry: col(r, 'RE-ENTRY') || null,
+      move_in: col(r, 'MOVE-IN') || null,
+      salutation: col(r, 'SAL') || null,
+      nj_tax: col(r, 'NJ TAX ID') || null,
+      nj_reg: col(r, 'NJREG') || null,
+      uz1: col(r, 'UZ1') || null,
+      street: col(r, 'ST ADDRESS') || null,
+      city: col(r, 'ST CITY') || null,
+      state: col(r, 'ST STATE') || null,
+      zip: col(r, 'ST ZIP') || null,
+      owner_name: owner || null,
+      owner_title: col(r, 'CONTITLE') || null,
+      phone: (col(r, 'CONTACT#') || '').replace(/\s*x\s*$/i, '').trim() || null,
+      fax: col(r, 'FAX') || null,
+      email: (col(r, 'E-MAIL') || '').toLowerCase() || null,
+      mailing_address: mailing || null,
+      nature: col(r, 'NATURE') || null,
+      sic_code: col(r, 'SIC') || null,
+      sic_desc: col(r, 'DESCRIPTION') || null,
+      naics_code: col(r, 'NAICS') || null,
+      naics_desc: col(r, 'NAICS DESCRIPTION') || null,
+      began_date: usToIso(col(r, 'BEGAN')),
+      new_business: yn(col(r, 'NEWBUS')),
+      minority_owned: yn(col(r, 'MINORITY')),
+      women_owned: yn(col(r, 'WOMAN')),
+      entity_type: col(r, 'TYPE') || null,
+      block: col(r, 'BLK ID') || null,
+      lot: col(r, 'LOT ID') || null,
+      total_invest: money(col(r, 'TOTAL INVEST')),
+      total_uz4: money(col(r, 'TOTAL UZ4')),
+      total_uz5: money(col(r, 'TOTAL UZ5')),
+      tax_status: col(r, 'TAX STATUS') || null,
+      reduced_tax: col(r, 'REDUCED TAX') || null,
+      ft_start: money(col(r, 'FTEMP START')),
+      ft_last: money(col(r, 'FTEMP LAST')),
+      pt_start: money(col(r, 'PTEMP START')),
+      pt_last: money(col(r, 'PTEMP LAST')),
+      inactivated_flag: col(r, 'INACTIVATED') || null,
+      // Full raw record (all 75 columns) so every field is available without more migrations.
+      dl_raw: Object.fromEntries(header.map((h, j) => [h, (r[j] ?? '').trim()]))
+    });
+  }
+  return out;
+}
+
+module.exports = { parseListing, parseDetail, parseDueReport, parseLateReport, parseDataDownload, isoDate };
