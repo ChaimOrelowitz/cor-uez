@@ -225,3 +225,14 @@ create table if not exists uez_zone_business_logins (
 create index if not exists uez_zone_business_logins_token_idx on uez_zone_business_logins (token);
 create index if not exists uez_zone_business_logins_org_idx on uez_zone_business_logins (org_id);
 alter table uez_zone_business_logins enable row level security;
+
+-- v7: full summary-sheet fields (to reproduce the portal's UEZ summary sheet exactly).
+alter table uez_zone_businesses add column if not exists fed_id text;        -- Fed # (EIN)
+alter table uez_zone_businesses add column if not exists nj_tax text;        -- NJ Tax #
+alter table uez_zone_businesses add column if not exists gfw text;           -- GFW
+alter table uez_zone_businesses add column if not exists re_entry text;      -- Re-Entry
+alter table uez_zone_businesses add column if not exists move_in text;       -- Move In
+alter table uez_zone_businesses add column if not exists salutation text;    -- owner salutation (MR./MS.)
+alter table uez_zone_businesses add column if not exists req_25 text;        -- 25% required (Y/N)
+alter table uez_zone_businesses add column if not exists met_25 text;        -- 25% met (Y/N)
+alter table uez_zone_businesses add column if not exists dl_25 date;         -- 25% deadline

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import supabase from './supabaseClient';
 import { zoneApi } from './zoneApi';
+import SummarySheet from './SummarySheet';
 import './zone.css';
 
 const TYPE_LABEL = { AR: 'Annual report', RCRT: 'Recertification' };
@@ -92,7 +93,7 @@ function PortalSetup({ org, status, onSaved, embedded }) {
 function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
   const [data, setData] = useState(null); const [err, setErr] = useState('');
   const [form, setForm] = useState({ channel: 'call', outcome: 'reached', note: '', follow_up_on: '' });
-  const [saving, setSaving] = useState(false); const [sending, setSending] = useState(false); const [requesting, setRequesting] = useState(false);
+  const [saving, setSaving] = useState(false); const [sending, setSending] = useState(false); const [requesting, setRequesting] = useState(false); const [showSheet, setShowSheet] = useState(false);
   const load = useCallback(() => { zoneApi.business(org.id, fileNo).then(setData).catch((e) => setErr(e.message)); }, [org.id, fileNo]);
   useEffect(() => { setData(null); setErr(''); load(); }, [load]);
 
@@ -118,6 +119,7 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
   const b = data?.business;
   const recertCount = (b?.employment || []).filter((r) => r.app_status === 'A').length;
   return (
+    <>
     <div className="z-drawer-backdrop" onClick={onClose}>
       <aside className="z-drawer" onClick={(e) => e.stopPropagation()}>
         <button className="z-close" onClick={onClose} aria-label="Close">×</button>
@@ -125,7 +127,14 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
         {!b ? <div className="z-muted">Loading…</div> : (
           <>
             <div className="z-drawer-head">
-              <span className={`z-pill ${b.bucket}`}>{BUCKET_LABEL[b.bucket]}</span>
+              <div className="z-drawer-pills">
+                <span className={`z-pill ${b.status === 'I' ? 'inactive' : 'ok'}`}>{b.status === 'I' ? 'Inactive' : 'Active'}</span>
+                {b.status !== 'I' && b.bucket !== 'ok' && b.days != null && (
+                  <span className={`z-pill ${b.bucket}`}>{b.days < 0
+                    ? `${b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'} overdue ${Math.abs(b.days).toLocaleString()}d`
+                    : `${b.deadline_type === 'RCRT' ? 'Recert' : 'Annual'} due in ${b.days}d`}</span>
+                )}
+              </div>
               <h2>{title(b.trade_name || b.name)}</h2>
               {b.trade_name && b.name && b.trade_name !== b.name && <div className="z-muted">{title(b.name)}</div>}
               <div className="z-muted small">File #{b.file_no} · {title(b.zone_name)}</div>
@@ -164,53 +173,10 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
               )}
             </section>
 
-            {(() => {
-              const pf = [];
-              if (b.entity_type) pf.push(['Entity type', title(b.entity_type)]);
-              if (b.business_size) pf.push(['Business size', title(b.business_size)]);
-              if (b.began_date) pf.push(['In business since', fmtDate(b.began_date)]);
-              if (b.permit_no) pf.push(['UEZ permit #', b.permit_no]);
-              if (b.nature) pf.push(['Nature of business', title(b.nature)]);
-              if (b.mailing_address) pf.push(['Mailing address', title(b.mailing_address)]);
-              if (b.block || b.lot) pf.push(['Block / Lot', `${b.block || '—'} / ${b.lot || '—'}`]);
-              const flags = [b.minority_owned && 'Minority-owned', b.women_owned && 'Women-owned', b.new_business && 'New business'].filter(Boolean);
-              if (!pf.length && !flags.length) return null;
-              return (
-                <section>
-                  <h3>Business profile</h3>
-                  {pf.length > 0 && <div className="z-kv">{pf.map(([k, v]) => <React.Fragment key={k}><span>{k}</span><strong>{v}</strong></React.Fragment>)}</div>}
-                  {flags.length > 0 && <div className="z-flags">{flags.map((f) => <span className="z-flag" key={f}>{f}</span>)}</div>}
-                </section>
-              );
-            })()}
-
-            {Array.isArray(b.employment) && b.employment.length > 0 && (
-              <section>
-                <h3>Employment &amp; tax savings</h3>
-                <div className="z-table-wrap z-emp">
-                  <table className="z-table z-emp-table">
-                    <thead><tr><th>Year</th><th>Full-time</th><th>New hires</th><th>Capital</th><th>Tax savings</th></tr></thead>
-                    <tbody>
-                      {[...b.employment]
-                        .sort((a, c) => String(c.program_year || c.date || '').localeCompare(String(a.program_year || a.date || '')))
-                        .slice(0, 12)
-                        .map((r, i) => {
-                          const ts = (r.uz4_savings || 0) + (r.uz5_savings || 0);
-                          return (
-                            <tr key={i}>
-                              <td>{r.program_year || (r.date ? fmtDate(r.date) : '—')}{r.app_status === 'I' && <span className="z-muted small"> · inactive</span>}</td>
-                              <td>{r.ft_actual ?? '—'}{r.pct_25 ? <span className="z-muted small"> · {r.pct_25}</span> : ''}</td>
-                              <td>{r.new_hires ?? '—'}</td>
-                              <td>{money(r.capital_actual)}</td>
-                              <td>{ts ? money(ts) : '—'}</td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
+            <section>
+              <button className="btn ghost z-full z-sheet-btn" onClick={() => setShowSheet(true)}>📄 View / print full summary sheet</button>
+              <div className="z-muted small" style={{ marginTop: 6 }}>Everything the state portal shows — profile, employment &amp; tax-savings history, notes — exactly like the official sheet.</div>
+            </section>
 
             {b.can_contact && b.status !== 'I' && (
               <section>
@@ -279,6 +245,8 @@ function BusinessDrawer({ org, fileNo, onClose, onChanged }) {
         )}
       </aside>
     </div>
+    {showSheet && b && <SummarySheet b={b} onClose={() => setShowSheet(false)} />}
+    </>
   );
 }
 
@@ -404,10 +372,10 @@ function Home({ org, refreshKey, onOpen, onGoBusinesses }) {
 function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
   const [data, setData] = useState(null); const [err, setErr] = useState('');
   const [bucket, setBucket] = useState(initialBucket || 'active');
-  const [type, setType] = useState('all'); const [q, setQ] = useState(''); const [sort, setSort] = useState('deadline');
+  const [q, setQ] = useState(''); const [sort, setSort] = useState('deadline');
   const [page, setPage] = useState(0); const PAGE = 50;
   useEffect(() => { setBucket(initialBucket || 'active'); }, [initialBucket, zone]);
-  useEffect(() => { setPage(0); }, [bucket, type, q, sort, zone]);
+  useEffect(() => { setPage(0); }, [bucket, q, sort, zone]);
   useEffect(() => { setData(null); setErr(''); zoneApi.businesses(org.id, zone).then(setData).catch((e) => setErr(e.message)); }, [org.id, zone, refreshKey]);
 
   const all = data?.businesses || [];
@@ -421,8 +389,6 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
     let r = all.filter((b) => {
       if (bucket === 'active' && b.status === 'I') return false;
       if (bucket === 'inactive' && b.status !== 'I') return false;
-      if (type !== 'all' && b.status !== 'I' && b.deadline_type !== type) return false;
-      if (type !== 'all' && b.status === 'I') return false;
       if (needle && !`${b.name} ${b.trade_name} ${b.file_no} ${b.contact_name} ${b.contact_email}`.toLowerCase().includes(needle)) return false;
       return true;
     });
@@ -430,7 +396,7 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
     r = [...r].sort((a, b2) => (key(a) < key(b2) ? -1 : key(a) > key(b2) ? 1 : 0));
     if (sort === 'touched') r.reverse();
     return r;
-  }, [all, bucket, type, q, sort]);
+  }, [all, bucket, q, sort]);
 
   if (err) return <div className="z-alert bad">{err}</div>;
   if (!data) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading businesses…</div>;
@@ -442,7 +408,6 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
       {!data.has_full_roster && <div className="hint">This zone isn't connected, so only businesses on the statewide due/late reports show.</div>}
       <div className="z-toolbar">
         <div className="z-seg">{[['all', 'All'], ['active', 'Active'], ['inactive', 'Inactive']].map(([k, l]) => <button key={k} className={bucket === k ? 'on' : ''} onClick={() => setBucket(k)}>{l} <span className="z-seg-n">{counts[k]}</span></button>)}</div>
-        <div className="z-seg">{[['all', 'All types'], ['AR', 'Annual'], ['RCRT', 'Recert']].map(([k, l]) => <button key={k} className={type === k ? 'on' : ''} onClick={() => setType(k)}>{l}</button>)}</div>
         <input className="z-search" placeholder="Search name, file #, contact…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="z-sort" value={sort} onChange={(e) => setSort(e.target.value)}><option value="deadline">Sort: deadline</option><option value="name">Sort: name</option>{ownZone && <option value="touched">Sort: last contacted</option>}</select>
       </div>

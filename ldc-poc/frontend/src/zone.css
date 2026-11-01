@@ -273,3 +273,8 @@ button.z-stat:hover{border-color:#c9cdf0}
 .z-emp{margin-top:4px}
 .z-emp-table th,.z-emp-table td{padding:7px 10px;font-size:12.5px;white-space:nowrap}
 .z-emp-table thead th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+
+/* ---- Drawer header pills (cert status + filing state) + summary-sheet button ---- */
+.z-drawer-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.z-drawer-pills .z-pill.ok{margin-left:0}
+.z-sheet-btn{width:100%;font-weight:700}

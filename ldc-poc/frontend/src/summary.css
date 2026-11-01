@@ -1,0 +1,42 @@
+.ss-backdrop{position:fixed;inset:0;background:rgba(18,24,38,.55);z-index:60;display:flex;justify-content:center;align-items:flex-start;overflow:auto;padding:24px}
+.ss-wrap{width:min(1100px,100%);background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 24px 60px rgba(10,20,40,.3)}
+.ss-toolbar{display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;background:#f3f5f9;border-bottom:1px solid #e3e7ef}
+
+.ss-sheet{font-family:Arial,Helvetica,sans-serif;color:#1c2430;font-size:13px;background:#fff}
+.ss-header{background:linear-gradient(120deg,#1f4e8c 0%,#2f6fb0 55%,#5aa0db 100%);color:#fff;padding:14px 20px 18px}
+.ss-state{font-size:13px;opacity:.95}
+.ss-titlebar h1{margin:2px 0 0;font-size:26px;font-weight:700;color:#ffd27a;letter-spacing:.2px}
+
+.ss-band{background:#c9d6e6;color:#1c2f4a;font-weight:700;font-size:13px;padding:5px 16px;border-top:1px solid #aebfd4;margin-top:2px}
+.ss-summary{display:flex;flex-wrap:wrap;gap:4px 26px;padding:12px 18px}
+.ss-summary .ss-field{flex:0 0 auto}
+
+.ss-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px 20px;padding:14px 18px}
+.ss-field{display:flex;gap:6px;min-width:0;font-size:13px;line-height:1.35}
+.ss-field.wide{grid-column:span 2}
+.ss-lbl{font-weight:700;color:#2a3442;white-space:nowrap}
+.ss-val{color:#1c2430;word-break:break-word}
+.ss-rule{grid-column:1 / -1;border-top:1px solid #d7dce6;margin:5px 0}
+
+.ss-emp{width:100%;border-collapse:collapse;font-size:11px;margin:2px 0 0}
+.ss-emp th{background:#eef2f8;border:1px solid #cdd6e4;padding:4px 5px;font-weight:700;text-align:center;color:#2a3442;white-space:nowrap}
+.ss-emp td{border:1px solid #d9e0ec;padding:3px 5px;text-align:center;white-space:nowrap}
+.ss-emp td.num{text-align:right}
+.ss-emp .ss-empty{text-align:center;color:#8b94a4;padding:10px}
+.ss-legend{padding:8px 18px 14px;font-size:11px;color:#3a4453;font-style:italic;line-height:1.6}
+
+.ss-notes-empty{padding:12px 18px 18px;font-size:13px}
+.ss-notes{width:100%;border-collapse:collapse;font-size:12px;margin:4px 0 14px}
+.ss-notes th{background:#eef2f8;border:1px solid #cdd6e4;padding:5px 8px;text-align:left}
+.ss-notes td{border:1px solid #d9e0ec;padding:5px 8px;vertical-align:top}
+
+@media (max-width:760px){ .ss-grid{grid-template-columns:1fr} .ss-field.wide{grid-column:span 1} .ss-emp{display:block;overflow-x:auto} }
+
+@media print {
+  body * { visibility: hidden !important; }
+  #ss-print, #ss-print * { visibility: visible !important; }
+  #ss-print { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; }
+  .ss-toolbar { display: none !important; }
+  .ss-emp { font-size: 9px; }
+  @page { size: landscape; margin: 10mm; }
+}
