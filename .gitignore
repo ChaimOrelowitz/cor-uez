@@ -6,3 +6,5 @@ backend/.env
 *.log
 .DS_Store
 dist/
+ldc-poc/backend/.env
+uez-discovery-*/
