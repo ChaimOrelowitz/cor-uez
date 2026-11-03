@@ -400,32 +400,43 @@ router.get('/orgs/:orgId/stats', wrap(async (req, res) => {
   const monthsBack = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 12, 1)).toISOString();
   const fetchStart = monthsBack < yearStart ? monthsBack : yearStart;
 
-  const events = await fetchAll(() => supabase.from('uez_zone_business_events')
-    .select('kind, detected_at').eq('zone_name', zone).gte('detected_at', fetchStart));
-  const emails = await fetchAll(() => supabase.from('uez_zone_email_log')
-    .select('kind, created_at').eq('org_id', org.id).gte('created_at', fetchStart).like('kind', 'reminder%'));
+  // Filing counts come from the state's weekly Application Processing Summary (dated by the Friday
+  // the state processed them). Our own change events are only a fallback: they're dated by when
+  // our sync noticed the change, so everything before the first sync piles up in that month.
+  const [weekly, events, emails] = await Promise.all([
+    fetchAll(() => supabase.from('uez_state_weekly')
+      .select('week_ending, cert_total, ar_total, rc_total, inactivated').eq('zone_name', zone).gte('week_ending', fetchStart.slice(0, 10))),
+    fetchAll(() => supabase.from('uez_zone_business_events')
+      .select('kind, detected_at').eq('zone_name', zone).gte('detected_at', fetchStart)),
+    fetchAll(() => supabase.from('uez_zone_email_log')
+      .select('kind, created_at').eq('org_id', org.id).gte('created_at', fetchStart).like('kind', 'reminder%'))
+  ]);
 
-  // Count a set of timestamps in each window.
-  const windows = (stamps) => ({
-    rolling_30: stamps.filter((t) => t >= thirtyAgo).length,
-    rolling_7: stamps.filter((t) => t >= sevenAgo).length,
-    ytd: stamps.filter((t) => t >= yearStart).length
+  // Each series is a list of [date, count]; windows sum the counts that fall in each range.
+  const sumIn = (series, lo, hi = '9999') => series.reduce((n, [t, c]) => (t >= lo && t < hi ? n + c : n), 0);
+  const windows = (series) => ({
+    rolling_30: sumIn(series, thirtyAgo.slice(0, 10)),
+    rolling_7: sumIn(series, sevenAgo.slice(0, 10)),
+    ytd: sumIn(series, yearStart.slice(0, 10))
   });
-  const stampsFor = (pred) => events.filter(pred).map((e) => e.detected_at);
-  const recertStamps = stampsFor((e) => e.kind === 'recertified');
-  const annualStamps = stampsFor((e) => e.kind === 'annual_filed');
-  const signupStamps = stampsFor((e) => e.kind === 'new_business');
-  const inactivStamps = stampsFor((e) => e.kind === 'inactivated');
+  const fromState = weekly.length > 0;
+  const seriesFor = (col, kind) => (fromState
+    ? weekly.map((w) => [w.week_ending, w[col] || 0])
+    : events.filter((e) => e.kind === kind).map((e) => [e.detected_at.slice(0, 10), 1]));
+  const recertStamps = seriesFor('rc_total', 'recertified');
+  const annualStamps = seriesFor('ar_total', 'annual_filed');
+  const signupStamps = seriesFor('cert_total', 'new_business');
+  const inactivStamps = seriesFor('inactivated', 'inactivated');
   const filingStamps = [...recertStamps, ...annualStamps];
-  const reminderStamps = emails.map((e) => e.created_at);
+  const reminderStamps = emails.map((e) => [e.created_at.slice(0, 10), 1]);
 
   // 12-month calendar series (oldest → newest) for filings, signups, recerts.
   const months = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
-    const lo = d.toISOString(), hi = next.toISOString();
-    const inM = (stamps) => stamps.filter((t) => t >= lo && t < hi).length;
+    const lo = d.toISOString().slice(0, 10), hi = next.toISOString().slice(0, 10);
+    const inM = (series) => sumIn(series, lo, hi);
     months.push({
       label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
       filings: inM(filingStamps), signups: inM(signupStamps), recerts: inM(recertStamps)
@@ -434,6 +445,7 @@ router.get('/orgs/:orgId/stats', wrap(async (req, res) => {
 
   res.json({
     zone,
+    source: fromState ? 'state' : 'sync',
     metrics: {
       filings: windows(filingStamps),
       recerts: windows(recertStamps),

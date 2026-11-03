@@ -615,7 +615,7 @@ function StatsBoard({ org }) {
 
       <div className="z-card z-pad">
         <h2 className="z-h2">UEZ filings by month</h2>
-        <p className="z-muted small">Recertifications and annual reports completed each month, last 12 months.</p>
+        <p className="z-muted small">Recertifications and annual reports completed each month, last 12 months{d.source === 'state' ? ', from the state’s weekly processing reports' : ''}.</p>
         <div className="z-chart">
           {months.map((x, i) => (
             <div className="z-chart-col" key={i} title={`${x.label}: ${x.filings} filings`}>
