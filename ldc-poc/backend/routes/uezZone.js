@@ -7,6 +7,7 @@ const { runZoneSync, savePortalLogin, isSyncRunning, runInactiveBackfill, runDet
 const { reminderEmail, sendBusinessEmail, sendViaResend, loadTemplates, previewTemplate, DEFAULT_TEMPLATES, MERGE_FIELDS } = require('../services/uezEmail');
 const { createInvite, loginStatusMap } = require('../services/uezBusinessLogin');
 const { listReports, buildReport } = require('../services/uezReports');
+const stateQ = require('../services/uezStateQueries');
 
 const router = express.Router();
 router.use(requireUezAuth);
@@ -254,6 +255,24 @@ router.get('/orgs/:orgId/statewide', wrap(async (req, res) => {
   list.sort((a, b) => b.due_60 - a.due_60);
   const last = await must(supabase.from('uez_zone_businesses').select('report_synced_at').not('report_synced_at', 'is', null).order('report_synced_at', { ascending: false }).limit(1));
   res.json({ zones: list, as_of: last[0]?.report_synced_at || null });
+}));
+
+// ---------- All zones (statewide reports) ----------
+const isoDate = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+
+router.get('/orgs/:orgId/state/overview', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  res.json(await stateQ.overview({ from: isoDate(req.query.from), to: isoDate(req.query.to), ownZone: org.zone_name }));
+}));
+
+router.get('/orgs/:orgId/state/zones/:zone', wrap(async (req, res) => {
+  const org = await loadOrg(req);
+  res.json(await stateQ.zoneProfile(String(req.params.zone).toUpperCase(), org.zone_name));
+}));
+
+router.get('/orgs/:orgId/state/feed', wrap(async (req, res) => {
+  await loadOrg(req);
+  res.json(await stateQ.feed({ weeks: req.query.weeks }));
 }));
 
 // ---------- Home summary (Concept A) ----------

@@ -1,0 +1,87 @@
+/* All zones (statewide) page. Uses the zone.css tokens; your zone = --blue, everyone else = neutral. */
+.sw{display:flex;flex-direction:column;gap:18px}
+.sw-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.sw .z-stats{margin-bottom:0}
+.sw-section{margin:0}
+.sw-tabs{align-self:flex-start;flex-wrap:wrap}
+
+/* standing tiles */
+.sw-standing{cursor:default}
+.sw-standing .k{justify-content:space-between}
+.sw-rank{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:0;text-transform:none;background:#eef0f5;color:var(--ink2)}
+.sw-rank.top{background:var(--blue-soft);color:var(--blue-ink)}
+.sw-delta{display:inline-block;margin-left:4px;color:var(--ink2);font-weight:600;white-space:nowrap}
+.sw-you{display:inline-block;margin-left:7px;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;background:var(--blue);color:#fff;vertical-align:1px}
+
+/* leaderboard */
+.sw-board-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px}
+.sw-select{width:auto;padding:8px 12px;font-size:13.5px;font-weight:600}
+.sw-num{text-align:right;font-variant-numeric:tabular-nums}
+.z-table th.sw-num{text-align:right}
+.sw-rankcell{color:var(--mut);font-weight:700;width:36px}
+.sw-barcell{min-width:180px;white-space:nowrap}
+.sw-hbar{display:inline-block;width:min(220px,40vw);height:10px;vertical-align:middle;margin-right:10px}
+.sw-hbar i{display:block;height:100%;min-width:2px;background:#c3cad6;border-radius:0 4px 4px 0}
+.sw-hbar i.me{background:var(--blue)}
+.sw-val{font-weight:700;font-variant-numeric:tabular-nums}
+.sw-sortable{cursor:pointer;user-select:none}
+.sw-sortable:hover{color:var(--ink2)}
+
+/* charts */
+.sw-chart{position:relative;width:100%;margin-top:10px}
+.sw-chart svg{display:block;overflow:visible}
+.sw-grid{stroke:var(--line2);stroke-width:1}
+.sw-axis{font-size:11px;fill:var(--mut);font-variant-numeric:tabular-nums}
+.sw-direct{font-size:12px;font-weight:700;fill:var(--ink2)}
+.sw-cross{stroke:#b9c0cc;stroke-width:1;stroke-dasharray:3 3}
+.sw-tip{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(23,32,58,.12);padding:8px 11px;font-size:12.5px;min-width:140px;z-index:2}
+.sw-tip-h{font-weight:700;margin-bottom:4px;color:var(--ink)}
+.sw-tip-r{display:flex;align-items:center;gap:7px;color:var(--ink2)}
+.sw-tip-r i{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
+.sw-tip-r b{margin-left:auto;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* across NJ feed */
+.sw-search{max-width:320px}
+.sw-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.sw-feed-card{padding:16px 18px}
+.sw-feed-card.mine{border-color:#b9cfe8;box-shadow:inset 3px 0 0 var(--blue)}
+.sw-feed-zone{display:flex;align-items:center;width:100%;border:0;background:none;padding:0;font:inherit;font-size:16px;font-weight:800;color:var(--ink);cursor:pointer;text-align:left}
+.sw-feed-go{margin-left:auto;font-size:12.5px;font-weight:700;color:var(--blue-ink)}
+.sw-feed-counts{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 4px;font-size:12.5px;color:var(--ink2)}
+.sw-feed-counts b{color:var(--ink);font-size:14px}
+.sw-feed-list{margin-top:10px}
+.sw-feed-k{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-right:4px}
+.sw-feed-list ul{margin:5px 0 0;padding-left:16px;font-size:13px;line-height:1.55}
+
+/* industries */
+.sw-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:14px 0 10px;font-size:12.5px;color:var(--ink2)}
+.sw-legend span{display:inline-flex;align-items:center;gap:6px}
+.sw-legend i{width:11px;height:11px;border-radius:3px}
+.sw-mix{display:flex;flex-direction:column;gap:4px}
+.sw-mix-row{display:grid;grid-template-columns:200px minmax(0,1fr) 150px;align-items:center;gap:12px;border:0;background:none;padding:5px 6px;border-radius:8px;font:inherit;text-align:left;cursor:pointer;color:var(--ink)}
+.sw-mix-row:hover{background:#fafbff}
+.sw-mix-row.mine{background:#f6f8ff}
+.sw-mix-name{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw-mix-bar{display:flex;gap:2px;height:14px}
+.sw-mix-bar i{display:block;min-width:2px}
+.sw-mix-bar i:first-child{border-radius:4px 0 0 4px}
+.sw-mix-bar i:last-child{border-radius:0 4px 4px 0}
+.sw-mix-top{font-size:12px;color:var(--ink2);white-space:nowrap}
+.sw-mix-tip{margin-top:12px;font-size:12.5px;color:var(--ink2);min-height:18px}
+
+/* zone profile drawer */
+.sw-profile{width:min(620px,100%)}
+.sw-pkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px}
+.sw-pk{background:#f7f8fc;border-radius:12px;padding:12px}
+.sw-pk-l{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.sw-pk-v{font-size:22px;font-weight:800;margin:4px 0 6px;font-variant-numeric:tabular-nums}
+.sw-week{padding:10px 0;border-bottom:1px solid var(--line2)}
+.sw-week-h{font-size:13.5px;font-weight:700}
+.sw-names{font-size:13px;line-height:1.55;margin-top:4px;color:var(--ink)}
+.sw-minibar{display:inline-block;width:60px;height:7px;background:#eef0f5;border-radius:99px;overflow:hidden;margin-right:8px;vertical-align:middle}
+.sw-minibar i{display:block;height:100%;background:var(--blue)}
+
+@media(max-width:820px){
+  .sw-mix-row{grid-template-columns:120px minmax(0,1fr)}
+  .sw-pkpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

@@ -38,7 +38,7 @@ function parseFp(url) {
 function extractLinks(html) {
   const found = new Set();
   const add = (u) => { if (u) found.add(decodeEntities(u).replace(/\\u0026/g, '&').replace(/\\\//g, '/')); };
-  for (const m of html.matchAll(/href="([^"]+)"/gi)) add(m[1]);
+  for (const m of html.matchAll(/href="([^"]+)"/gi)) if (!/^javascript:/i.test(m[1])) add(m[1]);
   for (const m of html.matchAll(/(f\?p=\d+:[^"'\s<>)\\]+)/gi)) add(m[1]);
   for (const m of html.matchAll(/((?:https?:\/\/[^"'\s<>]+)?\/reports\/rwservlet\?[^"'\s<>)\\]+)/gi)) add(m[1]);
   return [...found];

@@ -357,6 +357,8 @@ async function runZoneSync(orgId, trigger = 'manual') {
       await syncListing(portal, info.zoneName, stats);
       await syncReports(portal, stats);
       await syncDataDownload(portal, info.zoneName, stats);   // pristine bulk fill of all fields
+      // Statewide (all-zones) reports — shared data; never fails the zone's own sync.
+      try { await require('./uezStateSync').syncStatewide(portal, stats); } catch (e) { stats.statewide_error = e.message; console.error('statewide sync failed:', e.message); }
       const zoneId = await syncDetails(portal, info.zoneName, zone?.state_zone_id, stats);
       if (zoneId && !zone?.state_zone_id) await must(supabase.from('uez_zones').update({ state_zone_id: zoneId }).eq('name', info.zoneName));
     } finally {

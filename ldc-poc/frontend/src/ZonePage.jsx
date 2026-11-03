@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import supabase from './supabaseClient';
 import { zoneApi } from './zoneApi';
 import SummarySheet from './SummarySheet';
+import StatewidePage from './StatewidePage';
 import './zone.css';
 
 const TYPE_LABEL = { AR: 'Annual report', RCRT: 'Recertification' };
@@ -521,35 +522,6 @@ function BusinessList({ org, zone, initialBucket, refreshKey, onOpen }) {
   );
 }
 
-// ---------------- Statewide ----------------
-function Statewide({ org, onPickZone }) {
-  const [data, setData] = useState(null); const [err, setErr] = useState('');
-  useEffect(() => { zoneApi.statewide(org.id).then(setData).catch((e) => setErr(e.message)); }, [org.id]);
-  if (err) return <div className="z-alert bad">{err}</div>;
-  if (!data) return <div className="z-card z-muted" style={{ padding: 20 }}>Loading…</div>;
-  const max = Math.max(1, ...data.zones.map((z) => z.due_60 + z.late));
-  return (
-    <div className="z-card z-table-wrap">
-      <div className="z-pad"><h2 className="z-h2">All zones</h2><div className="z-muted small">From the statewide Companies Due &amp; Late reports{data.as_of ? `, as of ${fmtWhen(data.as_of)}` : ''}. Click a zone to view it.</div></div>
-      <table className="z-table">
-        <thead><tr><th>Zone</th><th>Due next 60d</th><th>Annual / Recert</th><th>Late</th><th className="z-hide-sm">Jobs (due)</th><th className="z-hide-sm">Outreach 30d</th></tr></thead>
-        <tbody>
-          {data.zones.map((z) => (
-            <tr key={z.zone} className={z.zone === org.zone_name ? 'z-mine' : ''} onClick={() => onPickZone(z.zone)}>
-              <td><strong>{title(z.zone)}</strong>{z.zone === org.zone_name && <span className="z-pill ok">You</span>}</td>
-              <td><div className="z-bar"><i style={{ width: `${(z.due_60 / max) * 100}%` }} /><b style={{ width: `${(z.late / max) * 100}%` }} /></div><span>{z.due_60}</span></td>
-              <td>{z.due_ar} / {z.due_rcrt}</td>
-              <td className={z.late ? 'z-bad-text' : ''}>{z.late}</td>
-              <td className="z-hide-sm">{z.due_jobs}</td>
-              <td className="z-hide-sm">{z.outreach_30d || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 // ---------------- Reports ----------------
 function ReportsPage({ org }) {
   const [list, setList] = useState(null); const [sel, setSel] = useState(null);
@@ -930,7 +902,7 @@ export default function ZonePage() {
             {!needsSetup && !viewZone && view === 'businesses' && <BusinessList org={org} zone={org.zone_name} initialBucket={listBucket} refreshKey={refreshKey} onOpen={setOpen} />}
             {!needsSetup && !viewZone && view === 'reports' && <ReportsPage org={org} />}
             {!needsSetup && !viewZone && view === 'stats' && <StatsBoard org={org} />}
-            {!needsSetup && view === 'state' && !viewZone && <Statewide org={org} onPickZone={(z) => (z === org.zone_name ? setView('businesses') : setViewZone(z))} />}
+            {!needsSetup && view === 'state' && !viewZone && <StatewidePage org={org} onViewBusinesses={(z) => (z === org.zone_name ? setView('businesses') : setViewZone(z))} />}
             {viewZone && <><button className="z-link" style={{ marginBottom: 12 }} onClick={() => setViewZone(null)}>← All zones</button><BusinessList org={org} zone={viewZone} refreshKey={refreshKey} onOpen={setOpen} /></>}
             {view === 'settings' && !viewZone && <Settings org={org} status={status} me={me} onReconnect={() => { loadStatus(); loadMe(); }} />}
             {view === 'admin' && !viewZone && me.isPlatformAdmin && <AdminPanel onChanged={loadMe} />}

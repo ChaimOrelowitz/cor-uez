@@ -254,3 +254,65 @@ alter table uez_zone_businesses add column if not exists pt_last int;
 alter table uez_zone_businesses add column if not exists inactivated_flag text;
 alter table uez_zone_businesses add column if not exists dl_raw jsonb;
 alter table uez_zone_businesses add column if not exists dl_synced_at timestamptz;
+
+-- v9: Statewide (all-zones) data from the portal's statewide reports. Shared by every zone;
+-- written only by the backend (service key). RLS on with no policies = no client access.
+-- Weekly activity per zone (Application Processing Summary for one Friday processing date).
+create table if not exists uez_state_weekly (
+  week_ending date not null,
+  zone_name text not null,
+  cert int, cert_total int,
+  ar int, ar_cond int, ar_total int,
+  rc int, rc_cond int, retention int, in_lieu int, extension int, rc_total int,
+  inactivated int, total int,
+  synced_at timestamptz default now(),
+  primary key (week_ending, zone_name)
+);
+-- The businesses behind each week's counts (Application Processing Detail).
+create table if not exists uez_state_activity (
+  week_ending date not null,
+  zone_name text not null,
+  file_no text not null,
+  kind text not null,          -- certified | annual | recertified | inactivated
+  code text,                   -- state outcome code (A, AX, IN, ...)
+  name text,
+  synced_at timestamptz default now(),
+  primary key (week_ending, file_no, kind)
+);
+create index if not exists uez_state_activity_zone_idx on uez_state_activity (zone_name, week_ending desc);
+-- Monthly snapshot per zone: Investment & Employment Summary + industry (SIC) profile.
+create table if not exists uez_state_monthly (
+  report_date date not null,
+  zone_name text not null,
+  active_businesses int, ft_jobs int, pt_jobs int, new_ft_jobs int, new_pt_jobs int, projected_ft int,
+  invest_active bigint, invest_inactive bigint, invest_total bigint, revenue_projected bigint,
+  sic_active jsonb, sic_inactive jsonb,
+  synced_at timestamptz default now(),
+  primary key (report_date, zone_name)
+);
+-- Current statewide lists, replaced on every sync: kind = tax_delinquent | incomplete_app.
+create table if not exists uez_state_current (
+  kind text not null,
+  item_key text not null,      -- file # (or zone+name for new applications without one)
+  zone_name text not null,
+  file_no text,
+  name text,
+  detail jsonb,
+  synced_at timestamptz default now(),
+  primary key (kind, item_key)
+);
+-- Which report periods have been loaded (backfill resumes from here; nightly skips done ones).
+create table if not exists uez_state_sync_log (
+  kind text not null,          -- weekly | activity | investment | sic_active | sic_inactive | current
+  period date not null,
+  status text not null,        -- ok | failed
+  rows int,
+  error text,
+  synced_at timestamptz default now(),
+  primary key (kind, period)
+);
+alter table uez_state_weekly enable row level security;
+alter table uez_state_activity enable row level security;
+alter table uez_state_monthly enable row level security;
+alter table uez_state_current enable row level security;
+alter table uez_state_sync_log enable row level security;
