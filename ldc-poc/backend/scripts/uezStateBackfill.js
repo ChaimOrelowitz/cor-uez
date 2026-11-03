@@ -43,10 +43,16 @@ async function main() {
         console.log(`[${i + 1}/${queue.length}] ${t.kind} ${t.period}: ${JSON.stringify(res)} (~${eta} min left)`);
         break;
       } catch (e) {
-        if (attempt === 1) {
+        // A fresh login can't fix a report we couldn't parse, and every extra myNJ login risks
+        // tripping its bot check, so only session-type errors get a retry.
+        if (attempt === 1 && e.code !== 'parse') {
           console.log(`  ${t.kind} ${t.period}: ${e.message} — logging in again and retrying`);
           await portal.logout().catch(() => {});
-          ({ portal, info } = await openScriptPortal());
+          try { ({ portal, info } = await openScriptPortal()); } catch (le) {
+            console.log(`\nStopping: could not log in again (${le.message}). Re-run later; loaded periods are skipped.`);
+            console.log(`Done so far: ${ok} loaded, ${failed} failed.`);
+            return;
+          }
           continue;
         }
         failed++;

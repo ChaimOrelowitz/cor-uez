@@ -37,6 +37,7 @@ function canonZone(raw) {
 function checkTotals(label, rows, totals, cols) {
   if (!totals) throw new PortalError('parse', `${label}: no totals row found.`);
   for (const c of cols) {
+    if (totals[c] == null) continue; // the state's total overflowed its column ("*****")
     const sum = rows.reduce((s, r) => s + (r[c] || 0), 0);
     if (Math.round(sum) !== Math.round(totals[c])) throw new PortalError('parse', `${label}: ${c} adds up to ${sum}, state total is ${totals[c]}.`);
   }
@@ -45,12 +46,13 @@ function checkTotals(label, rows, totals, cols) {
 // One numeric row per zone: "ZONE NAME   n n n ..." (ints, money, negatives). Returns { rows, totals }.
 function zoneTable(text, cols, totalLabel) {
   const rows = []; let totals = null;
-  const num = String.raw`-?\$?-?[\d,]+`;
+  // A number, or "*****" where the state's PDF ran out of column width (read as null).
+  const num = String.raw`(?:-?\$?-?[\d,]+|\*+)`;
   const re = new RegExp(String.raw`^\s*([A-Z][A-Za-z .:]+?)\s{2,}((?:${num}\s+){${cols.length - 1}}${num})\s*$`);
   for (const line of text.split('\n')) {
     const m = line.match(re);
     if (!m) continue;
-    const nums = m[2].trim().split(/\s+/).map(int);
+    const nums = m[2].trim().split(/\s+/).map((s) => (/^\*+$/.test(s) ? null : int(s)));
     const row = Object.fromEntries(cols.map((c, i) => [c, nums[i]]));
     if (totalLabel.test(m[1])) totals = row;
     else rows.push({ zone_name: canonZone(m[1]), ...row });
