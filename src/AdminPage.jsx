@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addAdminCaseNote,
   createAdminMyNjCredentials,
@@ -36,46 +36,17 @@ import {
   applicationDraftFrom,
   attentionItems,
   displayBusinessName,
-  docFor,
   docsFor,
   documentLabel,
-  filterAndSortApplications,
-  formatTimestamp,
-  grantSubmissionLikelyDetected,
-  grantSubmitGateReason,
-  lastEmailSent,
-  nameControl,
   njTaxId,
   ownerDraftFrom,
-  packetReady,
   paymentStatusLabel,
-  pbsAccountGateReason,
-  PROCESS_STEP_TITLES,
-  PROCESS_STEP_KEYS,
-  queueCounts,
-  readyDocumentCount,
-  resolveProcessStep,
-  statusLabel
+  readyDocumentCount
 } from './admin/caseLogic';
 
-// Maps each step to the tab that handles it — used by the cockpit pipeline dots
-const PIPELINE_STEPS = [
-  { key: 'formation',        tab: 'formation_brc',     short: 'CoF'   },
-  { key: 'brc',              tab: 'formation_brc',     short: 'BRC'   },
-  { key: 'pbs_mynj',        tab: 'pbs_mynj',           short: 'PBS'   },
-  { key: 'tax_clearance',   tab: 'uez_tax',            short: 'TC'    },
-  { key: 'uez_enrollment',  tab: 'uez_tax',            short: 'UEZ'   },
-  { key: 'ldc_application', tab: 'payment_ldc_grant',  short: 'LDC'   },
-  { key: 'payment',         tab: 'payment_ldc_grant',  short: 'Pay'   },
-  { key: 'grant_submission', tab: 'payment_ldc_grant', short: 'Grant' },
-];
 import AdminSidebar, { groupCounts } from './admin/AdminSidebar';
 import EmailComposer from './admin/EmailComposer';
 import CaseDetailTabs from './admin/CaseDetailTabs';
-
-const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
-const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
-const NJ_PBS_URL = 'https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login';
 
 // Each business gets its own URL — /admin/businesses/:id — so a refresh (or a
 // bookmark, or the back button) lands back on the same business instead of
@@ -87,43 +58,6 @@ function businessIdFromPath() {
 
 function businessUrl(id) {
   return `/admin/businesses/${encodeURIComponent(id)}`;
-}
-
-function openOfficialBrcLookup(application) {
-  const target = `cor-brc-${application.id}`;
-  const popup = window.open('about:blank', target, 'width=1050,height=850,resizable=yes,scrollbars=yes');
-  if (!popup) throw new Error('Your browser blocked the NJ lookup window. Allow pop-ups for COR admin and try again.');
-
-  popup.document.write('<title>NJ BRC Lookup</title><p style="font:16px system-ui;padding:30px">Opening New Jersey BRC lookup…</p>');
-
-  const fields = {
-    pinnctl: nameControl(application.business_name_input),
-    pinidnum: njTaxId(application.ein),
-    pincorpid: '',
-    pincasinoid: '',
-    submit: '  Submit  '
-  };
-
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = NJ_BRC_LOOKUP_URL;
-  form.target = target;
-  form.style.display = 'none';
-
-  Object.entries(fields).forEach(([key, value]) => {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = key;
-    input.value = value;
-    form.appendChild(input);
-  });
-
-  document.body.appendChild(form);
-  // The NJ form requires a field named "submit", which shadows form.submit.
-  // Call the native method directly so the targeted popup actually navigates.
-  HTMLFormElement.prototype.submit.call(form);
-  form.remove();
-  popup.focus();
 }
 
 // Small copy-to-clipboard icon button used next to identity fields (business
@@ -167,10 +101,17 @@ export default function AdminPage() {
   const applicationCounts = useMemo(() => groupCounts(applications), [applications]);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [filter, setFilter] = useState('needs');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessageText] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
+  // The one Chrome-extension automation in flight, if any. Tracked per job
+  // instead of the global `busy` so the rest of the admin stays usable while
+  // NJ's captcha sits there - and so a job finishing doesn't yank the view
+  // back to the case it was started on.
+  const [runningJob, setRunningJob] = useState(null);
+  const selectedIdRef = useRef(null);
+  const emailSentCallbackRef = useRef(null);
   const [pbsAnswerDraft, setPbsAnswerDraft] = useState('');
   const [pbsLoginDraft, setPbsLoginDraft] = useState({ username: '', password: '' });
   const [editMode, setEditMode] = useState(false);
@@ -185,21 +126,43 @@ export default function AdminPage() {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
-  const [pbsModalOpen, setPbsModalOpen] = useState(false);
   const [manualDocType, setManualDocType] = useState('supporting');
   const [manualDocFile, setManualDocFile] = useState(null);
   const [manualDocUploading, setManualDocUploading] = useState(false);
   const [directUploadType, setDirectUploadType] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  // Desktop applications list: an overlay drawer, collapsed by default so
-  // the case workspace gets the full screen width. Opening it floats it
-  // over the content rather than squeezing the layout narrower.
+  // Applications list: docked beside the case on wide screens (>=1280px) by
+  // default, remembered per browser; below that, or when undocked, it's the
+  // overlay drawer that `sidebarOpen` controls.
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarDocked, setSidebarDocked] = useState(() => {
+    try { return localStorage.getItem('adminSidebarDocked') !== '0'; } catch { return true; }
+  });
   const [noteDraft, setNoteDraft] = useState('');
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteEditingId, setNoteEditingId] = useState(null);
   const [noteEditDraft, setNoteEditDraft] = useState('');
   const [emailComposer, setEmailComposer] = useState(null);
+
+  function setMessage(text) {
+    setMessageText(text);
+    setMessageIsError(false);
+  }
+
+  function showError(text) {
+    setMessageText(text);
+    setMessageIsError(true);
+  }
+
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  // Results fade on their own; errors, and progress while something is still
+  // running, stay until replaced or dismissed.
+  useEffect(() => {
+    if (!message || messageIsError || busy || runningJob) return undefined;
+    const timer = window.setTimeout(() => setMessageText(''), 5000);
+    return () => window.clearTimeout(timer);
+  }, [message, messageIsError, busy, runningJob]);
 
   useEffect(() => {
     let active = true;
@@ -276,7 +239,7 @@ export default function AdminPage() {
       if (me.role !== 'admin') throw new Error('This account does not have UEZ admin access.');
       await refreshList(businessIdFromPath());
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -287,6 +250,39 @@ export default function AdminPage() {
     setApplications(rows || []);
     const id = preferredId || selectedId || rows?.[0]?.id;
     return id ? await openApplication(id) : null;
+  }
+
+  // Refreshes after something finished for `applicationId` - the list always,
+  // the open case only if it's still the one on screen. Background jobs use
+  // this so finishing one never switches the view out from under you.
+  async function refreshCase(applicationId) {
+    const rows = await getAdminApplications();
+    setApplications(rows || []);
+    if (selectedIdRef.current === applicationId) {
+      const data = await getAdminApplication(applicationId);
+      if (selectedIdRef.current === applicationId) setDetail(data);
+    }
+  }
+
+  // Shared wrapper for every Chrome-extension automation: one at a time, the
+  // case is captured up front, and results/errors are labelled with the
+  // business so they still make sense if you've moved to another case.
+  async function runJob(label, work) {
+    if (runningJob) return showError(`${runningJob.label} is still running for ${runningJob.name}. Finish or close it first.`);
+    const application = detail.application;
+    const name = displayBusinessName(application);
+    setRunningJob({ label, name, applicationId: application.id });
+    setMessage('Starting the COR Chrome extension…');
+    try {
+      const currentSession = await getApplicantSession();
+      if (!currentSession?.access_token) throw new Error(`Please sign in again before running ${label}.`);
+      const result = await work(application, currentSession.access_token);
+      if (result) setMessage(`${name}: ${result}`);
+    } catch (err) {
+      showError(`${name}: ${err.message}`);
+    } finally {
+      setRunningJob(null);
+    }
   }
 
   async function openApplication(id) {
@@ -323,7 +319,7 @@ export default function AdminPage() {
       });
       return data;
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
       return null;
     }
   }
@@ -337,7 +333,7 @@ export default function AdminPage() {
       setSession(auth.session || null);
       await bootstrap();
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -357,7 +353,7 @@ export default function AdminPage() {
       const result = await getDocumentUrl(detail.application.id, doc.id);
       setPreviewUrl(result.url);
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
       setPreviewDoc(null);
     } finally { setPreviewBusy(false); }
   }
@@ -378,7 +374,7 @@ export default function AdminPage() {
       setMessage(result === 'approved' ? 'Document approved.' : 'Document marked as wrong.');
       closePreview();
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -396,7 +392,7 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage(decision === 'approved' ? '✓ Formation document approved.' : 'Marked wrong — send the replacement request email below.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -407,7 +403,7 @@ export default function AdminPage() {
       const result = await getDocumentUrl(detail.application.id, doc.id);
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     }
   }
 
@@ -420,7 +416,7 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage(`Deleted ${doc.filename}.`);
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -445,7 +441,7 @@ export default function AdminPage() {
       else closePreview();
       setMessage('Document deleted.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -463,7 +459,7 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage('Document added to the applicant file.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setDirectUploadType('');
     }
@@ -547,118 +543,78 @@ export default function AdminPage() {
     });
   }
 
-  async function runBrcLookup() {
-    setBusy(true);
-    setMessage('Starting the COR Chrome extension…');
-    try {
-      const currentSession = await getApplicantSession();
-      if (!currentSession?.access_token) throw new Error('Please sign in again before running the BRC check.');
-
+  function runBrcLookup() {
+    return runJob('BRC check', async (application, accessToken) => {
       const outcome = await runExtensionWorkflow('brc', {
-        applicationId: detail.application.id,
-        businessName: detail.application.business_name_input,
-        ein: detail.application.ein,
-        accessToken: currentSession.access_token
+        applicationId: application.id,
+        businessName: application.business_name_input,
+        ein: application.ein,
+        accessToken
       });
-      await refreshList(detail.application.id);
-
-      if (outcome.status === 'complete') {
-        setMessage("BRC confirmed. The PDF and certificate details were added directly to this applicant's UEZ file.");
-      } else if (outcome.status === 'not_found') {
-        await markAdminBrcNotFound(detail.application.id);
-        await refreshList(detail.application.id);
-        setMessage('NJ did not find a matching BRC — marked as not found automatically.');
-      } else if (outcome.status === 'cancelled') {
-        setMessage('BRC check window closed before it finished. Nothing was saved — start it again when ready.');
-      } else {
-        throw new Error(outcome.error || 'The BRC check did not finish.');
+      if (outcome.status === 'cancelled') return 'BRC check window closed before it finished. Nothing was saved — start it again when ready.';
+      if (outcome.status === 'not_found') {
+        await markAdminBrcNotFound(application.id);
+        await refreshCase(application.id);
+        return 'NJ did not find a matching BRC — marked as not found automatically.';
       }
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+      if (outcome.status !== 'complete') throw new Error(outcome.error || 'The BRC check did not finish.');
+      await refreshCase(application.id);
+      return "BRC confirmed. The PDF and certificate details were added directly to this applicant's UEZ file.";
+    });
   }
 
-  async function runPbsSignup() {
-    setBusy(true);
-    setMessage('Starting the COR Chrome extension…');
-    try {
-      const currentSession = await getApplicantSession();
-      if (!currentSession?.access_token) throw new Error('Please sign in again before opening PBS.');
-      const primary = detail.owners?.[0];
-      if (!primary) throw new Error('A primary owner is required before opening PBS.');
-      if (!primary.title) throw new Error('The primary owner needs a title before opening PBS.');
-      if (!myNjCredentials) throw new Error('MyNJ login information is missing. Confirm the BRC and generate the MyNJ login first.');
-
+  function runPbsSignup() {
+    const primary = detail.owners?.[0];
+    if (!primary) return showError('A primary owner is required before opening PBS.');
+    if (!primary.title) return showError('The primary owner needs a title before opening PBS.');
+    if (!myNjCredentials) return showError('MyNJ login information is missing. Confirm the BRC and generate the MyNJ login first.');
+    return runJob('PBS setup', async (application, accessToken) => {
       const outcome = await runExtensionWorkflow('pbs_signup', {
-        applicationId: detail.application.id,
-        businessName: detail.application.registered_business_name || detail.application.brc_registered_name || detail.application.business_name_input,
-        ein: detail.application.ein,
-        accessToken: currentSession.access_token
+        applicationId: application.id,
+        businessName: application.registered_business_name || application.brc_registered_name || application.business_name_input,
+        ein: application.ein,
+        accessToken
       });
-      if (outcome.status === 'cancelled') { setMessage('PBS setup window closed before it finished. Nothing was saved — start it again when ready.'); return; }
+      if (outcome.status === 'cancelled') return 'PBS setup window closed before it finished. Nothing was saved — start it again when ready.';
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The PBS workflow did not finish.');
-      await refreshList(detail.application.id);
-      setMessage('PBS account and business setup completed.');
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+      await refreshCase(application.id);
+      return 'PBS account and business setup completed.';
+    });
   }
 
-  async function runPbsLogin() {
-    setBusy(true);
-    setMessage('Starting the COR Chrome extension…');
-    try {
-      const currentSession = await getApplicantSession();
-      if (!currentSession?.access_token) throw new Error('Please sign in again before opening PBS.');
-      if (!myNjCredentials) throw new Error('MyNJ / PBS login information is missing.');
-
+  function runPbsLogin() {
+    if (!myNjCredentials) return showError('MyNJ / PBS login information is missing.');
+    return runJob('PBS login', async (application, accessToken) => {
       const outcome = await runExtensionWorkflow('pbs_login', {
-        applicationId: detail.application.id,
-        businessName: detail.application.registered_business_name || detail.application.brc_registered_name || detail.application.business_name_input,
-        ein: detail.application.ein,
-        accessToken: currentSession.access_token
+        applicationId: application.id,
+        businessName: application.registered_business_name || application.brc_registered_name || application.business_name_input,
+        ein: application.ein,
+        accessToken
       });
-      if (outcome.status === 'cancelled') { setMessage('PBS login window closed before it finished.'); return; }
+      if (outcome.status === 'cancelled') return 'PBS login window closed before it finished.';
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'PBS login did not finish.');
-      setMessage('PBS is open and signed in.');
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+      return 'PBS is open and signed in.';
+    });
   }
 
-  async function runTaxClearance() {
-    setBusy(true);
-    setMessage('Starting the COR Chrome extension…');
-    try {
-      const currentSession = await getApplicantSession();
-      if (!currentSession?.access_token) throw new Error('Please sign in again before retrieving tax clearance.');
-
+  function runTaxClearance() {
+    return runJob('Tax clearance', async (application, accessToken) => {
       const outcome = await runExtensionWorkflow('tax_clearance', {
-        applicationId: detail.application.id,
-        businessName: detail.application.registered_business_name || detail.application.business_name_input,
-        accessToken: currentSession.access_token
+        applicationId: application.id,
+        businessName: application.registered_business_name || application.business_name_input,
+        accessToken
       });
-      if (outcome.status === 'cancelled') { setMessage('Tax-clearance window closed before it finished. Nothing was saved — start it again when ready.'); return; }
+      if (outcome.status === 'cancelled') return 'Tax-clearance window closed before it finished. Nothing was saved — start it again when ready.';
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The tax-clearance download did not finish.');
-      await refreshList(detail.application.id);
-      setMessage(outcome.taxIssue
+      await refreshCase(application.id);
+      return outcome.taxIssue
         ? 'NJ could not issue the tax clearance. The error screenshot was saved and the client was emailed the follow-up instructions.'
-        : "Tax-clearance letter downloaded and added directly to this applicant's UEZ file.");
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+        : "Tax-clearance letter downloaded and added directly to this applicant's UEZ file.";
+    });
   }
 
   async function uploadManualAdminDocument() {
-    if (!manualDocFile) { setMessage('Choose a file to upload.'); return; }
+    if (!manualDocFile) { showError('Choose a file to upload.'); return; }
     setManualDocUploading(true);
     setMessage('Uploading document…');
     try {
@@ -667,81 +623,54 @@ export default function AdminPage() {
       setManualDocFile(null);
       setMessage('Document added to the applicant file.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setManualDocUploading(false);
     }
   }
 
-  async function runLdcJotform() {
-    setBusy(true);
-    setMessage('Starting the COR Chrome extension…');
-    try {
-      const currentSession = await getApplicantSession();
-      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the LDC application.');
-
+  function runLdcJotform() {
+    return runJob('LDC application', async (application, accessToken) => {
       const outcome = await runExtensionWorkflow('ldc_jotform', {
-        applicationId: detail.application.id,
-        businessName: detail.application.registered_business_name || detail.application.business_name_input,
-        accessToken: currentSession.access_token
+        applicationId: application.id,
+        businessName: application.registered_business_name || application.business_name_input,
+        accessToken
       });
-      if (outcome.status === 'cancelled') { setMessage('LDC application window closed before it finished. Nothing was saved — start it again when ready.'); return; }
+      if (outcome.status === 'cancelled') return 'LDC application window closed before it finished. Nothing was saved — start it again when ready.';
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The LDC application workflow did not finish.');
-      await refreshList(detail.application.id);
-      setMessage("LDC application submitted. The signed JotForm PDF is saved in this applicant's Documents.");
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+      await refreshCase(application.id);
+      return "LDC application submitted. The signed JotForm PDF is saved in this applicant's Documents.";
+    });
   }
 
-  async function runUezEnrollment() {
-    setBusy(true);
-    setMessage('Starting the COR Chrome extension…');
-    try {
-      const currentSession = await getApplicantSession();
-      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the UEZ application.');
-
+  function runUezEnrollment() {
+    return runJob('UEZ application', async (application, accessToken) => {
       const outcome = await runExtensionWorkflow('uez_enrollment', {
-        applicationId: detail.application.id,
-        businessName: detail.application.registered_business_name || detail.application.business_name_input,
-        accessToken: currentSession.access_token
+        applicationId: application.id,
+        businessName: application.registered_business_name || application.business_name_input,
+        accessToken
       });
-      if (outcome.status === 'cancelled') { setMessage('UEZ application window closed before it finished. Nothing was saved — start it again when ready.'); return; }
+      if (outcome.status === 'cancelled') return 'UEZ application window closed before it finished. Nothing was saved — start it again when ready.';
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The UEZ application workflow did not finish.');
-      await refreshList(detail.application.id);
-      setMessage('UEZ Certification Application captured and saved as the pending certificate.');
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+      await refreshCase(application.id);
+      return 'UEZ Certification Application captured and saved as the pending certificate.';
+    });
   }
 
-  async function runLakewoodGrantPortal() {
-    setBusy(true);
-    setMessage('Starting the COR Chrome extension…');
-    try {
-      const currentSession = await getApplicantSession();
-      if (!currentSession?.access_token) throw new Error('Please sign in again before opening the Lakewood grant application.');
-
+  function runLakewoodGrantPortal() {
+    return runJob('Lakewood grant submission', async (application, accessToken) => {
       const outcome = await runExtensionWorkflow('lakewood_portal', {
-        applicationId: detail.application.id,
-        businessName: detail.application.registered_business_name || detail.application.business_name_input,
-        accessToken: currentSession.access_token
+        applicationId: application.id,
+        businessName: application.registered_business_name || application.business_name_input,
+        accessToken
       });
-      if (outcome.status === 'cancelled') { setMessage('Lakewood grant window closed before it finished. Nothing was saved — start it again when ready.'); return; }
+      if (outcome.status === 'cancelled') return 'Lakewood grant window closed before it finished. Nothing was saved — start it again when ready.';
       if (outcome.status !== 'complete') throw new Error(outcome.error || 'The Lakewood grant workflow did not finish.');
-      await refreshList(detail.application.id);
-      setMessage(outcome.ambiguous
+      await refreshCase(application.id);
+      return outcome.ambiguous
         ? 'COR saw what looks like a successful Lakewood submission, but there was no submission ID to confirm it automatically. Review the confirmation page, then click "Confirm grant submitted" below.'
-        : 'Lakewood UEZ Technology Grant submitted successfully.');
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
-    }
+        : 'Lakewood UEZ Technology Grant submitted successfully.';
+    });
   }
 
   async function confirmGrantSubmitted() {
@@ -758,7 +687,7 @@ export default function AdminPage() {
       await refreshList(applicationId);
       setMessage('Grant submission confirmed.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -794,7 +723,7 @@ export default function AdminPage() {
 
   function removeOwner(index) {
     if (ownerDrafts.length === 1) {
-      setMessage('An application must keep at least one owner. Delete the application instead if it should be removed entirely.');
+      showError('An application must keep at least one owner. Delete the application instead if it should be removed entirely.');
       return;
     }
     setOwnerDrafts((old) => old.filter((_, ownerIndex) => ownerIndex !== index));
@@ -803,19 +732,19 @@ export default function AdminPage() {
   async function saveAdminEdits() {
     const ownershipTotal = ownerDrafts.reduce((sum, owner) => sum + (Number(owner.ownershipPercent) || 0), 0);
     if (Math.abs(ownershipTotal - 100) > 0.001) {
-      setMessage(`Ownership percentages must total exactly 100%. They currently total ${ownershipTotal}%.`);
+      showError(`Ownership percentages must total exactly 100%. They currently total ${ownershipTotal}%.`);
       return;
     }
     if (!applicationDraft.businessName.trim() || !applicationDraft.contactEmail.trim()) {
-      setMessage('Business name and contact email are required.');
+      showError('Business name and contact email are required.');
       return;
     }
     if (ownerDrafts.some((owner) => !String(owner.title || '').trim())) {
-      setMessage('Choose a title for each owner before saving.');
+      showError('Choose a title for each owner before saving.');
       return;
     }
     if (!applicationDraft.hasDba || (applicationDraft.hasDba === 'yes' && !applicationDraft.dbaName.trim())) {
-      setMessage('Complete the DBA information before saving.');
+      showError('Complete the DBA information before saving.');
       return;
     }
 
@@ -832,7 +761,7 @@ export default function AdminPage() {
       setEditMode(false);
       setMessage('All applicant and owner changes were saved.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -857,7 +786,7 @@ export default function AdminPage() {
       if (rows?.[0]?.id) await openApplication(rows[0].id);
       setMessage("The UEZ application and its documents were permanently deleted. The person's login was not deleted.");
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -865,14 +794,14 @@ export default function AdminPage() {
 
 
   async function saveExistingPbsAnswer() {
-    if (!pbsAnswerDraft) return setMessage('Choose Yes or No for the PBS account question.');
-    if (pbsAnswerDraft === 'yes' && (!pbsLoginDraft.username.trim() || !pbsLoginDraft.password)) return setMessage('Enter the existing MyNJ username and password.');
+    if (!pbsAnswerDraft) return showError('Choose Yes or No for the PBS account question.');
+    if (pbsAnswerDraft === 'yes' && (!pbsLoginDraft.username.trim() || !pbsLoginDraft.password)) return showError('Enter the existing MyNJ username and password.');
     setBusy(true); setMessage('Saving PBS account answer…');
     try {
       await savePbsAccountInfo(detail.application.id, { hasExistingPbsAccount: pbsAnswerDraft === 'yes', username: pbsAnswerDraft === 'yes' ? pbsLoginDraft.username.trim() : '', password: pbsAnswerDraft === 'yes' ? pbsLoginDraft.password : '' });
       await refreshList(detail.application.id);
       setMessage('PBS account answer saved.');
-    } catch (err) { setMessage(err.message); } finally { setBusy(false); }
+    } catch (err) { showError(err.message); } finally { setBusy(false); }
   }
 
   async function createMyNjCredentials() {
@@ -885,7 +814,7 @@ export default function AdminPage() {
       setShowMyNjSecrets(true);
       setMessage('MyNJ account information is ready for the admin and applicant.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -902,7 +831,7 @@ export default function AdminPage() {
       setShowMyNjSecrets(true);
       setMessage('MyNJ / PBS login information was updated for the admin and applicant.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -916,7 +845,7 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage('PBS account marked created.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -927,7 +856,7 @@ export default function AdminPage() {
       await navigator.clipboard.writeText(value);
       setMessage(`${label} copied.`);
     } catch (_) {
-      setMessage(`Could not copy ${label.toLowerCase()}. Select it manually.`);
+      showError(`Could not copy ${label.toLowerCase()}. Select it manually.`);
     }
   }
 
@@ -959,7 +888,7 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage('BRC confirmed and the application was updated.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -973,22 +902,24 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage('BRC marked not found. COR will handle the follow-up; the applicant is not being asked to upload a BRC.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
   }
 
-  function sendBrcProblemEmail() {
-    openEmailComposer('brc_not_found');
+  // `onSent` runs only once the email actually goes out - closing the
+  // composer without sending leaves the step exactly as it was.
+  function sendBrcProblemEmail(onSent) {
+    openEmailComposer('brc_not_found', onSent);
   }
 
-  function sendBrcWrongAddressEmail() {
-    openEmailComposer('brc_wrong_address');
+  function sendBrcWrongAddressEmail(onSent) {
+    openEmailComposer('brc_wrong_address', onSent);
   }
 
-  function sendFormationRejectedEmail() {
-    openEmailComposer('formation_rejected');
+  function sendFormationRejectedEmail(onSent) {
+    openEmailComposer('formation_rejected', onSent);
   }
 
   // The rest of the per-step "send the email for this step" actions, same
@@ -1001,9 +932,11 @@ export default function AdminPage() {
     openEmailComposer('pbs_account_created');
   }
 
-  function sendPbsExistingAccountEmail() {
-    setProcessFlag('pbsStatus', 'creds_requested');
-    openEmailComposer('pbs_existing_account');
+  function sendPbsExistingAccountEmail(onSent) {
+    openEmailComposer('pbs_existing_account', async () => {
+      await setProcessFlag('pbsStatus', 'creds_requested');
+      await onSent?.();
+    });
   }
 
   function sendTaxIssueEmail() {
@@ -1026,9 +959,10 @@ export default function AdminPage() {
     openEmailComposer('grant_submitted');
   }
 
-  async function openEmailComposer(templateKey) {
+  async function openEmailComposer(templateKey, onSent) {
     const applicationId = detail?.application?.id;
     if (!applicationId) return;
+    emailSentCallbackRef.current = onSent || null;
     setEmailComposer({ templateKey, recipient: '', subject: '', body: '', attachments: [], loading: true, sending: false, error: '', sentResult: null });
     try {
       const preview = await getAdminEmailPreview(applicationId, templateKey);
@@ -1039,6 +973,7 @@ export default function AdminPage() {
   }
 
   function closeEmailComposer() {
+    emailSentCallbackRef.current = null;
     setEmailComposer(null);
   }
 
@@ -1052,7 +987,12 @@ export default function AdminPage() {
         body: emailComposer.body
       });
       setEmailComposer((prev) => (prev ? { ...prev, sending: false, sentResult: result } : prev));
-      if (result?.sent) await refreshList(applicationId);
+      if (result?.sent) {
+        const onSent = emailSentCallbackRef.current;
+        emailSentCallbackRef.current = null;
+        if (onSent) await onSent();
+        await refreshList(applicationId);
+      }
     } catch (err) {
       setEmailComposer((prev) => (prev ? { ...prev, sending: false, error: err.message } : prev));
     }
@@ -1066,7 +1006,7 @@ export default function AdminPage() {
       await refreshList(detail.application.id);
       setMessage('Process status updated.');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -1078,7 +1018,7 @@ export default function AdminPage() {
       await saveAdminPayment(detail.application.id, { ...paymentDraft, status: 'paid' });
       await refreshList(detail.application.id);
       setMessage('Client payment recorded.');
-    } catch (err) { setMessage(err.message); }
+    } catch (err) { showError(err.message); }
     finally { setBusy(false); }
   }
 
@@ -1094,7 +1034,7 @@ export default function AdminPage() {
       await requestAdminPayment(detail.application.id);
       await refreshList(detail.application.id);
       setMessage('');
-    } catch (err) { setMessage(err.message); return; }
+    } catch (err) { showError(err.message); return; }
     finally { setBusy(false); }
     // Open the email composer so admin can preview/edit before sending
     openEmailComposer('payment_requested');
@@ -1130,7 +1070,7 @@ export default function AdminPage() {
         : prev);
       if (bodyArg === undefined) setNoteDraft(''); // only clear parent draft when called without arg
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
       throw err; // re-throw so the caller (CaseDetailTabs) can keep its draft on failure
     } finally {
       setNoteBusy(false);
@@ -1160,7 +1100,7 @@ export default function AdminPage() {
       setNoteEditingId(null);
       setNoteEditDraft('');
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setNoteBusy(false);
     }
@@ -1177,27 +1117,9 @@ export default function AdminPage() {
         ? { ...prev, notes: (prev.notes || []).filter((n) => n.id !== noteId) }
         : prev);
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setNoteBusy(false);
-    }
-  }
-
-  async function markReadyForLdc() {
-    setBusy(true);
-    setMessage('');
-    try {
-      await updateAdminApplicationStatus(detail.application.id, {
-        status: 'ready_for_ldc',
-        label: 'Ready for grant processing',
-        message: 'COR completed the initial review and is preparing the next application step.'
-      });
-      await refreshList(detail.application.id);
-      setMessage('Application marked ready for grant processing.');
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -1209,7 +1131,7 @@ export default function AdminPage() {
       await updateAdminApplicationStatus(detail.application.id, { status });
       await refreshList(detail.application.id);
     } catch (err) {
-      setMessage(err.message);
+      showError(err.message);
     } finally {
       setBusy(false);
     }
@@ -1225,16 +1147,22 @@ export default function AdminPage() {
     return 'not_started';
   }
 
-  function toggleCallState(checked) {
-    setGlobalStatus(checked ? 'call_state' : 'in_progress');
+  function isWideScreen() {
+    return window.matchMedia('(min-width: 1280px)').matches;
   }
 
-  const filtered = useMemo(
-    () => filterAndSortApplications(applications, filter, search),
-    [applications, filter, search]
-  );
-
-  const counts = useMemo(() => queueCounts(applications), [applications]);
+  // ☰ docks/undocks on wide screens, opens/closes the drawer otherwise.
+  function toggleSidebar() {
+    if (isWideScreen()) {
+      setSidebarOpen(false);
+      setSidebarDocked((docked) => {
+        try { localStorage.setItem('adminSidebarDocked', docked ? '0' : '1'); } catch {}
+        return !docked;
+      });
+    } else {
+      setSidebarOpen((open) => !open);
+    }
+  }
 
   function selectApplication(id) {
     setMobileDetailOpen(true);
@@ -1245,10 +1173,6 @@ export default function AdminPage() {
     openApplication(id);
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
-
-  const emailApplicantHref = detail ? `mailto:${encodeURIComponent(detail.application.contact_email || '')}?subject=${encodeURIComponent('Your New Jersey Business Registration Certificate is needed')}&body=${encodeURIComponent(
-    `Hi,\n\nWe reviewed your COR UEZ application and could not locate a current New Jersey Business Registration Certificate (BRC).\n\nPlease complete New Jersey business/tax registration here:\n${NJ_REGISTRATION_URL}\n\nOnce your BRC is available, sign back into your COR account and upload it. We will continue your application from there.\n\nCOR Solutions`
-  )}` : '#';
 
   if (!authResolved || (session && !profile)) {
     return <div className="app-shell auth-loading-shell admin-loading"><div className="auth-loading-card">Loading admin…</div></div>;
@@ -1288,10 +1212,10 @@ export default function AdminPage() {
           <button
             type="button"
             className="sidebar-toggle-btn"
-            onClick={() => setSidebarOpen((open) => !open)}
-            title={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
-            aria-label={sidebarOpen ? 'Hide applications list' : 'Show applications list'}
-            aria-expanded={sidebarOpen}
+            onClick={toggleSidebar}
+            title="Show / hide applications list"
+            aria-label="Show / hide applications list"
+            aria-expanded={sidebarOpen || sidebarDocked}
           >☰</button>
           <div className="brand-mark">COR</div><div><strong>COR UEZ</strong><span>Admin</span></div>
         </div>
@@ -1302,7 +1226,24 @@ export default function AdminPage() {
           <span className="topbar-stat"><strong>{applicationCounts.submitted}</strong><small>Submitted</small></span>
         </div>
       </div>
-      <div className="admin-top-actions admin-desktop-actions"><a href="/admin/email-settings" className="email-settings-primary">EMAIL SETTINGS</a><a href="/admin/signup-layout">SIGNUP LAYOUT</a><a href="/admin/home-stats">HOME STATS</a><a href="/admin/jotform-test">JOTFORM TEST</a><a href="/admin/accounts">ACCOUNTS</a><a href="/admin/demo-client" target="_blank" rel="noreferrer">DEMO CLIENT</a><a href="/" target="_blank" rel="noreferrer">Open applicant site</a><button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button><button onClick={handleSignOut}>Log out</button></div>
+      <div className="admin-top-actions admin-desktop-actions">
+        {runningJob && <span className="running-job-pill" title="A Chrome-extension automation is running">Running: {runningJob.label} — {runningJob.name}</span>}
+        {/* Rarely-needed pages live behind one menu instead of seven links. */}
+        <details className="admin-settings-menu">
+          <summary title="Admin pages" aria-label="Admin pages">⚙</summary>
+          <div className="admin-settings-popover">
+            <a href="/admin/email-settings">Email settings</a>
+            <a href="/admin/signup-layout">Signup layout</a>
+            <a href="/admin/home-stats">Home stats</a>
+            <a href="/admin/accounts">Accounts</a>
+            <a href="/admin/jotform-test">JotForm test</a>
+            <a href="/admin/demo-client" target="_blank" rel="noreferrer">Demo client ↗</a>
+            <a href="/" target="_blank" rel="noreferrer">Applicant site ↗</a>
+          </div>
+        </details>
+        <button className="dark-mode-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}>{darkMode ? '☀' : '🌙'}</button>
+        <button onClick={handleSignOut}>Log out</button>
+      </div>
       <details className="admin-mobile-menu">
         <summary aria-label="Open admin menu">•••</summary>
         <div className="admin-mobile-menu-popover">
@@ -1318,7 +1259,7 @@ export default function AdminPage() {
       </details>
     </header>
 
-    <main className={`admin-layout ${mobileDetailOpen ? 'mobile-detail-open' : 'mobile-list-open'} ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}`}>
+    <main className={`admin-layout ${mobileDetailOpen ? 'mobile-detail-open' : 'mobile-list-open'} ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}${sidebarDocked ? ' sidebar-docked' : ''}`}>
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
       <AdminSidebar
         applications={applications}
@@ -1333,7 +1274,10 @@ export default function AdminPage() {
           <button type="button" onClick={() => { setMobileDetailOpen(false); window.scrollTo({ top: 0, behavior: 'instant' }); }}>‹ Applicants</button>
           <div><strong>{displayBusinessName(detail.application) || 'Application'}</strong><small>{readyDocumentCount(detail)}/5 docs · {paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</small></div>
         </div>}
-        {message && <div className="admin-message">{message}</div>}
+        {message && <div className={`admin-message${messageIsError ? ' admin-message-error' : ''}`}>
+          <span>{message}</span>
+          <button type="button" className="admin-message-close" onClick={() => setMessageText('')} aria-label="Dismiss message">×</button>
+        </div>}
         {!detail && <div className="admin-empty"><h2>Select an application</h2><p>New submissions will appear on the left.</p></div>}
 
         {detail && <>
@@ -1356,7 +1300,7 @@ export default function AdminPage() {
                   </div>}
                   {detail.application.contact_email && <div className="cockpit-meta-item">
                     <span className="cockpit-meta-label">Email</span>
-                    <div className="cockpit-meta-value">{detail.application.contact_email}</div>
+                    <div className="cockpit-meta-value">{detail.application.contact_email}<CopyButton value={detail.application.contact_email} label="email" /></div>
                   </div>}
                   {detail.owners?.[0] && <div className="cockpit-meta-item">
                     <span className="cockpit-meta-label">Primary owner</span>
@@ -1365,14 +1309,6 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="cockpit-controls">
-                <label className="cockpit-call-state">
-                  <input
-                    type="checkbox"
-                    checked={globalStatusValue(detail.application.status) === 'call_state'}
-                    onChange={(e) => toggleCallState(e.target.checked)}
-                  />
-                  Call State
-                </label>
                 <select
                   className={`cockpit-status-select gs-${globalStatusValue(detail.application.status)}`}
                   value={globalStatusValue(detail.application.status)}
@@ -1453,6 +1389,8 @@ export default function AdminPage() {
             sendTaxIssueEmail={sendTaxIssueEmail}
             sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
             runLdcJotform={runLdcJotform}
+            runUezEnrollment={runUezEnrollment}
+            runningJob={runningJob}
             requestPayment={requestPayment}
             confirmPayment={confirmPayment}
             sendPaymentRequestedEmail={sendPaymentRequestedEmail}
@@ -1493,13 +1431,6 @@ export default function AdminPage() {
           />
 
         </>}
-        {pbsModalOpen && <div className="document-modal-backdrop pbs-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setPbsModalOpen(false); }}>
-          <div className="document-modal pbs-modal" role="dialog" aria-modal="true" aria-label="NJ Premier Business Services">
-            <div className="document-modal-head"><div><strong>NJ Premier Business Services</strong><small>Create / manage the applicant's PBS account</small></div><button onClick={() => setPbsModalOpen(false)} aria-label="Close PBS">×</button></div>
-            <div className="document-modal-body pbs-modal-body"><iframe src={NJ_PBS_URL} title="NJ Premier Business Services" /></div>
-            <div className="document-modal-footer"><div><a href={NJ_PBS_URL} target="_blank" rel="noreferrer">Open PBS in new tab</a><small className="pbs-frame-note">If New Jersey blocks the embedded page, use this link.</small></div><button className="secondary" onClick={() => setPbsModalOpen(false)}>Close</button></div>
-          </div>
-        </div>}
         {previewDoc && (() => {
           const gallery = docsFor(detail, previewDoc.document_type);
           const idx = gallery.findIndex((d) => d.id === previewDoc.id);

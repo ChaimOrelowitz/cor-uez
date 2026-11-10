@@ -22,6 +22,8 @@ import {
   queueCounts,
   readyDocumentCount,
   resolveProcessStep,
+  sidebarTurn,
+  stepStateOption,
   uezStatusLabel
 } from './caseLogic';
 
@@ -440,23 +442,23 @@ describe('deriveDefaultProcessStep', () => {
     expect(deriveDefaultProcessStep('formation', detail)).toEqual({ state: 'not_applicable', waitingOn: null });
   });
 
-  it('formation: non-sole-prop with no document is not_started; rejected doc is waiting on the applicant', () => {
+  it('formation: non-sole-prop with no document is not_started; rejected doc is "Not approved" until the replacement email goes out', () => {
     const noDoc = { application: { is_sole_proprietorship: false }, documents: [] };
     expect(deriveDefaultProcessStep('formation', noDoc)).toEqual({ state: 'not_started', waitingOn: null });
 
     const rejected = { application: { formation_review_status: 'rejected' }, documents: [{ document_type: 'formation' }] };
-    expect(deriveDefaultProcessStep('formation', rejected)).toEqual({ state: 'waiting', waitingOn: 'document' });
+    expect(deriveDefaultProcessStep('formation', rejected)).toEqual({ state: 'cancelled', waitingOn: null });
   });
 
-  it('brc: found is complete, not_found waits on NJ state, mid-flight is in_progress', () => {
+  it('brc: found is complete, not_found is waiting, anything mid-flight is still not_started', () => {
     expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'found' } })).toEqual({ state: 'complete', waitingOn: null });
-    expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'not_found' } })).toEqual({ state: 'waiting', waitingOn: 'nj_state' });
-    expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'checking' } })).toEqual({ state: 'in_progress', waitingOn: null });
+    expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'not_found' } })).toEqual({ state: 'waiting', waitingOn: null });
+    expect(deriveDefaultProcessStep('brc', { application: { brc_status: 'checking' } })).toEqual({ state: 'not_started', waitingOn: null });
     expect(deriveDefaultProcessStep('brc', { application: {} })).toEqual({ state: 'not_started', waitingOn: null });
   });
 
-  it('pbs_mynj: unanswered existing-account question waits on the applicant', () => {
-    expect(deriveDefaultProcessStep('pbs_mynj', { application: { has_existing_pbs_account: null } })).toEqual({ state: 'waiting', waitingOn: 'applicant' });
+  it('pbs_mynj: not_started until the account is created (the admin advances the chip by hand)', () => {
+    expect(deriveDefaultProcessStep('pbs_mynj', { application: { has_existing_pbs_account: null } })).toEqual({ state: 'not_started', waitingOn: null });
     expect(deriveDefaultProcessStep('pbs_mynj', { application: { pbs_account_created: true } })).toEqual({ state: 'complete', waitingOn: null });
   });
 
@@ -623,5 +625,49 @@ describe('displayBusinessName', () => {
       business_name_input: 'Lakewood Bagel',
       brc_registered_name: 'LAKEWOOD BAGEL CO LLC'
     })).toBe('LAKEWOOD BAGEL CO LLC');
+  });
+});
+
+describe('stepStateOption', () => {
+  it('tax clearance: in_progress is the passive wait, waiting is the applicant saying it is fixed', () => {
+    const detail = { application: {}, documents: [] };
+    expect(stepStateOption('tax_clearance', { state: 'in_progress' }, detail)).toMatchObject({ label: 'Issue - emailed applicant', waiting: true });
+    expect(stepStateOption('tax_clearance', { state: 'waiting' }, detail).waiting).toBeFalsy();
+  });
+
+  it('uez: a captured pending certificate reads as applied even with no explicit chip', () => {
+    const detail = { application: {}, documents: [{ document_type: 'uez_pending_certification' }] };
+    expect(stepStateOption('uez_enrollment', { state: 'not_started' }, detail)).toMatchObject({ state: 'in_progress', waiting: true });
+    expect(stepStateOption('uez_enrollment', { state: 'not_started' }, { application: {}, documents: [] }).state).toBe('not_started');
+  });
+});
+
+describe('sidebarTurn', () => {
+  const done = (key) => ({ step_key: key, state: 'complete' });
+  const base = { submitted_at: '2026-01-01', document_types: ['formation', 'brc'], formation_review_status: 'approved' };
+
+  it('applicant still signing up is waiting', () => {
+    expect(sidebarTurn({})).toBe('waiting');
+  });
+
+  it('first unfinished step decides: not started is mine, emailed-applicant is waiting', () => {
+    expect(sidebarTurn({ ...base, brc_status: 'pending', process_steps: [done('formation')] })).toBe('mine');
+    expect(sidebarTurn({ ...base, process_steps: [done('formation'), { step_key: 'brc', state: 'waiting' }] })).toBe('waiting');
+  });
+
+  it('a TC wait does not hide UEZ work that can be done in parallel', () => {
+    const steps = [done('formation'), done('brc'), done('pbs_mynj'), { step_key: 'tax_clearance', state: 'in_progress' }];
+    expect(sidebarTurn({ ...base, process_steps: steps })).toBe('mine');
+    expect(sidebarTurn({ ...base, process_steps: [...steps, { step_key: 'uez_enrollment', state: 'in_progress' }] })).toBe('waiting');
+  });
+
+  it('urgent client actions and Call State are always mine', () => {
+    const waitingRow = { ...base, process_steps: [done('formation'), { step_key: 'brc', state: 'waiting' }] };
+    expect(sidebarTurn({ ...waitingRow, payment_status: 'client_reported' })).toBe('mine');
+    expect(sidebarTurn({ ...waitingRow, status: 'call_state' })).toBe('mine');
+  });
+
+  it('everything complete is done', () => {
+    expect(sidebarTurn({ ...base, process_steps: PROCESS_STEP_KEYS.map(done) })).toBe('done');
   });
 });

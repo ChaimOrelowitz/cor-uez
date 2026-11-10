@@ -161,6 +161,16 @@ const URGENT_REVIEW_ITEMS = [
   }
 ];
 
+// True when any URGENT_REVIEW_ITEMS check fires - the client did something
+// (paid, uploaded, says it's resolved) that needs a human look right now,
+// whatever the step chips currently say.
+export function hasUrgentReview(app) {
+  const types = new Set(app.document_types || []);
+  const formationReview = app.formation_review_status || 'not_reviewed';
+  const approvalReview = app.uez_approval_review_status || 'not_reviewed';
+  return URGENT_REVIEW_ITEMS.some((item) => item.test(app, types, formationReview, approvalReview));
+}
+
 // Tax Clearance and UEZ Enrollment are worked in parallel in real life — an
 // issue on one doesn't mean COR waits before pushing on the other. So each is
 // evaluated independently here instead of one hiding the other behind an
@@ -617,16 +627,118 @@ const NEXT_STEP_LABELS = {
 };
 
 export function nextStepStatus(row) {
-  const detail = {
+  const detail = rowDetail(row);
+  for (const stepKey of NEXT_STEP_WATERFALL) {
+    const { state } = resolveProcessStep(stepKey, detail);
+    if (state !== 'complete' && state !== 'not_applicable') return NEXT_STEP_LABELS[stepKey];
+  }
+  return 'Complete';
+}
+
+// The chip choices each step offers, in display order - the one source for
+// the step panel's pill label, its state chips, and the sidebar's
+// "My move / Waiting" split. `waiting: true` means the ball is in someone
+// else's court (applicant, NJ, LDC). Note the per-step meanings differ:
+// tax_clearance's in_progress is the passive wait and its `waiting` is the
+// applicant saying it's fixed (your move), so never infer turn from the raw
+// state name alone.
+export const STEP_STATE_OPTIONS = {
+  formation: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'cancelled',   label: 'Not approved' },
+    { state: 'waiting',     label: 'Waiting on applicant', waiting: true },
+    { state: 'manual',      label: 'Re-uploaded — needs review' },
+    { state: 'complete',    label: 'Approved' },
+  ],
+  brc: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'waiting',     label: 'Issue — emailed applicant', waiting: true },
+    { state: 'manual',      label: 'Client says resolved — check again' },
+    { state: 'complete',    label: 'Complete' },
+  ],
+  pbs_mynj: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'waiting',     label: 'Waiting on creds', waiting: true },
+    { state: 'manual',      label: 'Creds provided — confirm' },
+    { state: 'complete',    label: 'Complete' },
+  ],
+  tax_clearance: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'in_progress', label: 'Issue - emailed applicant', waiting: true },
+    { state: 'waiting',     label: 'Issue - applicant says resolved' },
+    { state: 'complete',    label: 'Cleared' },
+  ],
+  uez_enrollment: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'in_progress', label: 'Applied - Waiting for state approval', waiting: true },
+    { state: 'complete',    label: 'State approved' },
+  ],
+  ldc_application: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'complete',    label: 'Completed' },
+  ],
+  payment: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'waiting',     label: 'Payment requested', waiting: true },
+    { state: 'in_progress', label: 'Client reported' },
+    { state: 'complete',    label: 'Paid ✓' },
+  ],
+  grant_submission: [
+    { state: 'not_started', label: 'Not started' },
+    { state: 'in_progress', label: 'Submitted — awaiting LDC', waiting: true },
+    { state: 'complete',    label: 'Approved ✓' },
+  ],
+};
+
+// Folds a resolved step state onto one of that step's chip options. UEZ has
+// only three chips, so anything between "not started" and "approved" -
+// including a captured pending certificate with no explicit chip yet -
+// reads as applied/waiting; LDC has two, so anything unfinished is
+// not started. Every other step's states map 1:1 onto its chips.
+export function stepDisplayState(stepKey, step, detail) {
+  if (stepKey === 'uez_enrollment') {
+    if (step.state === 'complete') return 'complete';
+    if (step.state === 'not_started' && !docFor(detail, 'uez_pending_certification')) return 'not_started';
+    return 'in_progress';
+  }
+  if (stepKey === 'ldc_application') return step.state === 'complete' ? 'complete' : 'not_started';
+  return step.state;
+}
+
+export function stepStateOption(stepKey, step, detail) {
+  const display = stepDisplayState(stepKey, step, detail);
+  const option = (STEP_STATE_OPTIONS[stepKey] || []).find((o) => o.state === display);
+  return option || { state: display, label: PROCESS_STEP_STATE_LABELS[display] || display };
+}
+
+function rowDetail(row) {
+  return {
     application: row,
     documents: (row.document_types || []).map((type) => ({ document_type: type })),
     payments: row.payment_status ? [{ status: row.payment_status }] : [],
     statusEvents: [],
     processSteps: row.process_steps || []
   };
-  for (const stepKey of NEXT_STEP_WATERFALL) {
+}
+
+// Whose turn a sidebar row is: 'mine' (something COR can do now), 'waiting'
+// (applicant / NJ / LDC has the ball) or 'done'. Urgent client actions and
+// Call State are always 'mine'. Otherwise the first unfinished pipeline
+// step decides - except Tax Clearance and UEZ Enrollment, which are worked
+// in parallel, so a wait on one doesn't hide work on the other.
+export function sidebarTurn(row) {
+  if (row.status === 'call_state' || hasUrgentReview(row)) return 'mine';
+  if (!row.submitted_at) return 'waiting';
+  const detail = rowDetail(row);
+  const pending = NEXT_STEP_WATERFALL.filter((stepKey) => {
     const { state } = resolveProcessStep(stepKey, detail);
-    if (state !== 'complete' && state !== 'not_applicable') return NEXT_STEP_LABELS[stepKey];
-  }
-  return 'Complete';
+    return state !== 'complete' && state !== 'not_applicable';
+  });
+  if (!pending.length) return 'done';
+  const first = pending[0];
+  const considered = (first === 'tax_clearance' || first === 'uez_enrollment')
+    ? pending.filter((k) => k === 'tax_clearance' || k === 'uez_enrollment')
+    : [first];
+  const anyMine = considered.some((stepKey) => !stepStateOption(stepKey, resolveProcessStep(stepKey, detail), detail).waiting);
+  return anyMine ? 'mine' : 'waiting';
 }

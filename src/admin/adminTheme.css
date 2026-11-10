@@ -396,6 +396,26 @@
 .admin-shell .sidebar-group-call-state .sidebar-group-label { color: #6b46c1; }
 .admin-shell .sidebar-group-call-state .sidebar-group-count { background: #fff; color: #6b46c1; }
 
+/* Whose-turn blocks: My move on top at full strength, Waiting below it
+   visibly quieter - it's the "check in on these" pile, not the work queue. */
+.admin-shell .sidebar-turn-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 14px 20px 2px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--admin-sidebar-text);
+}
+.admin-shell .sidebar-turn-title span:last-child { font-size: 11px; color: var(--admin-sidebar-text-muted); font-variant-numeric: tabular-nums; }
+.admin-shell .sidebar-turn-waiting { margin-top: 10px; border-top: 1px solid var(--admin-sidebar-border); }
+.admin-shell .sidebar-turn-waiting .sidebar-turn-title { color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-turn-waiting [class*="sidebar-group-needs-"] .sidebar-group-label { color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-turn-waiting [class*="sidebar-group-needs-"] .sidebar-group-count { background: rgba(34,54,76,.08); color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-turn-waiting .application-list-item:not(.active) { opacity: .8; }
+.admin-shell .sidebar-turn-done,
+.admin-shell .sidebar-turn-cancelled { margin-top: 10px; border-top: 1px solid var(--admin-sidebar-border); }
+
 /* Sidebar row internals — a real <a href="/admin/businesses/:id"> now, so
    ctrl/cmd/middle-click "open in new tab" and "copy link" work like any
    other page; display:block + no underline makes it read like the button it
@@ -752,7 +772,38 @@
 .admin-shell .cockpit-status-select.gs-call_state {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b46c1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
-.admin-shell .admin-message { background: var(--admin-accent-soft); color: var(--admin-accent); border-radius: var(--admin-radius-sm); }
+.admin-shell .admin-message { background: var(--admin-accent-soft); color: var(--admin-accent); border-radius: var(--admin-radius-sm); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.admin-shell .admin-message-close { flex: 0 0 auto; background: none; border: 0; color: inherit; font-size: 16px; line-height: 1; padding: 0 2px; cursor: pointer; opacity: .6; }
+.admin-shell .admin-message-close:hover { opacity: 1; }
+
+/* Background automation indicator + the ⚙ menu that replaced seven topbar links */
+.admin-shell .running-job-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 5px 10px; border-radius: 20px;
+  background: var(--admin-warn-bg); color: var(--admin-warn-text); border: 1px solid var(--admin-warn-border);
+  font-size: 11px; font-weight: 700;
+}
+.admin-shell .running-job-pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: running-job-pulse 1.2s ease-in-out infinite; }
+@keyframes running-job-pulse { 50% { opacity: .3; } }
+.admin-shell .admin-settings-menu { position: relative; }
+.admin-shell .admin-settings-menu summary {
+  list-style: none; cursor: pointer; padding: 5px 9px; border-radius: var(--admin-radius-sm);
+  background: var(--admin-surface); color: var(--admin-text-muted); font-size: 14px; line-height: 1.2;
+}
+.admin-shell .admin-settings-menu summary::-webkit-details-marker { display: none; }
+.admin-shell .admin-settings-menu[open] summary { color: var(--admin-text); }
+.admin-shell .admin-settings-popover {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 190px;
+  display: flex; flex-direction: column; padding: 6px;
+  background: var(--admin-surface); border: 1px solid var(--admin-border); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(16,20,28,.16);
+}
+.admin-shell .admin-top-actions .admin-settings-popover a {
+  display: block; padding: 8px 10px; border-radius: 6px; background: none;
+  color: var(--admin-text); text-decoration: none; font-size: 12.5px; text-transform: none; letter-spacing: 0;
+}
+.admin-shell .admin-top-actions .admin-settings-popover a:hover { background: var(--admin-surface-sunken); }
 .admin-shell .admin-message-error { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
 
 /* Open PBS button — lives in the chips row */
@@ -1518,6 +1569,15 @@
   --cw-state-manual:      #a78bfa;
   --cw-state-cancelled:   #3a3f4a;
 
+  /* Step state chips/pills: background, border, text (CaseDetailTabs) */
+  --cw-st-complete-bg: #1a2c1e;       --cw-st-complete-border: #2d5035;       --cw-st-complete-fg: #34d399;
+  --cw-st-in_progress-bg: #182030;    --cw-st-in_progress-border: #2a3a54;    --cw-st-in_progress-fg: #60a5fa;
+  --cw-st-waiting-bg: #2a1f08;        --cw-st-waiting-border: #4a3610;        --cw-st-waiting-fg: #fbbf24;
+  --cw-st-manual-bg: #1e1a28;         --cw-st-manual-border: #352d44;         --cw-st-manual-fg: #a08cd8;
+  --cw-st-cancelled-bg: #261519;      --cw-st-cancelled-border: #3d2228;      --cw-st-cancelled-fg: #c0726a;
+  --cw-st-not_applicable-bg: #1a1c20; --cw-st-not_applicable-border: #2c3038; --cw-st-not_applicable-fg: #6f7883;
+  --cw-st-not_started-bg: #181b1f;    --cw-st-not_started-border: #262c34;    --cw-st-not_started-fg: #6f7883;
+
   --cw-radius: 20px;
   --cw-radius-sm: 6px;
   --cw-shadow: 0 22px 44px rgba(0,0,0,.45);
@@ -1542,6 +1602,14 @@
   --cw-chip-bg:      #f3e7cf;
   --cw-divider:      #eee0c4;
   --cw-bar-empty:    #e3d4b0;
+
+  --cw-st-complete-bg: #e3f0e8;       --cw-st-complete-border: #b9d9c5;       --cw-st-complete-fg: #2f7d52;
+  --cw-st-in_progress-bg: #e7eef8;    --cw-st-in_progress-border: #c3d4ec;    --cw-st-in_progress-fg: #2f5f9e;
+  --cw-st-waiting-bg: #f8eccf;        --cw-st-waiting-border: #e8d2a0;        --cw-st-waiting-fg: #8a6a2e;
+  --cw-st-manual-bg: #efe9f8;         --cw-st-manual-border: #d9cdee;         --cw-st-manual-fg: #6b46c1;
+  --cw-st-cancelled-bg: #f6ecea;      --cw-st-cancelled-border: #e3cac5;      --cw-st-cancelled-fg: #9c4a3f;
+  --cw-st-not_applicable-bg: #f3e7cf; --cw-st-not_applicable-border: #e2d3ae; --cw-st-not_applicable-fg: #6b6255;
+  --cw-st-not_started-bg: #f3e7cf;    --cw-st-not_started-border: #e2d3ae;    --cw-st-not_started-fg: #6b6255;
 
   --cw-text:         #16191d;
   --cw-text-soft:    #282d34;
@@ -2209,6 +2277,7 @@
   cursor: pointer;
 }
 .admin-shell .cw-step-chip:hover { background: var(--cw-border-soft); color: var(--cw-text); }
+.admin-shell .cw-step-chip.cw-step-chip-on { background: var(--cw-st-in_progress-bg); color: var(--cw-st-in_progress-fg); }
 
 .admin-shell .cw-pin-btn {
   margin-left: auto;

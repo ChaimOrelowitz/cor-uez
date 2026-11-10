@@ -255,6 +255,25 @@
   }
 }
 
+/* Wide screens: the list is docked beside the case by default (one person
+   switches cases all day - a drawer that closes on every pick cost three
+   clicks per switch). The ☰ button undocks it back into the drawer above. */
+@media (min-width: 1280px) {
+  .admin-layout.sidebar-docked {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+  .admin-layout.sidebar-docked .admin-sidebar {
+    position: relative;
+    width: auto;
+    transform: none;
+    transition: none;
+    box-shadow: none;
+    border-right: 1px solid var(--admin-sidebar-border, #e4e7f0);
+  }
+  .admin-layout.sidebar-docked .sidebar-backdrop { display: none; }
+}
+
 @media (max-width: 640px) {
   .upload-card { align-items: flex-start; flex-direction: column; }
   .review-grid { grid-template-columns: 1fr; }

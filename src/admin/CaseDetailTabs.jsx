@@ -15,10 +15,11 @@ import {
   programLabel,
   PROCESS_STEP_KEYS,
   PROCESS_STEP_STATE_LABELS,
-  PROCESS_STEP_STATES,
   PROCESS_STEP_TITLES,
   REQUIRED_GRANT_DOCUMENTS,
   resolveProcessStep,
+  STEP_STATE_OPTIONS,
+  stepStateOption,
 } from './caseLogic';
 import DocThumbnail from './DocThumbnail';
 import BusinessDetailsCard from './BusinessDetailsCard';
@@ -46,16 +47,11 @@ const STEP_DOC_TYPE = {
 };
 
 // ── State chip styling ────────────────────────────────────────────────────────
+// Theme tokens (--cw-st-<state>-*, adminTheme.css) so chips read correctly in
+// both light and dark mode instead of always rendering dark-theme blobs.
 function stateStyle(state) {
-  switch (state) {
-    case 'complete':        return { bg: '#1a2c1e', border: '#2d5035', fg: '#34d399' };
-    case 'in_progress':     return { bg: '#182030', border: '#2a3a54', fg: '#60a5fa' };
-    case 'waiting':         return { bg: '#2a1f08', border: '#4a3610', fg: '#fbbf24' };
-    case 'not_applicable':  return { bg: '#1a1c20', border: '#2c3038', fg: '#6f7883' };
-    case 'manual':          return { bg: '#1e1a28', border: '#352d44', fg: '#a08cd8' };
-    case 'cancelled':       return { bg: '#261519', border: '#3d2228', fg: '#c0726a' };
-    default:                return { bg: '#181b1f', border: '#262c34', fg: '#6f7883' };
-  }
+  const key = ['complete', 'in_progress', 'waiting', 'manual', 'cancelled', 'not_applicable'].includes(state) ? state : 'not_started';
+  return { bg: `var(--cw-st-${key}-bg)`, border: `var(--cw-st-${key}-border)`, fg: `var(--cw-st-${key}-fg)` };
 }
 
 // ── Segment bar colour ────────────────────────────────────────────────────────
@@ -72,19 +68,32 @@ function segBarColor(state) {
 }
 
 // ── Activity stream helpers ───────────────────────────────────────────────────
+// A case note can be tagged to a step by starting it with "[step_key] " -
+// stored as plain text so tagging needs no schema change; the stream shows
+// the tag as a step chip and hides the prefix.
+function splitStepTag(text) {
+  const match = /^\[([a-z_]+)\] /.exec(text || '');
+  if (match && PROCESS_STEP_KEYS.includes(match[1])) return { stepKey: match[1], body: text.slice(match[0].length) };
+  return { stepKey: null, body: text };
+}
+
 function buildStream(detail) {
-  const notes = (detail.notes || []).map((n) => ({
+  const notes = (detail.notes || []).map((n) => {
+    const { stepKey, body } = splitStepTag(n.body);
+    return {
     id: `note-${n.id}`,
     kind: 'note',
-    body: n.body,
+    body,
+    stepKey,
+    stepLabel: stepKey ? SEG_LABEL[stepKey] : null,
     authorName: n.author_name || 'COR',
     initial: (n.author_name || 'C').charAt(0).toUpperCase(),
     when: formatTimestamp(n.created_at),
     ts: new Date(n.created_at).getTime(),
     noteId: n.id,
     updatedAt: n.updated_at,
-    isPinned: n.is_pinned,
-  }));
+    };
+  });
 
   const stepNotes = (detail.processSteps || [])
     .filter((s) => s.manual_note)
@@ -168,6 +177,8 @@ export default function CaseDetailTabs({
   sendTaxIssueEmail,
   sendUezApplicationSubmittedEmail,
   runLdcJotform,
+  runUezEnrollment,
+  runningJob,
   requestPayment,
   confirmPayment,
   sendPaymentRequestedEmail,
@@ -212,8 +223,12 @@ export default function CaseDetailTabs({
   const [selectedStep, setSelectedStep] = useState(defaultStep);
   const [footerOpen, setFooterOpen] = useState(false);
   const [footerTab, setFooterTab] = useState('docs');
-  const [noteDraftLocal, setNoteDraftLocal] = useState('');
-  const [pinnedNoteId, setPinnedNoteId] = useState(null);
+  // Note drafts are kept per application, so switching cases mid-sentence
+  // neither loses the draft nor posts it to the wrong business.
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const noteDraftLocal = noteDrafts[app.id] || '';
+  const setNoteDraftLocal = (value) => setNoteDrafts((old) => ({ ...old, [app.id]: value }));
+  const [tagNoteToStep, setTagNoteToStep] = useState(false);
   const stepPanelRef = useRef(null);
   const savingNoteRef = useRef(false);
 
@@ -222,7 +237,6 @@ export default function CaseDetailTabs({
     const next = adminQueueInfo(detail.application).stepKey || PROCESS_STEP_KEYS[0];
     setSelectedStep(next);
     setFooterOpen(false);
-    setPinnedNoteId(null);
   }, [detail.application.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll step panel to top on step change
@@ -231,15 +245,15 @@ export default function CaseDetailTabs({
   }, [selectedStep]);
 
   const stream = buildStream(detail);
-  const pinnedItem = stream.find((s) => s.noteId === pinnedNoteId || s.id === `note-${pinnedNoteId}`);
 
   async function saveNote() {
-    const body = noteDraftLocal.trim();
-    if (!body || savingNoteRef.current) return;
+    const text = noteDraftLocal.trim();
+    if (!text || savingNoteRef.current) return;
+    const applicationId = app.id;
     savingNoteRef.current = true;
     try {
-      await addCaseNote(body);
-      setNoteDraftLocal(''); // clear only on success
+      await addCaseNote(tagNoteToStep ? `[${selectedStep}] ${text}` : text);
+      setNoteDrafts((old) => ({ ...old, [applicationId]: '' })); // clear only on success
     } catch {
       // error already surfaced by addCaseNote via the global message banner
     } finally {
@@ -308,6 +322,8 @@ export default function CaseDetailTabs({
             sendTaxIssueEmail={sendTaxIssueEmail}
             sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
             runLdcJotform={runLdcJotform}
+            runUezEnrollment={runUezEnrollment}
+            runningJob={runningJob}
             requestPayment={requestPayment}
             confirmPayment={confirmPayment}
             sendPaymentRequestedEmail={sendPaymentRequestedEmail}
@@ -343,51 +359,33 @@ export default function CaseDetailTabs({
             <span className="cw-rail-count">{stream.length} entries</span>
           </div>
 
-          {/* Composer */}
+          {/* Composer - saves on the button or ⌘/Ctrl+Enter only, never on blur */}
           <div className="cw-composer">
             <textarea
               className="cw-composer-input"
               value={noteDraftLocal}
               onChange={(e) => setNoteDraftLocal(e.target.value)}
-              onBlur={saveNote}
-              placeholder="Add a note…"
+              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNote(); } }}
+              placeholder="Add a note… (⌘↵ to save)"
               rows={2}
-             
             />
             {noteDraftLocal.trim() && (
               <div className="cw-composer-actions">
-                {/* onMouseDown+preventDefault keeps focus on the textarea so blur doesn't fire
-                    before the click lands — then onClick triggers the actual save */}
+                <button className="cw-btn cw-btn-ok" onClick={saveNote} disabled={noteBusy}>Save note</button>
                 <button
-                  className="cw-btn cw-btn-ok"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={saveNote}
-                 
-                >Save note</button>
-                {/* Discard: clear the draft on mousedown so the blur handler sees an empty body */}
-                <button
-                  className="cw-btn-ghost"
-                  onMouseDown={(e) => { e.preventDefault(); setNoteDraftLocal(''); }}
-                >Discard</button>
+                  type="button"
+                  className={`cw-step-chip${tagNoteToStep ? ' cw-step-chip-on' : ''}`}
+                  onClick={() => setTagNoteToStep((on) => !on)}
+                  title="Tag this note to the step you're on"
+                >{tagNoteToStep ? '✓ ' : '+ '}{SEG_LABEL[selectedStep].toUpperCase()}</button>
+                <button className="cw-btn-ghost" onClick={() => setNoteDraftLocal('')}>Discard</button>
               </div>
             )}
           </div>
 
-          {/* Pinned note */}
-          {pinnedItem && (
-            <div className="cw-pinned-card">
-              <div className="cw-pinned-head">
-                <span className="cw-mono cw-faint2">PINNED</span>
-                <button className="cw-unpin-btn" onClick={() => setPinnedNoteId(null)}>✕</button>
-              </div>
-              <span className="cw-note-body">{pinnedItem.body}</span>
-              <span className="cw-mono cw-faint3">{pinnedItem.when}</span>
-            </div>
-          )}
-
           {/* Stream */}
           <div className="cw-stream">
-            {stream.filter((s) => s.noteId !== pinnedNoteId).map((item) => (
+            {stream.map((item) => (
               <div key={item.id} className="cw-stream-entry">
                 {item.divider && (
                   <div className="cw-day-divider">
@@ -411,7 +409,6 @@ export default function CaseDetailTabs({
                               onClick={() => setSelectedStep(item.stepKey)}
                             >{item.stepLabel.toUpperCase()}</button>
                           )}
-                          <button className="cw-pin-btn" onClick={() => setPinnedNoteId(item.noteId)} title="Pin">⚲</button>
                         </div>
                         <span className="cw-note-body">{item.body}</span>
                         <div className="cw-note-footer">
@@ -605,7 +602,7 @@ function StepPanel({
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
   markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail, sendPbsExistingAccountEmail,
   runTaxClearance, sendTaxIssueEmail, sendUezApplicationSubmittedEmail,
-  runLdcJotform, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
+  runLdcJotform, runUezEnrollment, runningJob, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
   runLakewoodGrantPortal, confirmGrantSubmitted, sendGrantSubmittedEmail,
   changePbsAnswerDraft, saveExistingPbsAnswer, saveMyNjCredentials,
   startMyNjEdit, cancelMyNjEdit, toggleShowMyNjSecrets, copyCredential, createMyNjCredentials,
@@ -618,22 +615,6 @@ function StepPanel({
   const docType = STEP_DOC_TYPE[stepKey];
   const doc = docType ? docFor(detail, docType) : null;
 
-  // Step-note local state — keep in sync when step or application changes
-  const [stepNoteDraft, setStepNoteDraft] = useState(step.manualNote || '');
-  useEffect(() => { setStepNoteDraft(step.manualNote || ''); }, [stepKey, detail.application.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function saveStepNote() {
-    const text = stepNoteDraft.trim() || null;
-    if (text === (step.manualNote || null)) return; // nothing changed
-    await saveProcessStep(stepKey, {
-      state: step.state,
-      waitingOn: step.waitingOn || null,
-      waitingSince: step.waitingSince || null,
-      waitingReason: step.waitingReason || null,
-      manualNote: text,
-    });
-  }
-
   // "Set by" line
   const setByLine = step.source === 'explicit'
     ? `Set by ${step.updatedByName || 'admin'} · ${step.updatedAt ? formatTimestamp(step.updatedAt) : ''}`
@@ -641,6 +622,7 @@ function StepPanel({
 
   // Alert content per step
   const alert = stepAlert(stepKey, detail, step);
+  const currentOption = stepStateOption(stepKey, step, detail);
 
   return (
     <div className="cw-step-panel">
@@ -648,29 +630,8 @@ function StepPanel({
       <div className="cw-step-header">
         <div className="cw-step-title-row">
           <h2 className="cw-step-title">{PROCESS_STEP_TITLES[stepKey]}</h2>
-          <span className="cw-step-pill" style={pillStyle(
-            stepKey === 'uez_enrollment' && step.state === 'complete' ? 'complete'
-            : stepKey === 'uez_enrollment' && (step.state === 'in_progress' || step.state === 'waiting' || (step.state === 'not_started' && docFor(detail, 'uez_pending_certification'))) ? 'in_progress'
-            : stepKey === 'tax_clearance' && (step.state === 'in_progress' || step.state === 'waiting') ? step.state
-            : step.state
-          )}>
-            {stepKey === 'formation'
-              ? ({ cancelled: 'Not approved', waiting: 'Waiting on applicant', manual: 'Re-uploaded — needs review', complete: 'Approved' }[step.state] || 'Not started')
-              : stepKey === 'brc'
-              ? ({ waiting: 'Issue — emailed applicant', manual: 'Client says resolved — check again', complete: 'Complete' }[step.state] || 'Not started')
-              : stepKey === 'uez_enrollment'
-              ? (step.state === 'complete' ? 'State approved' : (step.state === 'not_started' && !docFor(detail, 'uez_pending_certification')) ? 'Not started' : 'Applied - Waiting for state approval')
-              : stepKey === 'tax_clearance'
-              ? (step.state === 'complete' ? 'Cleared' : step.state === 'not_started' ? 'Not started' : step.state === 'waiting' ? 'Issue - applicant says resolved' : 'Issue - emailed applicant')
-              : stepKey === 'ldc_application'
-              ? (step.state === 'complete' ? 'Completed' : 'Not started')
-              : stepKey === 'grant_submission'
-              ? (step.state === 'complete' ? 'Approved ✓' : step.state === 'in_progress' ? 'Submitted — awaiting LDC' : 'Not started')
-              : stepKey === 'pbs_mynj'
-              ? ({ waiting: 'Waiting on credentials from applicant', manual: 'PBS creds provided — confirm business added', complete: 'Complete' }[step.state] || 'Not started')
-              : stepKey === 'payment'
-              ? ({ waiting: 'Payment requested', in_progress: 'Client reported — verify', complete: 'Paid ✓' }[step.state] || 'Not started')
-              : PROCESS_STEP_STATE_LABELS[step.state]}
+          <span className="cw-step-pill" style={pillStyle(currentOption.state)}>
+            {currentOption.label}
           </span>
         </div>
         <div className="cw-step-meta">
@@ -679,67 +640,10 @@ function StepPanel({
         </div>
         {/* State selector chips */}
         <div className="cw-state-chips">
-          {(stepKey === 'formation'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'cancelled',   label: 'Not approved' },
-                { state: 'waiting',     label: 'Waiting on applicant' },
-                { state: 'manual',      label: 'Re-uploaded — needs review' },
-                { state: 'complete',    label: 'Approved' },
-              ]
-            : stepKey === 'brc'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'waiting',     label: 'Issue — emailed applicant' },
-                { state: 'manual',      label: 'Client says resolved — check again' },
-                { state: 'complete',    label: 'Complete' },
-              ]
-            : stepKey === 'uez_enrollment'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'in_progress', label: 'Applied - Waiting for state approval' },
-                { state: 'complete',    label: 'State approved' },
-              ]
-            : stepKey === 'tax_clearance'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'in_progress', label: 'Issue - emailed applicant' },
-                { state: 'waiting',     label: 'Issue - applicant says resolved' },
-                { state: 'complete',    label: 'Cleared' },
-              ]
-            : stepKey === 'ldc_application'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'complete',    label: 'Completed' },
-              ]
-            : stepKey === 'grant_submission'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'in_progress', label: 'Submitted — awaiting LDC' },
-                { state: 'complete',    label: 'Approved ✓' },
-              ]
-            : stepKey === 'pbs_mynj'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'waiting',     label: 'Waiting on creds' },
-                { state: 'manual',      label: 'Creds provided — confirm' },
-                { state: 'complete',    label: 'Complete' },
-              ]
-            : stepKey === 'payment'
-            ? [
-                { state: 'not_started', label: 'Not started' },
-                { state: 'waiting',     label: 'Payment requested' },
-                { state: 'in_progress', label: 'Client reported' },
-                { state: 'complete',    label: 'Paid ✓' },
-              ]
-            : PROCESS_STEP_STATES.map((s) => ({ state: s, label: PROCESS_STEP_STATE_LABELS[s] }))
-          ).map(({ state: s, label }) => {
+          {(STEP_STATE_OPTIONS[stepKey] || [])
+            .map(({ state: s, label }) => {
             const st = stateStyle(s);
-            const active = stepKey === 'uez_enrollment'
-              ? (s === 'complete' ? step.state === 'complete' : s === 'not_started' ? step.state === 'not_started' : step.state !== 'complete' && step.state !== 'not_started')
-              : stepKey === 'ldc_application'
-              ? (s === 'complete' ? step.state === 'complete' : step.state !== 'complete')
-              : step.state === s; // formation, brc, tax_clearance, pbs_mynj, payment: exact match
+            const active = currentOption.state === s;
             return (
               <button
                 key={s}
@@ -853,6 +757,8 @@ function StepPanel({
             sendTaxIssueEmail={sendTaxIssueEmail}
             sendUezApplicationSubmittedEmail={sendUezApplicationSubmittedEmail}
             runLdcJotform={runLdcJotform}
+            runUezEnrollment={runUezEnrollment}
+            runningJob={runningJob}
             requestPayment={requestPayment}
             confirmPayment={confirmPayment}
             sendPaymentRequestedEmail={sendPaymentRequestedEmail}
@@ -872,20 +778,6 @@ function StepPanel({
         </div>
       </div>
 
-      {/* Step note — editable (this panel only renders the currently selected step) */}
-      <div className="cw-step-note-section">
-        <span className="cw-field-label cw-mono">STEP NOTE</span>
-        <textarea
-          className="cw-step-note-input"
-          value={stepNoteDraft}
-          onChange={(e) => setStepNoteDraft(e.target.value)}
-          onBlur={saveStepNote}
-          placeholder="Add a note for this step…"
-          rows={3}
-         
-        />
-      </div>
-
       {/* Prev / Next nav */}
       <div className="cw-step-nav">
         {prevLabel
@@ -901,13 +793,8 @@ function StepPanel({
 
 // ── Pill style helper ─────────────────────────────────────────────────────────
 function pillStyle(state) {
-  switch (state) {
-    case 'complete':       return { background: '#1a2c1e', color: '#57c98a' };
-    case 'in_progress':    return { background: '#182030', color: '#6f9fd8' };
-    case 'waiting':        return { background: '#2a1f08', color: '#e0a23c' };
-    case 'not_applicable': return { background: '#1e1f23', color: '#6f7883' };
-    default:               return { background: '#1a1c20', color: '#6f7883' };
-  }
+  const st = stateStyle(state);
+  return { background: st.bg, color: st.fg };
 }
 
 // ── Per-step alert ────────────────────────────────────────────────────────────
@@ -1073,6 +960,28 @@ function StepFields({
 
     case 'payment': {
       const latest = [...(detail.payments || [])].reverse()[0];
+      // Until it's recorded, the details "Confirm payment received" will save
+      // are editable right here (prefilled $500 / Zelle / today).
+      if (latest?.status !== 'paid') {
+        return (
+          <div className="cw-fields cw-fields-col1">
+            <FieldPair label="Amount ($)" value={paymentDraft.amount}
+              onChange={(v) => setPaymentDraft((d) => ({ ...d, amount: v }))} />
+            <span className="cw-field-label">Method</span>
+            <select className="cw-field-input" value={paymentDraft.paymentMethod}
+              onChange={(e) => setPaymentDraft((d) => ({ ...d, paymentMethod: e.target.value }))}>
+              {['Zelle', 'Check', 'Cash', 'Card', 'Other'].map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <span className="cw-field-label">Date</span>
+            <input className="cw-field-input" type="date" value={paymentDraft.paymentDate}
+              onChange={(e) => setPaymentDraft((d) => ({ ...d, paymentDate: e.target.value }))} />
+            <FieldPair label="Reference" value={paymentDraft.reference}
+              onChange={(v) => setPaymentDraft((d) => ({ ...d, reference: v }))} />
+            <span className="cw-field-label">Status</span>
+            <span className="cw-field-value">{paymentStatusLabel(latest?.status)}</span>
+          </div>
+        );
+      }
       return (
         <div className="cw-fields">
           <span className="cw-field-label">Amount</span>
@@ -1134,7 +1043,7 @@ function StepActions({
   runBrcLookup, sendBrcProblemEmail, sendBrcWrongAddressEmail,
   markPbsAccountCreated, setProcessFlag, runPbsSignup, sendPbsAccountCreatedEmail, sendPbsExistingAccountEmail,
   runTaxClearance, sendTaxIssueEmail, sendUezApplicationSubmittedEmail,
-  runLdcJotform, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
+  runLdcJotform, runUezEnrollment, runningJob, requestPayment, confirmPayment, sendPaymentRequestedEmail, sendPaymentReceivedEmail,
   runLakewoodGrantPortal, confirmGrantSubmitted, sendGrantSubmittedEmail,
   changePbsAnswerDraft, saveExistingPbsAnswer, saveMyNjCredentials,
   startMyNjEdit, cancelMyNjEdit, createMyNjCredentials,
@@ -1165,7 +1074,7 @@ function StepActions({
           {(cofState === 'cancelled' || cofState === 'manual') && (
             <Btn
               label={`✉ Send replacement request${lastSent ? ' (resend)' : ''}`}
-              onClick={() => { sendFormationRejectedEmail(); saveStep('waiting'); }}
+              onClick={() => sendFormationRejectedEmail(() => saveStep('waiting'))}
             />
           )}
         </>
@@ -1187,11 +1096,11 @@ function StepActions({
           )}
           {brcState !== 'complete' && (
             <Btn label="✉ Send BRC problem email"
-              onClick={() => { sendBrcProblemEmail(); saveStep('waiting'); }} />
+              onClick={() => sendBrcProblemEmail(() => saveStep('waiting'))} />
           )}
           {brcState !== 'complete' && (
             <Btn label="✉ Send wrong address email"
-              onClick={() => { sendBrcWrongAddressEmail(); saveStep('waiting'); }} />
+              onClick={() => sendBrcWrongAddressEmail(() => saveStep('waiting'))} />
           )}
         </>
       );
@@ -1217,7 +1126,7 @@ function StepActions({
           {/* Existing account path: mark waiting + manually email applicant for creds */}
           {pbsState !== 'complete' && (
             <Btn label={pbsState === 'waiting' ? '✉ Email: already has PBS account (resend)' : '✉ Email: already has PBS account'}
-              onClick={() => { saveStep('waiting'); sendPbsExistingAccountEmail(); }} />
+              onClick={() => sendPbsExistingAccountEmail(() => saveStep('waiting'))} />
           )}
 
           {/* Applicant provided creds — confirm business added */}
@@ -1257,6 +1166,7 @@ function StepActions({
     case 'uez_enrollment':
       return (
         <>
+          <Btn label="▶ Open UEZ application" onClick={runUezEnrollment} variant="ok" disabled={!!runningJob} />
           <Btn label="✉ Send UEZ submitted email" onClick={sendUezApplicationSubmittedEmail} />
         </>
       );

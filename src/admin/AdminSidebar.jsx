@@ -1,5 +1,5 @@
 import React from 'react';
-import { applicationMatchesSearch, displayBusinessName, nextStepStatus } from './caseLogic';
+import { applicationMatchesSearch, displayBusinessName, nextStepStatus, sidebarTurn } from './caseLogic';
 
 // The waterfall labels nextStepStatus() returns, in pipeline order, plus two
 // buckets pulled out separately and overriding the waterfall entirely:
@@ -79,17 +79,36 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
   // Filter by search
   const matched = (applications || []).filter((app) => applicationMatchesSearch(app, search));
 
-  // Group by granular pipeline position (Not started / Needs BRC / ... /
-  // Complete, plus Cancelled) instead of the coarse 5-value status column -
-  // "what does this case actually need next" is the more useful triage view.
-  const groups = {};
-  SECTION_ORDER.forEach((g) => { groups[g] = []; });
+  // Two levels: whose turn it is (My move / Waiting - see sidebarTurn), then
+  // the granular next-step label inside each. Call State, Complete and
+  // Cancelled stay as their own top-level sections. My move runs oldest
+  // first (it's a queue); Waiting runs longest-untouched first, since that's
+  // what most needs a nudge.
+  const blocks = [
+    { turn: 'call_state', title: null },
+    { turn: 'mine', title: 'My move' },
+    { turn: 'waiting', title: 'Waiting on applicant / state' },
+    { turn: 'done', title: null },
+    { turn: 'cancelled', title: null },
+  ].map((block) => ({ ...block, groups: {}, total: 0 }));
+  const byTurn = Object.fromEntries(blocks.map((b) => [b.turn, b]));
   matched.forEach((app) => {
-    const g = sectionKey(app);
-    if (groups[g]) groups[g].push(app);
+    const section = sectionKey(app);
+    const turn = section === 'Call State' ? 'call_state'
+      : section === 'Cancelled' ? 'cancelled'
+      : section === 'Complete' ? 'done'
+      : sidebarTurn(app) === 'waiting' ? 'waiting' : 'mine';
+    const block = byTurn[turn];
+    (block.groups[section] ||= []).push(app);
+    block.total += 1;
   });
-  SECTION_ORDER.forEach((g) => {
-    groups[g].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const time = (value) => new Date(value || 0).getTime();
+  blocks.forEach((block) => {
+    Object.values(block.groups).forEach((rows) => rows.sort((a, b) => (
+      block.turn === 'waiting' ? time(a.updated_at) - time(b.updated_at)
+      : block.turn === 'mine' ? time(a.created_at) - time(b.created_at)
+      : time(b.created_at) - time(a.created_at)
+    )));
   });
 
   return (
@@ -106,19 +125,22 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
       </div>
 
       <div className="application-list">
-        {SECTION_ORDER.map((section) => {
-          const rows = groups[section];
-          if (!rows.length) return null;
+        {blocks.map((block) => block.total > 0 && <div key={block.turn} className={`sidebar-turn sidebar-turn-${block.turn}`}>
+          {block.title && <div className="sidebar-turn-title"><span>{block.title}</span><span>{block.total}</span></div>}
+          {SECTION_ORDER.map((section) => {
+          const rows = block.groups[section];
+          if (!rows?.length) return null;
           const key = slug(section);
-          const isCollapsed = collapsed.has(section);
+          const collapseKey = `${block.turn}:${section}`;
+          const isCollapsed = collapsed.has(collapseKey);
           return (
-            <div key={section} className={`sidebar-group sidebar-group-${key}`}>
+            <div key={collapseKey} className={`sidebar-group sidebar-group-${key}`}>
               <button
                 type="button"
                 className="sidebar-group-header"
                 onClick={() => setCollapsed((old) => {
                   const next = new Set(old);
-                  if (next.has(section)) next.delete(section); else next.add(section);
+                  if (next.has(collapseKey)) next.delete(collapseKey); else next.add(collapseKey);
                   return next;
                 })}
                 aria-expanded={!isCollapsed}
@@ -173,6 +195,7 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
             </div>
           );
         })}
+        </div>)}
         {matched.length === 0 && <div className="empty-list">No applications found.</div>}
       </div>
     </aside>
