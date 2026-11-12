@@ -185,6 +185,23 @@ function MaskedSsnInput({ value, onChange }) {
   );
 }
 
+// Shown on the review step and again in the submit confirmation. People kept
+// asking "do I pay now?" — so the answer leads, in plain words.
+function PaymentTerms() {
+  return (
+    <div className="payment-terms">
+      <div className="payment-terms-head"><span className="payment-terms-badge">Nothing to pay today</span><strong>$500 service fee — paid later</strong></div>
+      <ol>
+        <li><b>Today:</b> you submit this application. No payment, no card needed.</li>
+        <li><b>Next:</b> COR Solutions works through your UEZ enrollment and prepares your grant application.</li>
+        <li><b>Before we file the grant application:</b> we'll ask you for the $500 fee. The application is not filed until it's paid.</li>
+        <li><b>If the LDC denies the application:</b> you get the full $500 back.</li>
+        <li><b>If the LDC approves it:</b> the fee is earned and no longer refundable.</li>
+      </ol>
+    </div>
+  );
+}
+
 function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
@@ -484,6 +501,9 @@ export default function App({ demoMode = false }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  // New step = new page: start it at the top, like any other website.
+  useEffect(() => { window.scrollTo(0, 0); }, [step]);
   const [eligibility, setEligibility] = useState(null);
   const [applicationId, setApplicationId] = useState(null);
   const [bundle, setBundle] = useState(null);
@@ -1352,7 +1372,7 @@ export default function App({ demoMode = false }) {
           </div>
           <div className="hint review-consent">By submitting, you authorize COR Solutions to use the information and documents provided to prepare and process your UEZ enrollment and applicable grant application.</div>
           <div className="hint review-consent">Along the way, COR Solutions will likely ask you to complete certain steps that only you, the business owner, are able to perform — COR Solutions cannot take those actions on your behalf.</div>
-          <div className="hint review-consent">COR Solutions will now begin processing your information. Once every step is complete, COR Solutions will request a $500 payment before submitting your grant application — payment is due prior to the application being filed. Those funds are held by COR Solutions until the application is decided: if the application is denied, the $500 is refunded in full. Once the application is approved by the LDC, the fee is no longer refundable.</div>
+          <PaymentTerms />
         </div>}
 
         {message && <div className="form-message">{message}</div>}
@@ -1364,11 +1384,22 @@ export default function App({ demoMode = false }) {
           {step === 3 && <button className="primary compact" onClick={saveBusinessStep} disabled={busy}>Continue</button>}
           {step === 4 && <button className="primary compact" onClick={saveOwnerStep} disabled={busy}>Continue</button>}
           {step === 5 && <button className="primary compact" onClick={continueFromDocuments} disabled={busy || Boolean(uploadingType)}>Continue</button>}
-          {step === 6 && <button className="primary compact" onClick={submitFinal} disabled={busy}>{busy ? 'Submitting…' : 'Submit application'}</button>}
+          {step === 6 && <button className="primary compact" onClick={() => setShowSubmitConfirm(true)} disabled={busy}>{busy ? 'Submitting…' : 'Submit application'}</button>}
         </div>
       </div>
 
       <div className="trust-row"><span>Secure application</span><span>•</span><span>Private document storage</span><span>•</span><span>Progress saved to your account</span></div>
+
+      {showSubmitConfirm && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setShowSubmitConfirm(false); }}>
+        <div className="submit-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="submit-confirm-title">
+          <h3 id="submit-confirm-title">Before you submit</h3>
+          <PaymentTerms />
+          <div className="submit-confirm-actions">
+            <button type="button" className="secondary" onClick={() => setShowSubmitConfirm(false)} disabled={busy}>Go back</button>
+            <button type="button" className="primary" onClick={async () => { await submitFinal(); setShowSubmitConfirm(false); }} disabled={busy}>{busy ? 'Submitting…' : 'I understand — submit'}</button>
+          </div>
+        </div>
+      </div>}
 
       {exampleDocPreview && <div className="document-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setExampleDocPreview(null); }}>
         <div className="document-modal doc-example-modal" role="dialog" aria-modal="true" aria-label={exampleDocPreview.title}>
