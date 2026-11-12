@@ -166,6 +166,25 @@ function formatDob(value) {
   return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
 }
 
+// SSN shows in the clear only while the field has focus; once the applicant
+// clicks away every digit becomes a dot (dashes kept so the shape still reads).
+function MaskedSsnInput({ value, onChange }) {
+  const [focused, setFocused] = useState(false);
+  const masked = String(value || '').replace(/\d/g, '•');
+  return (
+    <input
+      required
+      inputMode="numeric"
+      autoComplete="off"
+      value={focused ? value : masked}
+      onChange={onChange}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      placeholder="###-##-####"
+    />
+  );
+}
+
 function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
@@ -1258,7 +1277,7 @@ export default function App({ demoMode = false }) {
                 if (key === 'email') return <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>Email <span className="required-star">*</span></label><input required type="email" value={owner.email} onChange={updateOwner(index, 'email')} /></div>;
                 if (key === 'phone') return <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>Best phone <span className="required-star">*</span></label><input required inputMode="tel" value={owner.phone} onChange={updateOwner(index, 'phone')} /></div>;
                 if (key === 'dob') return <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>Date of birth <span className="required-star">*</span></label><input required inputMode="numeric" placeholder="MM/DD/YYYY" value={owner.dob} onChange={updateOwner(index, 'dob')} /></div>;
-                if (key === 'ssn') return <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>SSN <span className="required-star">*</span></label><input required inputMode="numeric" value={owner.ssn} onChange={updateOwner(index, 'ssn')} placeholder="•••-••-••••" /></div>;
+                if (key === 'ssn') return <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>SSN <span className="required-star">*</span></label><MaskedSsnInput value={owner.ssn} onChange={updateOwner(index, 'ssn')} /></div>;
                 if (key === 'ownershipPercent') return !primaryIs100 ? <div className={signupFieldClass(signupLayout, 'ownerCore', key)} key={key}><label>Ownership percentage <span className="required-star">*</span></label><input required type="number" min="0.01" max="100" step="0.01" value={owner.ownershipPercent} onChange={updateOwner(index, 'ownershipPercent')} /></div> : null;
                 return null;
               })}
