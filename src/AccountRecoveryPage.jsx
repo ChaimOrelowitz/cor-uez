@@ -56,7 +56,7 @@ export default function AccountRecoveryPage({ mode }) {
       <section className="wizard-card login-card">
         <div className="content-block">
           {mode === 'forgot' ? <>
-            <div className="intro-copy"><h3>Reset your password</h3><p>Enter the email address connected to your COR UEZ account.</p></div>
+            <div className="intro-copy"><h3>Reset your password</h3><p>Enter the email address connected to your COR Solutions UEZ account.</p></div>
             <form onSubmit={sendReset}>
               <label>Email</label><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               <button className="primary login-submit" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>

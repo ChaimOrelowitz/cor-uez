@@ -24,7 +24,8 @@ import {
   reportTaxClearanceResolved,
   whoAmI,
   getSignupLayout,
-  getHomeStats
+  getHomeStats,
+  adminCheckMyNjLogin
 } from './api';
 
 const steps = ['Address', 'Eligibility', 'Account', 'Business', 'Owners', 'Documents', 'Review'];
@@ -237,12 +238,12 @@ function PaymentTerms() {
     <div className="payment-terms">
       <div className="payment-terms-head"><span className="payment-terms-badge">Nothing to pay today</span><strong>$500 service fee — paid later</strong></div>
       <ol>
-        <li><b>Today:</b> you submit this application. No payment, no card needed.</li>
+        <li><b>Today:</b> you submit this application. No payment needed.</li>
         <li><b>Next:</b> COR Solutions works through your UEZ enrollment and prepares your grant application.</li>
-        <li><b>Before we file the grant application:</b> we'll ask you for the $500 fee. The application is not filed until it's paid.</li>
+        <li className="payment-terms-key"><b>Before we file the grant application:</b> we'll ask you for the $500 fee. The application is not filed until it's paid.</li>
         <li><b>After we file:</b> the LDC usually takes <b>2–3 months</b> to approve or deny the application. That timing is up to the LDC, not COR Solutions.</li>
         <li><b>If the LDC denies the application:</b> you get the full $500 back.</li>
-        <li><b>If the LDC approves it:</b> the fee is earned and no longer refundable.</li>
+        <li><b>If the LDC approves it:</b> the fee is no longer refundable.</li>
       </ol>
     </div>
   );
@@ -381,7 +382,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
     try {
       await reportTaxClearanceResolved(app.id);
       await onRefresh();
-      setMessage('Thanks. COR will recheck your Tax Clearance Certificate.');
+      setMessage('Thanks. COR Solutions will recheck your Tax Clearance Certificate.');
     } catch (err) { setMessage(err.message); }
     finally { setTaxBusy(false); }
   }
@@ -453,10 +454,10 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
           {taxIssueOpen && <div className="action-panel warn-panel tax-issue-client-panel">
             <h3>Tax Clearance issue</h3>
             {taxRecheckRequested ? <>
-              <p>You told COR that the State says this issue is resolved. We will recheck your Tax Clearance Certificate.</p>
+              <p>You told COR Solutions that the State says this issue is resolved. We will recheck your Tax Clearance Certificate.</p>
               <span className="status-pill warn">Recheck requested</span>
             </> : <>
-              <p>New Jersey could not issue your Tax Clearance Certificate. Please follow the instructions COR sent you. Once the State tells you the issue is resolved, click below.</p>
+              <p>New Jersey could not issue your Tax Clearance Certificate. Please follow the instructions COR Solutions sent you. Once the State tells you the issue is resolved, click below.</p>
               <button className="primary compact inline-button" onClick={reportTaxResolved} disabled={taxBusy}>{taxBusy ? 'Saving…' : 'The state says my tax issue is resolved'}</button>
             </>}
           </div>}
@@ -494,7 +495,7 @@ function ApplicantPortal({ bundle, onRefresh, onSignOut, demoMode = false }) {
         {paymentRequested && <section className="wizard-card portal-card">
           <div className="portal-section-head"><h3>Payment</h3><span>$500</span></div>
           {latestPayment?.status === 'paid' ? <div className="action-panel good-panel"><h3>✓ Payment received</h3></div>
-            : latestPayment?.status === 'client_reported' ? <div className="action-panel"><h3>Payment reported</h3><p>You told COR the payment was sent. We are verifying it.</p></div>
+            : latestPayment?.status === 'client_reported' ? <div className="action-panel"><h3>Payment reported</h3><p>You told COR Solutions the payment was sent. We are verifying it.</p></div>
             : <><p className="muted">After you send the $500 payment, click below.</p><button className="primary admin-full-button" onClick={reportPaymentSent} disabled={paymentBusy}>{paymentBusy ? 'Saving…' : 'I sent my payment'}</button></>}
         </section>}
 
@@ -1117,13 +1118,16 @@ export default function App({ demoMode = false }) {
     const needsAnswer = pbsCheck.state === 'challenge';
     if (needsAnswer && !pbsChallengeAnswer.trim()) { setPbsCheck((old) => ({ ...old, message: 'Enter your security answer.' })); return; }
     setPbsCheck((old) => ({ state: 'checking', message: '', question: old.question }));
-    if (demoMode) {
+    // Local dev demo (no admin login): pretend. Live demo: a real myNJ
+    // sign-in through the admin-only check endpoint, nothing saved.
+    if (demoMode && import.meta.env.DEV && !session?.access_token) {
       await new Promise((r) => setTimeout(r, 1500));
       setPbsCheckedKey(key); setPbsCheck({ state: 'ok', message: '', question: null });
       return;
     }
     try {
-      const result = await savePbsAccountInfo(applicationId, { hasExistingPbsAccount: true, username: form.pbsUsername.trim(), password: form.pbsPassword, challengeAnswer: needsAnswer ? pbsChallengeAnswer.trim() : '' });
+      const payload = { hasExistingPbsAccount: true, username: form.pbsUsername.trim(), password: form.pbsPassword, challengeAnswer: needsAnswer ? pbsChallengeAnswer.trim() : '' };
+      const result = demoMode ? await adminCheckMyNjLogin(payload) : await savePbsAccountInfo(applicationId, payload);
       setPbsCheckedKey(key);
       setPbsChallengeAnswer('');
       setPbsCheck(result?.myNjVerified
@@ -1265,7 +1269,7 @@ export default function App({ demoMode = false }) {
             <details><summary>What does COR Solutions do?</summary><p>COR Solutions collects the information needed for the process, prepares the UEZ enrollment and applicable Lakewood grant application, and gives you an online account where you can see updates and anything that still needs your attention.</p></details>
             <details><summary>What will I need to provide?</summary><p>You will enter basic business and owner information, as well as the Certificate of Formation. If another item is needed later, it will appear clearly in your account.</p></details>
             <details><summary>How do I know if my business is eligible?</summary><p>Click “Check my business address.” The next page checks the location against the UEZ map before you create an account or complete the full intake.</p></details>
-            <details><summary>What happens after I submit?</summary><p>You can log back into your COR account at any time. Your activity tracker shows the application moving forward, and any item you need to provide or replace will appear as an action in your account.</p></details>
+            <details><summary>What happens after I submit?</summary><p>You can log back into your COR Solutions account at any time. Your activity tracker shows the application moving forward, and any item you need to provide or replace will appear as an action in your account.</p></details>
           </div>
         </section>
 
@@ -1296,7 +1300,7 @@ export default function App({ demoMode = false }) {
       <section className="hero">
         <div className="eyebrow">NEW JERSEY UEZ SERVICES</div>
         <h1>We handle your UEZ signup and grant application.</h1>
-        <p>Start with your business address. COR will check eligibility, collect what we need, and handle the applications for you.</p>
+        <p>Start with your business address. COR Solutions will check eligibility, collect what we need, and handle the applications for you.</p>
       </section>
 
       <div className="wizard-card">
@@ -1339,7 +1343,7 @@ export default function App({ demoMode = false }) {
         </div>}
 
         {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); createAccountAndCase(); }}>
-          <div className="intro-copy"><h3>Create your COR account</h3><p>Your account keeps your application, documents, and status in one place.</p></div>
+          <div className="intro-copy"><h3>Create your COR Solutions account</h3><p>Your account keeps your application, documents, and status in one place.</p></div>
           <div className="field-grid ordered-field-grid">
             {signupLayout.account.map((key) => isBreak(key) ? renderSectionBreak(key) : key === 'email'
               ? <div className={signupFieldClass(signupLayout, 'account', key)} key={key}><label>Email <span className="required-star">*</span></label><input type="email" value={form.email} onChange={update('email')} required /></div>
@@ -1368,7 +1372,7 @@ export default function App({ demoMode = false }) {
 
         {step === 4 && <div className="content-block">
           <div className="intro-copy"><h3>Business ownership</h3><p>List every owner of the business.</p></div>
-          <div className="hint"><strong>Why we ask for DOB and SSN:</strong> The grant application requires this information for each business owner. COR collects it only so we can prepare and submit the required application information on your behalf.</div>
+          <div className="hint"><strong>Why we ask for DOB and SSN:</strong> The grant application requires this information for each business owner. COR Solutions collects it only so we can prepare and submit the required application information on your behalf.</div>
           <div className="field-grid"><div><label>Is the primary owner the 100% owner? <span className="required-star">*</span></label><select required value={primaryOwnershipSelection} onChange={(e) => setPrimaryOwnershipMode(e.target.value)}><option value="" disabled>Select yes or no</option><option value="yes">Yes</option><option value="no">No</option></select></div></div>
           {!primaryIs100 && <div className="ownership-summary"><span>Ownership accounted for</span><strong className={Math.abs(ownershipTotal - 100) < 0.001 ? 'ownership-ok' : ''}>{ownershipTotal}% / 100%</strong></div>}
           {form.owners.map((owner, index) => <div className="owner-card" key={index}>
@@ -1444,6 +1448,7 @@ export default function App({ demoMode = false }) {
                   {hasBrc
                     ? <UploadZone label="Upload Business Registration Certificate" docs={brcDocs} uploading={uploadingType === 'brc'} disabled={Boolean(uploadingType)} onFile={(file) => uploadDoc('brc', file)} onRemove={removeUploadedDocument} />
                       : <>
+                        {demoMode && import.meta.env.DEV && <button type="button" className="demo-fake-upload" onClick={() => setDocuments((old) => [...old, { id: `demo-brc-${Date.now()}`, document_type: 'brc', filename: 'demo-brc.pdf' }])}>Local demo only: pretend a BRC was uploaded</button>}
                         <ol className="doc-steps">
                           <li><div className="doc-steps-title">Open the NJ BRC lookup and enter these two values</div>
                             <div className="brc-lookup-values">
@@ -1477,7 +1482,7 @@ export default function App({ demoMode = false }) {
                   <div className="doc-step-head"><div><strong>Do you already have a NJ Premier Business Services (PBS) account? <span className="required-star">*</span></strong>{pbsDone && <span className="doc-done-pill">✓ Done</span>}<p>If you already use PBS / MyNJ for this business, we'll use that account instead of creating a new one.</p></div></div>
                   <div className="doc-choice-row" role="radiogroup" aria-label="Do you already have a PBS account?">
                     <button type="button" role="radio" aria-checked={form.hasExistingPbsAccount === 'yes'} className={`doc-choice ${form.hasExistingPbsAccount === 'yes' ? 'on' : ''}`} onClick={() => setForm((old) => ({ ...old, hasExistingPbsAccount: 'yes' }))}><b>Yes</b><span>I have a MyNJ login</span></button>
-                    <button type="button" role="radio" aria-checked={form.hasExistingPbsAccount === 'no'} className={`doc-choice ${form.hasExistingPbsAccount === 'no' ? 'on' : ''}`} onClick={() => setForm((old) => ({ ...old, hasExistingPbsAccount: 'no', pbsUsername: '', pbsPassword: '' }))}><b>No</b><span>COR will create one</span></button>
+                    <button type="button" role="radio" aria-checked={form.hasExistingPbsAccount === 'no'} className={`doc-choice ${form.hasExistingPbsAccount === 'no' ? 'on' : ''}`} onClick={() => setForm((old) => ({ ...old, hasExistingPbsAccount: 'no', pbsUsername: '', pbsPassword: '' }))}><b>No</b><span>COR Solutions will create one</span></button>
                   </div>
                   {form.hasExistingPbsAccount === 'yes' && <div className="pbs-login-panel">
                     <div className="pbs-login-fields">
@@ -1495,7 +1500,7 @@ export default function App({ demoMode = false }) {
                           {checking && <span className="pbs-check-hint">This can take up to a minute. Please keep this page open.</span>}
                         </div>}
                     {!pbsLoginChecked && pbsCheck.message && pbsCheck.state !== 'checking' && <div className={`pbs-check-result ${pbsCheck.state === 'challenge' ? 'warn' : 'bad'}`}>{pbsCheck.message}</div>}
-                    <p className="pbs-login-note">🔒 We sign in to MyNJ once to confirm the login works. It's stored encrypted, and only COR's team uses it, to work on your PBS account.</p>
+                    <p className="pbs-login-note">🔒 We sign in to MyNJ once to confirm the login works. It's stored encrypted, and only COR Solutions' team uses it, to work on your PBS account.</p>
                   </div>}
                   {!pbsLoginChecked && <a className="pbs-check-link" href="https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login" target="_blank" rel="noreferrer">Not sure? Open MyNJ to check, or reset your password ↗</a>}
                 </div>;
@@ -1508,7 +1513,7 @@ export default function App({ demoMode = false }) {
         </div>}
 
         {step === 6 && <div className="content-block review-block">
-          <div className="intro-copy"><h3>Review and submit</h3><p>Make sure the information below looks right. COR will handle the remaining state verification steps after submission.</p></div>
+          <div className="intro-copy"><h3>Review and submit</h3><p>Make sure the information below looks right. COR Solutions will handle the remaining state verification steps after submission.</p></div>
           <div className="review-grid">
             <div><span>Business</span><strong>{form.businessName}</strong><small>{form.address}</small></div>
             <div><span>Program</span><strong>{eligibleProgramName}</strong></div>

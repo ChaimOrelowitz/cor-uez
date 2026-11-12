@@ -141,6 +141,10 @@ export function saveOwners(applicationId, owners) {
   });
 }
 
+export function adminCheckMyNjLogin(payload) {
+  return request('/api/uez/admin/mynj-check', { method: 'POST', body: JSON.stringify(payload) });
+}
+
 export function savePbsAccountInfo(applicationId, payload) {
   return request(`/api/uez/applications/${applicationId}/pbs-account-info`, {
     method: 'PUT',

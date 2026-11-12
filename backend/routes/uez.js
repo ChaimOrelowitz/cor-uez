@@ -840,6 +840,25 @@ function takeMyNjCheck(applicationId) {
   return true;
 }
 
+// Demo client only: a real myNJ sign-in for an admin testing the checker
+// with their own login. Nothing is saved; only the result code comes back.
+router.post('/admin/mynj-check', requireUezAdmin, async (req, res) => {
+  try {
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '');
+    const challengeAnswer = String(req.body?.challengeAnswer || '').trim();
+    if (!username || !password) return res.status(400).json({ error: 'Enter the MyNJ username and password.' });
+    if (!takeMyNjCheck(`admin:${req.user.id}`)) {
+      return res.status(429).json({ code: 'too_many_checks', error: 'Too many login checks in a short time. Wait about 15 minutes, then try again.' });
+    }
+    const result = await verifyMyNjLogin({ username, password, challengeAnswer });
+    if (USER_FIXABLE_CODES.has(result.code)) {
+      return res.status(422).json({ code: result.code, question: result.question || null, error: MYNJ_CHECK_MESSAGES[result.code] });
+    }
+    res.json({ myNjVerified: result.code === 'ok', code: result.code });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.put('/applications/:id/pbs-account-info', async (req, res) => {
   try {
     const application = await getOwnedApplication(req.params.id, req.user);
