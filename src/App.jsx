@@ -1448,7 +1448,7 @@ export default function App({ demoMode = false }) {
                   {hasBrc
                     ? <UploadZone label="Upload Business Registration Certificate" docs={brcDocs} uploading={uploadingType === 'brc'} disabled={Boolean(uploadingType)} onFile={(file) => uploadDoc('brc', file)} onRemove={removeUploadedDocument} />
                       : <>
-                        {demoMode && import.meta.env.DEV && <button type="button" className="demo-fake-upload" onClick={() => setDocuments((old) => [...old, { id: `demo-brc-${Date.now()}`, document_type: 'brc', filename: 'demo-brc.pdf' }])}>Local demo only: pretend a BRC was uploaded</button>}
+                        {demoMode && <button type="button" className="demo-fake-upload" onClick={() => setDocuments((old) => [...old, { id: `demo-brc-${Date.now()}`, document_type: 'brc', filename: 'demo-brc.pdf' }])}>Demo only: pretend a BRC was uploaded</button>}
                         <ol className="doc-steps">
                           <li><div className="doc-steps-title">Open the NJ BRC lookup and enter these two values</div>
                             <div className="brc-lookup-values">
