@@ -8,3 +8,7 @@ backend/.env
 dist/
 ldc-poc/backend/.env
 uez-discovery-*/
+
+# Generated locally, not committed
+backend/package-lock.json
+**/supabase/.temp/
