@@ -413,6 +413,12 @@
 .admin-shell .sidebar-turn-waiting [class*="sidebar-group-needs-"] .sidebar-group-label { color: var(--admin-sidebar-text-muted); }
 .admin-shell .sidebar-turn-waiting [class*="sidebar-group-needs-"] .sidebar-group-count { background: rgba(34,54,76,.08); color: var(--admin-sidebar-text-muted); }
 .admin-shell .sidebar-turn-waiting .application-list-item:not(.active) { opacity: .8; }
+/* Not completed: signups that never pressed Submit. Parked at the bottom,
+   collapsed, so half-filled applications stay out of the work queue. */
+.admin-shell .sidebar-turn-incomplete { margin-top: 10px; border-top: 1px solid var(--admin-sidebar-border); }
+.admin-shell .sidebar-incomplete-toggle { width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit; text-align: left; color: var(--admin-sidebar-text-muted); padding-bottom: 10px; }
+.admin-shell .sidebar-incomplete-hint { padding: 0 20px 8px; font-size: 11px; color: var(--admin-sidebar-text-muted); line-height: 1.4; }
+.admin-shell .sidebar-incomplete-item:not(.active) { opacity: .7; }
 .admin-shell .sidebar-turn-done,
 .admin-shell .sidebar-turn-cancelled { margin-top: 10px; border-top: 1px solid var(--admin-sidebar-border); }
 

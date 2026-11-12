@@ -166,3 +166,99 @@ textarea { min-height: 94px; resize: vertical; }
 .submit-confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .submit-confirm-actions .primary{margin-top:0}
 @media(max-width:600px){.submit-confirm-actions{flex-direction:column-reverse}.submit-confirm-actions button{width:100%}}
+
+/* Documents step: numbered cards, either/or choice, drop zones */
+.doc-step-card{border:1px solid #dfe3ee;border-radius:16px;background:#fff;padding:18px 20px;display:grid;gap:14px}
+.doc-step-card.is-done{border-color:#9fd9bc;background:#f6fcf9}
+.doc-step-head{text-align:center}
+.doc-step-head>div{max-width:560px;margin:0 auto}
+.doc-done-pill{display:inline-block;margin-left:8px;vertical-align:2px;background:#1f9d62;color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px}
+.doc-step-head p{margin:4px 0 0;color:#5b6380;font-size:14px;line-height:1.5}
+.doc-step-head strong{font-size:16px}
+.documents-service-note+.uploaded-docs,.ordered-documents+.documents-service-note{margin-top:16px}
+.doc-choice-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.doc-choice{display:grid;gap:2px;text-align:left;padding:14px 16px;border:2px solid #dfe3ee;border-radius:12px;background:#fff;cursor:pointer;font-family:inherit;color:#2c3150}
+.doc-choice b{font-size:16px}.doc-choice span{font-size:13px;color:#6f7690}
+.doc-choice:hover:not(:disabled){border-color:#a9aef0}
+.doc-choice.on{border-color:#616ae0;background:#f5f6ff;box-shadow:0 0 0 3px rgba(97,106,224,.12)}
+.doc-choice:disabled{opacity:.5;cursor:not-allowed}
+.doc-step-body{display:grid;gap:10px;justify-items:start}
+.doc-step-body>.upload-zone,.doc-step-body>.upload-done{justify-self:stretch}
+.doc-help{margin:0;color:#5b6380;font-size:14px;line-height:1.5}
+.primary.doc-cta{margin-top:0;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-size:14px;cursor:pointer}
+.upload-zone{position:relative;display:grid;justify-items:center;gap:4px;text-align:center;padding:24px 16px;border:2px dashed #b9bef2;border-radius:14px;background:#f8f9ff;cursor:pointer;color:#5b6380;font-size:13px;transition:.15s}
+.upload-zone strong{color:#4a52c4;font-size:15px}
+.upload-zone:hover,.upload-zone.dragging{border-color:#616ae0;background:#eff0ff}
+.upload-zone.disabled{opacity:.6;cursor:default}
+.upload-zone-icon{font-size:20px;color:#616ae0}
+.upload-zone input,.upload-another input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.upload-done{display:grid;gap:8px}
+.upload-done-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:#e8f6ef;border:1px solid #9fd9bc}
+.upload-done-row strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.upload-done-check{color:#1f9d62;font-weight:800}
+.upload-another{position:relative;justify-self:start;cursor:pointer}
+.doc-done-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:#e8f6ef;border:1px solid #9fd9bc;color:#17663f;font-weight:700;font-size:14px;justify-self:stretch}
+.link-button{background:none;border:0;padding:0;color:#5860c9;font-weight:700;font-size:13px;cursor:pointer;text-decoration:underline;font-family:inherit}
+.link-button:disabled{opacity:.5;cursor:default}
+.doc-steps{margin:0;padding:0;list-style:none;counter-reset:docstep;display:grid;gap:16px}
+.doc-steps>li{counter-increment:docstep;position:relative;padding-left:38px;display:grid;gap:10px;justify-items:start}
+.doc-steps>li>.upload-zone,.doc-steps>li>.upload-done{justify-self:stretch}
+.doc-steps>li:before{content:counter(docstep);position:absolute;left:4px;top:-1px;width:24px;height:24px;border-radius:50%;background:#616ae0;color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center}
+.doc-steps-title{font-weight:800;color:#2c3150;font-size:14px}
+.doc-steps .brc-lookup-values{display:flex;gap:10px;flex-wrap:wrap;margin:0}
+.copy-value{display:grid;gap:2px;padding:10px 14px;border:1px solid #dfe3ee;border-radius:10px;background:#f8f9fc;min-width:150px}
+.copy-value span{font-size:11px;color:#6f7690;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+.copy-value strong{font-size:17px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em}
+.copy-value .link-button{justify-self:start}
+.doc-fallback{border-top:1px solid #e6e9f2;padding-top:12px}
+.doc-fallback summary{cursor:pointer;color:#5860c9;font-weight:700;font-size:13px}
+.doc-fallback p{color:#5b6380;font-size:13px;line-height:1.5}
+@media(max-width:600px){.doc-choice-row{grid-template-columns:1fr}.doc-steps>li{padding-left:34px}.doc-step-card{padding:16px}}
+
+/* Eligibility step: eligible banner + COR service scope */
+.eligible-banner{display:flex;gap:14px;align-items:flex-start;padding:18px 20px;border-radius:16px;background:#e8f6ef;border:1px solid #9fd9bc;margin-bottom:18px}
+.eligible-banner h3{margin:2px 0 4px!important;font-size:22px!important;line-height:1.25}
+.eligible-banner p{margin:0;color:#3d6b55;font-size:14px}
+.eligible-banner .eyebrow{color:#1f9d62;margin-bottom:2px}
+.eligible-check{flex:none;width:36px;height:36px;border-radius:50%;background:#1f9d62;color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px}
+.service-scope{border:1px solid #dfe3ee;border-radius:16px;padding:18px 20px;background:#fff}
+.service-scope h4{margin:0 0 12px;font-size:16px}
+.service-scope-steps{margin:0;padding:0;list-style:none;counter-reset:scope;display:grid;gap:12px}
+.service-scope-steps li{counter-increment:scope;position:relative;padding-left:40px;display:grid;gap:2px}
+.service-scope-steps li:before{content:counter(scope);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:#616ae0;color:#fff;font-weight:800;font-size:13px;display:grid;place-items:center}
+.service-scope-steps b{font-size:15px;color:#2c3150}
+.service-scope-steps span{font-size:14px;color:#5b6380;line-height:1.5}
+.service-scope-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.service-scope-meta>div{display:grid;gap:3px;padding:12px 14px;border-radius:12px;background:#f5f6ff}
+.service-scope-meta span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#6870d9}
+.service-scope-meta strong{font-size:14px;color:#2c3150;line-height:1.45}
+.service-scope-note{margin:14px 0 0;font-size:13px;color:#6f7690;line-height:1.5}
+.optional-tag{display:inline-block;margin-left:6px;vertical-align:2px;font-size:11px;font-weight:700;color:#6f7690;background:#eef0f5;border-radius:999px;padding:2px 8px}
+.footer-missing{margin-left:auto;margin-right:10px;align-self:center;font-size:13px;font-weight:700;color:#b5541c}
+@media(max-width:600px){.service-scope-meta{grid-template-columns:1fr}.eligible-banner h3{font-size:19px!important}}
+
+.doc-skip-link{font-size:12px;font-weight:600;color:#7b8297;justify-self:start}
+.doc-skip-note{margin:0;font-size:12px;color:#7b8297}
+
+/* PBS question card: MyNJ login panel */
+.pbs-login-panel{display:grid;gap:10px;padding:16px;border-radius:12px;background:#f5f6ff;border:1px solid #e1e4fa}
+.pbs-login-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pbs-login-fields>div{display:grid;gap:6px;min-width:0}
+.pbs-login-fields label{margin:0;font-size:13px;font-weight:700;color:#2c3150}
+.pbs-login-fields input{width:100%;box-sizing:border-box;margin:0;background:#fff}
+.password-field{position:relative}
+.password-field input{padding-right:58px}
+.password-field .link-button{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;text-decoration:none}
+.pbs-login-note{margin:0;font-size:12px;color:#6f7690}
+.doc-step-card .pbs-check-link{justify-self:center;font-size:12px;color:#7b8297}
+@media(max-width:600px){.pbs-login-fields{grid-template-columns:1fr}}
+
+.pbs-check-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pbs-check-hint{font-size:12px;color:#6f7690}
+.pbs-check-result{padding:10px 12px;border-radius:10px;font-size:13px;font-weight:700;line-height:1.45}
+.pbs-check-result.ok{background:#e8f6ef;border:1px solid #9fd9bc;color:#17663f}
+.pbs-check-result.bad{background:#fdecea;border:1px solid #f3b8b0;color:#a3321f}
+.pbs-check-result.warn{background:#fff6e0;border:1px solid #f0d48a;color:#8a5a00}
+.pbs-challenge{display:grid;gap:6px}
+.pbs-challenge label{margin:0;font-size:13px;font-weight:700;color:#2c3150}
+.pbs-challenge input{width:100%;box-sizing:border-box;margin:0;background:#fff}

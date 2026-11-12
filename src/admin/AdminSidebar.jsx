@@ -53,8 +53,15 @@ export const ROW_STATUS_LABELS = {
 // cluster - so the counts stay visible even while the sidebar is collapsed.
 export function groupCounts(applications) {
   const counts = { not_started: 0, in_progress: 0, ready: 0, submitted: 0, cancelled: 0 };
-  (applications || []).forEach((app) => { counts[toGroup(app)] += 1; });
+  (applications || []).filter((app) => !isIncompleteSignup(app)).forEach((app) => { counts[toGroup(app)] += 1; });
   return counts;
+}
+
+// The applicant started the online signup but never pressed Submit (which
+// now requires the BRC). These are kept out of the work queue and parked in
+// a collapsed "Not completed" section at the bottom of the sidebar.
+export function isIncompleteSignup(app) {
+  return !app.submitted_at && app.status !== 'cancelled';
 }
 
 // Days since a date string — returns null if date is missing/invalid
@@ -75,9 +82,13 @@ function agingTone(days) {
 
 export default function AdminSidebar({ applications, selectedId, search, onSearchChange, onSelectApplication }) {
   const [collapsed, setCollapsed] = React.useState(() => new Set());
+  const [showIncomplete, setShowIncomplete] = React.useState(false);
 
-  // Filter by search
-  const matched = (applications || []).filter((app) => applicationMatchesSearch(app, search));
+  // Filter by search; unfinished signups are listed separately at the bottom.
+  const searched = (applications || []).filter((app) => applicationMatchesSearch(app, search));
+  const matched = searched.filter((app) => !isIncompleteSignup(app));
+  const incomplete = searched.filter(isIncompleteSignup)
+    .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
 
   // Two levels: whose turn it is (My move / Waiting - see sidebarTurn), then
   // the granular next-step label inside each. Call State, Complete and
@@ -196,7 +207,33 @@ export default function AdminSidebar({ applications, selectedId, search, onSearc
           );
         })}
         </div>)}
-        {matched.length === 0 && <div className="empty-list">No applications found.</div>}
+        {incomplete.length > 0 && <div className="sidebar-turn sidebar-turn-incomplete">
+          <button type="button" className="sidebar-turn-title sidebar-incomplete-toggle" onClick={() => setShowIncomplete((v) => !v)} aria-expanded={showIncomplete}>
+            <span><span className={`sidebar-group-chevron ${showIncomplete ? '' : 'collapsed'}`}>▾</span> Not completed</span><span>{incomplete.length}</span>
+          </button>
+          {showIncomplete && <>
+            <div className="sidebar-incomplete-hint">Started signup but never submitted. They can't submit until their BRC is uploaded.</div>
+            {incomplete.map((app) => <a
+              key={app.id}
+              href={`/admin/businesses/${encodeURIComponent(app.id)}`}
+              className={`application-list-item sidebar-incomplete-item ${selectedId === app.id ? 'active' : ''}`}
+              onClick={(e) => {
+                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                onSelectApplication(app.id);
+              }}
+            >
+              <div className="sidebar-row-top">
+                <span className="sidebar-row-name">{displayBusinessName(app) || app.contact_email || 'Unnamed business'}</span>
+                <span className="sidebar-row-date">{app.updated_at || app.created_at ? new Date(app.updated_at || app.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</span>
+              </div>
+              <div className="sidebar-row-meta"><div className="sidebar-row-meta-left">
+                <span className={`sidebar-badge ${(app.document_types || []).includes('brc') ? 'next-step' : 'aging age-warn'}`}>{(app.document_types || []).includes('brc') ? 'BRC uploaded' : 'No BRC'}</span>
+              </div></div>
+            </a>)}
+          </>}
+        </div>}
+        {matched.length === 0 && incomplete.length === 0 && <div className="empty-list">No applications found.</div>}
       </div>
     </aside>
   );

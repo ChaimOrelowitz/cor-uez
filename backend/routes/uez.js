@@ -5,6 +5,7 @@ const { chromium } = require('playwright');
 const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { encryptText, decryptText } = require('../utils/uezCrypto');
+const { verifyMyNjLogin, USER_FIXABLE_CODES, MYNJ_CHECK_MESSAGES } = require('../services/myNjVerify');
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
 const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
@@ -774,19 +775,13 @@ router.post('/applications/:id/submit', async (req, res) => {
       return res.status(400).json({ error: 'Every owner field is required before submission except Address Line 2.' });
     }
 
-    const hasFormation = (docsResult.data || []).some((doc) => doc.document_type === 'formation');
-    if (!application.is_sole_proprietorship && !hasFormation) {
-      return res.status(400).json({ error: 'Please upload the Certificate of Formation or formation document before submitting.' });
-    }
-
-    // Clients now provide their own BRC (upload it, or tell us they registered
-    // for one and will follow up) — only enforced for applications created
-    // after this shipped; see BRC_REQUIRED_SINCE above.
+    // The Certificate of Formation is optional at signup (COR can get it
+    // later). The BRC is not: clients must upload it before submitting —
+    // only enforced for applications created after BRC_REQUIRED_SINCE.
     const hasBrc = (docsResult.data || []).some((doc) => doc.document_type === 'brc');
-    const brcDeferred = ['client_created', 'found', 'checking', 'manual_verification_required', 'recheck_requested'].includes(application.brc_status);
     const brcRequired = new Date(application.created_at) >= BRC_REQUIRED_SINCE;
-    if (brcRequired && !hasBrc && !brcDeferred) {
-      return res.status(400).json({ error: 'Please upload your Business Registration Certificate, or tell us you registered for one, before submitting.' });
+    if (brcRequired && !hasBrc) {
+      return res.status(400).json({ error: 'Please upload your Business Registration Certificate (BRC) before submitting.' });
     }
 
     const submittedAt = new Date().toISOString();
@@ -831,6 +826,20 @@ router.get('/applications/:id', async (req, res) => {
   }
 });
 
+// Real myNJ sign-ins are slow and count toward myNJ's lockout, so cap how
+// often one application can trigger a check.
+const myNjCheckLog = new Map(); // applicationId -> [timestamps]
+const MYNJ_CHECK_WINDOW_MS = 15 * 60 * 1000;
+const MYNJ_CHECK_LIMIT = 6;
+function takeMyNjCheck(applicationId) {
+  const now = Date.now();
+  const recent = (myNjCheckLog.get(applicationId) || []).filter((t) => now - t < MYNJ_CHECK_WINDOW_MS);
+  if (recent.length >= MYNJ_CHECK_LIMIT) { myNjCheckLog.set(applicationId, recent); return false; }
+  recent.push(now);
+  myNjCheckLog.set(applicationId, recent);
+  return true;
+}
+
 router.put('/applications/:id/pbs-account-info', async (req, res) => {
   try {
     const application = await getOwnedApplication(req.params.id, req.user);
@@ -845,15 +854,37 @@ router.put('/applications/:id/pbs-account-info', async (req, res) => {
       .select('*').eq('application_id', application.id).eq('provider', 'mynj').maybeSingle();
     if (credentialReadError) throw credentialReadError;
 
+    // Sign in to myNJ for real before saving. Wrong password / lock / security
+    // question go back to the applicant to fix. If the check itself fails on
+    // our side (bot check, timeout, server busy) we don't hold them up: the
+    // login is saved unverified and COR is told to check it by hand.
+    let myNjCheck = null;
+    const challengeAnswer = String(req.body?.challengeAnswer || '').trim();
     if (hasExisting) {
       if (!username || !password) return res.status(400).json({ error: 'Enter the MyNJ username and password for the existing PBS account.' });
+      if (!takeMyNjCheck(application.id)) {
+        return res.status(429).json({ code: 'too_many_checks', error: 'Too many login checks in a short time. Wait about 15 minutes, then try again.' });
+      }
+      myNjCheck = await verifyMyNjLogin({ username, password, challengeAnswer });
+      if (USER_FIXABLE_CODES.has(myNjCheck.code)) {
+        return res.status(422).json({ code: myNjCheck.code, question: myNjCheck.question || null, error: MYNJ_CHECK_MESSAGES[myNjCheck.code] });
+      }
+      const verified = myNjCheck.code === 'ok';
       const { error: credentialError } = await supabase.from('uez_credentials').upsert({
         application_id: application.id, provider: 'mynj',
         username_enc: encryptText(username), password_enc: encryptText(password),
-        challenge_question_enc: existingCredential?.challenge_question_enc || null,
-        challenge_answer_enc: existingCredential?.challenge_answer_enc || null, updated_at: now
+        challenge_question_enc: verified && challengeAnswer && myNjCheck.question ? encryptText(myNjCheck.question) : (existingCredential?.challenge_question_enc || null),
+        challenge_answer_enc: verified && challengeAnswer ? encryptText(challengeAnswer) : (existingCredential?.challenge_answer_enc || null), updated_at: now
       }, { onConflict: 'application_id,provider' });
       if (credentialError) throw credentialError;
+      await addStatusEvent(
+        application.id,
+        verified ? 'mynj_login_verified' : 'mynj_login_unverified',
+        verified ? 'MyNJ login verified' : 'MyNJ login not verified',
+        verified ? 'COR signed in to MyNJ with the login the applicant entered, and it worked.' : `COR could not check the MyNJ login automatically (${myNjCheck.code}). It was saved; check it by hand.`,
+        req.user.id,
+        false
+      );
     } else if (application.pbs_status === 'existing_account_reported' && existingCredential) {
       const { error: deleteError } = await supabase.from('uez_credentials').delete().eq('id', existingCredential.id);
       if (deleteError) throw deleteError;
@@ -869,7 +900,7 @@ router.put('/applications/:id/pbs-account-info', async (req, res) => {
     if (application.has_existing_pbs_account !== hasExisting) {
       await addStatusEvent(application.id, hasExisting ? 'existing_pbs_reported' : 'pbs_account_needed', hasExisting ? 'Existing PBS account reported' : 'PBS account needed', hasExisting ? 'Applicant reported that the business already has a New Jersey PBS account and supplied the MyNJ login.' : 'Applicant reported that the business does not already have a New Jersey PBS account.', req.user.id, false);
     }
-    res.json({ application: data });
+    res.json({ application: data, myNjVerified: myNjCheck ? myNjCheck.code === 'ok' : null });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 

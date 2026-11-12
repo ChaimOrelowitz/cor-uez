@@ -61,11 +61,6 @@ function renderSectionBreak(item) {
 }
 const NJ_REGISTRATION_URL = 'https://www.njportal.com/dor/businessregistration';
 const NJ_BRC_LOOKUP_URL = 'https://www1.state.nj.us/TYTR_BRC/servlet/common/BRCLogin';
-// Grandfather clause: only applications created from this date onward are
-// required to provide their own BRC. Keep in sync with the identical
-// constant in backend/routes/uez.js.
-const BRC_REQUIRED_SINCE = new Date('2026-09-06T00:00:00Z');
-const BRC_DEFERRED_STATUSES = ['client_created', 'found', 'checking', 'manual_verification_required', 'recheck_requested'];
 const blankOwner = () => ({ title: '', titleOther: '', firstName: '', lastName: '', email: '', phone: '', dob: '', ssn: '', ownershipPercent: '', addressLine1: '', addressLine2: '', city: '', state: '', zip: '' });
 
 function programNameFromCode(code) {
@@ -185,6 +180,56 @@ function MaskedSsnInput({ value, onChange }) {
   );
 }
 
+function PasswordInput({ id, value, onChange }) {
+  const [shown, setShown] = useState(false);
+  return <div className="password-field">
+    <input id={id} type={shown ? 'text' : 'password'} value={value} onChange={onChange} autoComplete="off" required />
+    <button type="button" className="link-button" onClick={() => setShown((v) => !v)} aria-label={shown ? 'Hide password' : 'Show password'}>{shown ? 'Hide' : 'Show'}</button>
+  </div>;
+}
+
+// ['A'] -> 'A', ['A','B'] -> 'A and B', ['A','B','C'] -> 'A, B, and C'
+function listSentence(items) {
+  if (items.length <= 1) return items[0] || '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+// Big click-or-drop target for one document type. Once a file is in, the zone
+// turns into a green "done" row with the filename, so people can see at a
+// glance that this item is finished.
+function UploadZone({ label, docs, uploading, disabled, onFile, onRemove }) {
+  const [dragging, setDragging] = useState(false);
+  const pick = (file) => { if (file && !disabled) onFile(file); };
+  const input = <input type="file" accept=".pdf,image/*" disabled={disabled} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />;
+  if (docs.length && !uploading) {
+    return <div className="upload-done">
+      {docs.map((doc) => <div className="upload-done-row" key={doc.id}><span className="upload-done-check">✓</span><strong>{doc.filename}</strong><button type="button" className="link-button" onClick={() => onRemove(doc)} disabled={disabled}>Remove</button></div>)}
+      <label className="link-button upload-another">Upload another file{input}</label>
+    </div>;
+  }
+  return <label
+    className={`upload-zone ${dragging ? 'dragging' : ''} ${disabled ? 'disabled' : ''}`}
+    onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+    onDragLeave={() => setDragging(false)}
+    onDrop={(e) => { e.preventDefault(); setDragging(false); pick(e.dataTransfer.files?.[0]); }}
+  >
+    <span className="upload-zone-icon" aria-hidden="true">⬆</span>
+    <strong>{uploading ? 'Uploading…' : label}</strong>
+    <span>Click to choose a file, or drag it here · PDF or photo</span>
+    {input}
+  </label>;
+}
+
+function CopyValue({ label, value }) {
+  const [copied, setCopied] = useState(false);
+  return <div className="copy-value">
+    <span>{label}</span>
+    <strong>{value || '—'}</strong>
+    {value && <button type="button" className="link-button" onClick={() => { navigator.clipboard?.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); }}>{copied ? 'Copied ✓' : 'Copy'}</button>}
+  </div>;
+}
+
 // Shown on the review step and again in the submit confirmation. People kept
 // asking "do I pay now?" — so the answer leads, in plain words.
 function PaymentTerms() {
@@ -195,6 +240,7 @@ function PaymentTerms() {
         <li><b>Today:</b> you submit this application. No payment, no card needed.</li>
         <li><b>Next:</b> COR Solutions works through your UEZ enrollment and prepares your grant application.</li>
         <li><b>Before we file the grant application:</b> we'll ask you for the $500 fee. The application is not filed until it's paid.</li>
+        <li><b>After we file:</b> the LDC usually takes <b>2–3 months</b> to approve or deny the application. That timing is up to the LDC, not COR Solutions.</li>
         <li><b>If the LDC denies the application:</b> you get the full $500 back.</li>
         <li><b>If the LDC approves it:</b> the fee is earned and no longer refundable.</li>
       </ol>
@@ -502,6 +548,15 @@ export default function App({ demoMode = false }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [formationChoice, setFormationChoice] = useState('');
+  // "I can't find it right now": lets them continue without the Certificate
+  // of Formation (COR gets it later). Deliberately low-key, not advertised.
+  const [formationSkipped, setFormationSkipped] = useState(false);
+  // MyNJ login check. pbsCheckedKey = the username+password that last passed
+  // (or was saved when our checker couldn't run); editing either field clears it.
+  const [pbsCheck, setPbsCheck] = useState({ state: 'idle', message: '', question: null });
+  const [pbsCheckedKey, setPbsCheckedKey] = useState('');
+  const [pbsChallengeAnswer, setPbsChallengeAnswer] = useState('');
   // New step = new page: start it at the top, like any other website.
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
   const [eligibility, setEligibility] = useState(null);
@@ -523,7 +578,6 @@ export default function App({ demoMode = false }) {
   const [signupLayout, setSignupLayout] = useState(DEFAULT_SIGNUP_LAYOUT);
   const [homeStats, setHomeStats] = useState(null);
   const [solePropConfirmedHere, setSolePropConfirmedHere] = useState(false);
-  const [brcBusy, setBrcBusy] = useState(false);
   const [form, setForm] = useState(() => demoMode ? {
     address: '123 Demo Street, Lakewood, NJ 08701', email: 'demo@corsolutions.io', password: 'Demo123!',
     businessName: 'Demo Lakewood Business LLC', businessDescription: 'Demo business for testing the COR client flow', ein: '12-3456789', yearFounded: '2024',
@@ -542,8 +596,13 @@ export default function App({ demoMode = false }) {
   const eligibleProgramName = eligibility?.programs?.[0]?.name || programNameFromCode(bundle?.application?.program_code);
   const hasFormation = documents.some((doc) => doc.document_type === 'formation');
   const hasBrc = documents.some((doc) => doc.document_type === 'brc');
-  const brcDeferred = BRC_DEFERRED_STATUSES.includes(bundle?.application?.brc_status);
-  const brcRequired = bundle?.application?.created_at ? new Date(bundle.application.created_at) >= BRC_REQUIRED_SINCE : true;
+  const otherDocuments = documents.filter((doc) => doc.document_type !== 'formation' && doc.document_type !== 'brc');
+  const formationAnswer = hasFormation ? 'yes' : solePropConfirmedHere ? 'no' : formationChoice;
+  const formationOk = hasFormation || solePropConfirmedHere || (formationSkipped && formationAnswer === 'yes');
+  const pbsKey = `${form.pbsUsername.trim()}\n${form.pbsPassword}`;
+  const pbsLoginChecked = form.hasExistingPbsAccount === 'yes' && Boolean(pbsCheckedKey) && pbsCheckedKey === pbsKey;
+  const pbsAnswered = form.hasExistingPbsAccount === 'no' || pbsLoginChecked;
+  const docsMissing = [!formationOk && 'Certificate of Formation', !hasBrc && 'BRC', !pbsAnswered && (form.hasExistingPbsAccount === 'yes' ? 'MyNJ login check' : 'PBS answer')].filter(Boolean);
   const update = (key) => (e) => setForm((old) => ({ ...old, [key]: e.target.value }));
 
   useEffect(() => {
@@ -579,6 +638,9 @@ export default function App({ demoMode = false }) {
     getApplicantSession().then(async (current) => {
       if (!active) return;
       if (demoMode) {
+        // Local dev only (`npm run dev`): open the demo without an admin login.
+        // import.meta.env.DEV is false in production builds, so this never ships.
+        if (import.meta.env.DEV && !current) { if (active) setSession({ user: { email: 'dev-preview@localhost' } }); return; }
         if (!current) { window.location.href = '/admin'; return; }
         const me = await whoAmI();
         if (me.role !== 'admin') { window.location.href = '/admin'; return; }
@@ -626,6 +688,10 @@ export default function App({ demoMode = false }) {
     setBundle(full);
     setApplicationId(latest.id);
     setDocuments(full.documents || []);
+    if (existingPbsLogin?.credentials?.username && existingPbsLogin?.credentials?.password) {
+      setPbsCheckedKey(`${existingPbsLogin.credentials.username.trim()}\n${existingPbsLogin.credentials.password}`);
+      setPbsCheck({ state: 'saved', message: '', question: null });
+    }
     setForm((old) => ({
       ...old,
       email: latest.contact_email || old.email,
@@ -1045,39 +1111,49 @@ export default function App({ demoMode = false }) {
     setStep(1);
   }
 
-  // Mirrors ApplicantPortal's reportBrcMade (that component's version keeps
-  // its own separate state/refresh loop for the post-submission dashboard) —
-  // this is the wizard's own copy of the same "I registered, I'll follow up"
-  // action, hitting the same client-created endpoint.
-  async function reportBrcRegistered() {
-    if (demoMode) { setMessage('Demo only: BRC follow-up simulated. Nothing was saved.'); return; }
-    setBrcBusy(true); setMessage('');
+  async function checkPbsLogin() {
+    if (!form.pbsUsername.trim() || !form.pbsPassword) { setPbsCheck({ state: 'error', message: 'Enter your MyNJ username and password first.', question: null }); return; }
+    const key = pbsKey;
+    const needsAnswer = pbsCheck.state === 'challenge';
+    if (needsAnswer && !pbsChallengeAnswer.trim()) { setPbsCheck((old) => ({ ...old, message: 'Enter your security answer.' })); return; }
+    setPbsCheck((old) => ({ state: 'checking', message: '', question: old.question }));
+    if (demoMode) {
+      await new Promise((r) => setTimeout(r, 1500));
+      setPbsCheckedKey(key); setPbsCheck({ state: 'ok', message: '', question: null });
+      return;
+    }
     try {
-      await reportBrcCreated(applicationId);
-      const refreshed = await getApplication(applicationId);
-      setBundle(refreshed);
-      setMessage("Thanks — we'll follow up once we've checked for your BRC.");
-    } catch (err) { setMessage(err.message); }
-    finally { setBrcBusy(false); }
+      const result = await savePbsAccountInfo(applicationId, { hasExistingPbsAccount: true, username: form.pbsUsername.trim(), password: form.pbsPassword, challengeAnswer: needsAnswer ? pbsChallengeAnswer.trim() : '' });
+      setPbsCheckedKey(key);
+      setPbsChallengeAnswer('');
+      setPbsCheck(result?.myNjVerified
+        ? { state: 'ok', message: '', question: null }
+        : { state: 'saved', message: "We couldn't reach MyNJ to check it right now, so we saved your login. Our team will double-check it.", question: null });
+    } catch (err) {
+      const challenge = err.code === 'needs_challenge' || err.code === 'bad_challenge';
+      if (!challenge) setPbsChallengeAnswer('');
+      setPbsCheck({ state: challenge ? 'challenge' : 'error', message: err.message, question: err.question || null });
+    }
   }
 
   async function continueFromDocuments() {
     if (demoMode) { setMessage(''); setStep(6); return; }
-    if (!hasFormation && !solePropConfirmedHere) {
-      setMessage('Upload the Certificate of Formation, or confirm below that the business is legally a sole proprietorship.');
+    if (!formationOk) {
+      setMessage('Upload your Certificate of Formation, or confirm that your business is a sole proprietorship.');
       return;
     }
-    if (brcRequired && !hasBrc && !brcDeferred) {
-      setMessage('Upload your Business Registration Certificate, or tell us you registered for one, before continuing.');
+    if (!hasBrc) {
+      setMessage('Upload your Business Registration Certificate (BRC) to continue.');
       return;
     }
     if (!form.hasExistingPbsAccount) { setMessage('Please answer whether you already have a New Jersey PBS account.'); return; }
-    if (form.hasExistingPbsAccount === 'yes' && (!form.pbsUsername.trim() || !form.pbsPassword)) { setMessage('Enter the MyNJ username and password for your existing PBS account.'); return; }
+    if (form.hasExistingPbsAccount === 'yes' && !pbsLoginChecked) { setMessage('Click "Check my login" so we can confirm your MyNJ login works.'); return; }
     setBusy(true); setMessage('');
     try {
       // Formation present means this should not remain marked sole prop because of an earlier misunderstood answer.
       await persistSoleProprietorship(!hasFormation && solePropConfirmedHere);
-      await savePbsAccountInfo(applicationId, { hasExistingPbsAccount: form.hasExistingPbsAccount === 'yes', username: form.hasExistingPbsAccount === 'yes' ? form.pbsUsername.trim() : '', password: form.hasExistingPbsAccount === 'yes' ? form.pbsPassword : '' });
+      // A "yes" login was already checked and saved by checkPbsLogin().
+      if (form.hasExistingPbsAccount === 'no') await savePbsAccountInfo(applicationId, { hasExistingPbsAccount: false, username: '', password: '' });
       setStep(6);
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
@@ -1247,10 +1323,19 @@ export default function App({ demoMode = false }) {
         </div>}
 
         {step === 1 && <div className="content-block eligibility-offer compact-offer">
-          <h3>Your business is eligible.</h3>
-          <div className="offer-row"><span>Available program</span><strong>{eligibleProgramName}</strong></div>
-          <div className="offer-row"><span>Available COR Solutions services</span><strong>{eligibility?.programs?.length ? 'UEZ enrollment & grant application · $500' : 'UEZ enrollment support'}</strong></div>
-          <p className="offer-description">Complete one intake. COR will review your documents, handle the New Jersey verification steps, enroll the business in the UEZ, and process the available grant application when applicable.</p>
+          <div className="eligible-banner"><span className="eligible-check" aria-hidden="true">✓</span><div><span className="eyebrow">GOOD NEWS</span><h3>Your business is eligible for the {eligibleProgramName || 'UEZ LDC Technology Grant'}.</h3><p>Your address is inside the Urban Enterprise Zone.</p></div></div>
+          <div className="service-scope">
+            <h4>What COR Solutions does for you</h4>
+            <ol className="service-scope-steps">
+              <li><b>We enroll your business in the UEZ.</b><span>We handle the New Jersey UEZ enrollment for your business.</span></li>
+              <li><b>We apply for the Technology Grant for you.</b><span>Once you're enrolled in the UEZ, we prepare and submit your grant application to the LDC.</span></li>
+            </ol>
+            <div className="service-scope-meta">
+              <div><span>You'll need</span><strong>Your NJ Business Registration Certificate (BRC). We'll show you how to find it.</strong></div>
+              <div><span>Service fee</span><strong>$500. Nothing is due today.</strong></div>
+            </div>
+            <p className="service-scope-note"><b>Not included:</b> anything before or after these two steps, such as registering your business with New Jersey or submitting invoices etc. after you're approved.</p>
+          </div>
         </div>}
 
         {step === 2 && <form className="content-block" onSubmit={(e) => { e.preventDefault(); createAccountAndCase(); }}>
@@ -1318,48 +1403,108 @@ export default function App({ demoMode = false }) {
         </div>}
 
         {step === 5 && <div className="content-block">
-          <div className="intro-copy"><h3>Documents</h3><p>Upload your formation document and any other supporting documents you want COR to have.</p></div>
+          <div className="intro-copy"><h3>Documents</h3><p>Upload your <b>Certificate of Formation</b> and <b>Business Registration Certificate (BRC)</b>.</p></div>
           <div className="ordered-documents">
             {signupLayout.documents.map((key) => {
               if (isBreak(key)) return renderSectionBreak(key);
-              if (key === 'formation') return solePropConfirmedHere ? null : <div className={`upload-card formation-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Certificate of Formation <span className="required-star">*</span></strong><p>Issued by New Jersey (not the IRS). Look for a document titled "Certificate of Formation" or "Certificate of Incorporation" from the NJ Division of Revenue and Enterprise Services.</p><button type="button" className="doc-example-link" onClick={() => setExampleDocPreview({ title: 'Example Certificate of Formation', src: cofExampleImage })}><img src={cofExampleImage} alt="Example Certificate of Formation" className="doc-example-thumb" /><span>See an example of a Certificate of Formation</span></button></div>
-                <label className="secondary inline-button file-button">{uploadingType === 'formation' ? 'Uploading…' : hasFormation ? 'Replace / add another' : 'Upload Certificate of Formation'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType)} onChange={(e) => uploadDoc('formation', e.target.files?.[0])} /></label>
-              </div>;
-              if (key === 'soleProp') return !hasFormation ? <div className={`sole-prop-choice ${solePropConfirmedHere ? 'selected' : ''} ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>I am a sole proprietorship</strong><p>Only choose this if the business is legally a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship — those entities always have a Certificate of Formation.</p></div>
-                <div className="sole-prop-action-row"><button type="button" className={solePropConfirmedHere ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={declareSoleProprietorship} disabled={busy}>{solePropConfirmedHere ? '✓ Confirmed — I am a sole proprietorship' : 'I am a sole proprietorship'}</button>{solePropConfirmedHere && <button type="button" className="secondary" onClick={undoSoleProprietorship} disabled={busy}>Undo</button>}</div>
-              </div> : null;
-              if (key === 'brc') return <React.Fragment key={key}>
-                <div className="documents-service-note field-span-2"><span className="eyebrow">COR SOLUTIONS' PART OF THE PROCESS</span><p>From here — once your Business Registration Certificate is on file — through your grant application, COR Solutions manages the process on your behalf.</p></div>
-                <div className={`upload-card brc-choice-card ${signupFieldClass(signupLayout, 'documents', key)}`}>
-                <div><strong>Business Registration Certificate (BRC) <span className="required-star">*</span></strong><p>New Jersey requires a BRC for every enrolled business. Most businesses can retrieve theirs online in minutes — click "Look up my BRC" and enter the values below. Download the PDF and upload it here.</p><button type="button" className="doc-example-link" onClick={() => setExampleDocPreview({ title: 'Example Business Registration Certificate', src: brcExampleImage })}><img src={brcExampleImage} alt="Example Business Registration Certificate" className="doc-example-thumb" /><span>See an example of a Business Registration Certificate</span></button></div>
-                <div className="brc-lookup-values">
-                  <div><span>Name Control</span><strong>{nameControl(form.businessName) || '—'}</strong></div>
-                  <div><span>Tax ID</span><strong>{njTaxId(form.ein) || '—'}</strong></div>
-                </div>
-                <a className="secondary compact inline-button" href={NJ_BRC_LOOKUP_URL} target="_blank" rel="noreferrer">Look up my BRC</a>
-                <label className="secondary inline-button file-button">{uploadingType === 'brc' ? 'Uploading…' : hasBrc ? 'Replace / add another' : 'Upload Business Registration Certificate'}<input type="file" accept=".pdf,image/*" disabled={Boolean(uploadingType) || brcDeferred} onChange={(e) => uploadDoc('brc', e.target.files?.[0])} /></label>
-                {!hasBrc && <div className={`sole-prop-choice ${brcDeferred ? 'selected' : ''}`}>
-                  <div><strong>Can't find your BRC yet?</strong><p>If NJ says your business isn't registered, you'll need to register first — it takes about 10 minutes. Once you've registered, come back and let us know. You don't need to upload anything until you have it.</p></div>
-                  <div className="sole-prop-action-row">
-                    <a className="secondary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Register my business with NJ</a>
-                    <button type="button" className={brcDeferred ? 'secondary sole-prop-confirmed' : 'secondary'} onClick={reportBrcRegistered} disabled={brcBusy}>{brcDeferred ? '✓ Got it — we\'ll follow up' : "I registered, I'll follow up"}</button>
+              // Formation and sole-prop are one either/or question. Render it at
+              // whichever of the two keys the layout lists first.
+              if (key === 'formation' || key === 'soleProp') {
+                if (key === 'soleProp' && signupLayout.documents.includes('formation')) return null;
+                const formationDocs = documents.filter((doc) => doc.document_type === 'formation');
+                const done = hasFormation || solePropConfirmedHere;
+                return <div className={`doc-step-card field-span-2 ${done ? 'is-done' : ''}`} key={key}>
+                  <div className="doc-step-head"><div><strong>Certificate of Formation <span className="required-star">*</span></strong>{done && <span className="doc-done-pill">✓ Done</span>}<p>Do you have your Certificate of Formation (or Certificate of Incorporation) from New Jersey?</p></div></div>
+                  <div className="doc-choice-row" role="radiogroup" aria-label="Does your business have a Certificate of Formation?">
+                    <button type="button" role="radio" aria-checked={formationAnswer === 'yes'} className={`doc-choice ${formationAnswer === 'yes' ? 'on' : ''}`} disabled={busy} onClick={async () => { if (solePropConfirmedHere) await undoSoleProprietorship(); setFormationChoice('yes'); }}><b>Yes</b><span>I'll upload it</span></button>
+                    <button type="button" role="radio" aria-checked={formationAnswer === 'no'} className={`doc-choice ${formationAnswer === 'no' ? 'on' : ''}`} disabled={busy || hasFormation} title={hasFormation ? 'Remove the uploaded certificate first' : undefined} onClick={() => setFormationChoice('no')}><b>No</b><span>I'm a sole proprietor</span></button>
                   </div>
-                </div>}
+                  {formationAnswer === 'yes' && <div className="doc-step-body">
+                    <p className="doc-help">Issued by New Jersey (not the IRS) — from the NJ Division of Revenue and Enterprise Services.</p>
+                    <button type="button" className="doc-example-link" onClick={() => setExampleDocPreview({ title: 'Example Certificate of Formation', src: cofExampleImage })}><img src={cofExampleImage} alt="Example Certificate of Formation" className="doc-example-thumb" /><span>See an example</span></button>
+                    <UploadZone label="Upload Certificate of Formation" docs={formationDocs} uploading={uploadingType === 'formation'} disabled={Boolean(uploadingType)} onFile={(file) => uploadDoc('formation', file)} onRemove={removeUploadedDocument} />
+                    {!hasFormation && (formationSkipped
+                      ? <p className="doc-skip-note">OK, you can continue without it for now. <button type="button" className="link-button" onClick={() => setFormationSkipped(false)}>Undo</button></p>
+                      : <button type="button" className="link-button doc-skip-link" onClick={() => { setFormationSkipped(true); setMessage(''); }}>I can't find it right now</button>)}
+                  </div>}
+                  {formationAnswer === 'no' && <div className="doc-step-body">
+                    <p className="doc-help">Only choose this if the business is <b>legally</b> a sole proprietorship. A one-owner LLC or corporation is <b>not</b> a sole proprietorship — those always have a Certificate of Formation.</p>
+                    {solePropConfirmedHere
+                      ? <div className="doc-done-row"><span>✓ Confirmed — my business is a sole proprietorship</span><button type="button" className="link-button" onClick={async () => { await undoSoleProprietorship(); setFormationChoice(''); }} disabled={busy}>Undo</button></div>
+                      : <button type="button" className="primary doc-cta" onClick={declareSoleProprietorship} disabled={busy}>Confirm: my business is a sole proprietorship</button>}
+                  </div>}
+                </div>;
+              }
+              if (key === 'brc') {
+                const brcDocs = documents.filter((doc) => doc.document_type === 'brc');
+                const done = hasBrc;
+                return <React.Fragment key={key}>
+                <div className={`doc-step-card field-span-2 ${done ? 'is-done' : ''}`}>
+                  <div className="doc-step-head"><div><strong>Business Registration Certificate (BRC) <span className="required-star">*</span></strong>{done && <span className="doc-done-pill">✓ Done</span>}<p>UEZ enrollment requires a BRC. Most businesses can retrieve theirs online in a few minutes.</p></div></div>
+                  {hasBrc
+                    ? <UploadZone label="Upload Business Registration Certificate" docs={brcDocs} uploading={uploadingType === 'brc'} disabled={Boolean(uploadingType)} onFile={(file) => uploadDoc('brc', file)} onRemove={removeUploadedDocument} />
+                      : <>
+                        <ol className="doc-steps">
+                          <li><div className="doc-steps-title">Open the NJ BRC lookup and enter these two values</div>
+                            <div className="brc-lookup-values">
+                              <CopyValue label="Name Control" value={nameControl(form.businessName)} />
+                              <CopyValue label="Tax ID" value={njTaxId(form.ein)} />
+                            </div>
+                            <a className="primary doc-cta" href={NJ_BRC_LOOKUP_URL} target="_blank" rel="noreferrer">Open NJ BRC lookup ↗</a>
+                          </li>
+                          <li><div className="doc-steps-title">Download the certificate PDF from the NJ site</div>
+                            <button type="button" className="doc-example-link" onClick={() => setExampleDocPreview({ title: 'Example Business Registration Certificate', src: brcExampleImage })}><img src={brcExampleImage} alt="Example Business Registration Certificate" className="doc-example-thumb" /><span>See what it looks like</span></button>
+                          </li>
+                          <li><div className="doc-steps-title">Upload it here</div>
+                            <UploadZone label="Upload Business Registration Certificate" docs={brcDocs} uploading={uploadingType === 'brc'} disabled={Boolean(uploadingType)} onFile={(file) => uploadDoc('brc', file)} onRemove={removeUploadedDocument} />
+                          </li>
+                        </ol>
+                        <details className="doc-fallback">
+                          <summary>NJ says my business isn't registered / I can't find my BRC</summary>
+                          <p>You'll need to register with New Jersey first. It takes about 10 minutes, and NJ issues the BRC once you're registered. Then come back, look it up with the steps above, and upload it. Your progress here is saved, so you can log back in and pick up where you left off.</p>
+                          <div className="sole-prop-action-row">
+                            <a className="secondary compact inline-button" href={NJ_REGISTRATION_URL} target="_blank" rel="noreferrer">Register my business with NJ ↗</a>
+                          </div>
+                        </details>
+                      </>}
                 </div>
               </React.Fragment>;
-              if (key === 'pbsAccount') return <div className={`upload-card pbs-account-question ${signupFieldClass(signupLayout, 'documents', key)}`} key={key}>
-                <div><strong>Do you already have a New Jersey Premier Business Services (PBS) account? <span className="required-star">*</span></strong><p>If you already use PBS/MyNJ for this business, choose Yes and provide the login so COR can use the existing account.</p></div>
-                <div className="cor-inline-radios"><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="yes" checked={form.hasExistingPbsAccount==='yes'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value}))} required />Yes</label><label className="cor-radio-option"><input type="radio" name="hasExistingPbsAccount" value="no" checked={form.hasExistingPbsAccount==='no'} onChange={(e)=>setForm((old)=>({...old,hasExistingPbsAccount:e.target.value,pbsUsername:'',pbsPassword:''}))} />No</label></div>
-                <a className="pbs-check-link" href="https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login" target="_blank" rel="noreferrer">Not sure? Open PBS / MyNJ to check for a saved login or reset your password.</a>
-                {form.hasExistingPbsAccount === 'yes' && <div className="pbs-existing-login-grid"><div><label>MyNJ username <span className="required-star">*</span></label><input value={form.pbsUsername} onChange={update('pbsUsername')} required /></div><div><label>MyNJ password <span className="required-star">*</span></label><input type="password" value={form.pbsPassword} onChange={update('pbsPassword')} required /></div></div>}
-              </div>;
+              }
+              if (key === 'pbsAccount') {
+                const pbsDone = pbsAnswered;
+                const checking = pbsCheck.state === 'checking';
+                return <div className={`doc-step-card field-span-2 ${pbsDone ? 'is-done' : ''}`} key={key}>
+                  <div className="doc-step-head"><div><strong>Do you already have a NJ Premier Business Services (PBS) account? <span className="required-star">*</span></strong>{pbsDone && <span className="doc-done-pill">✓ Done</span>}<p>If you already use PBS / MyNJ for this business, we'll use that account instead of creating a new one.</p></div></div>
+                  <div className="doc-choice-row" role="radiogroup" aria-label="Do you already have a PBS account?">
+                    <button type="button" role="radio" aria-checked={form.hasExistingPbsAccount === 'yes'} className={`doc-choice ${form.hasExistingPbsAccount === 'yes' ? 'on' : ''}`} onClick={() => setForm((old) => ({ ...old, hasExistingPbsAccount: 'yes' }))}><b>Yes</b><span>I have a MyNJ login</span></button>
+                    <button type="button" role="radio" aria-checked={form.hasExistingPbsAccount === 'no'} className={`doc-choice ${form.hasExistingPbsAccount === 'no' ? 'on' : ''}`} onClick={() => setForm((old) => ({ ...old, hasExistingPbsAccount: 'no', pbsUsername: '', pbsPassword: '' }))}><b>No</b><span>COR will create one</span></button>
+                  </div>
+                  {form.hasExistingPbsAccount === 'yes' && <div className="pbs-login-panel">
+                    <div className="pbs-login-fields">
+                      <div><label htmlFor="pbs-username">MyNJ username <span className="required-star">*</span></label><input id="pbs-username" value={form.pbsUsername} onChange={update('pbsUsername')} autoComplete="off" required /></div>
+                      <div><label htmlFor="pbs-password">MyNJ password <span className="required-star">*</span></label><PasswordInput id="pbs-password" value={form.pbsPassword} onChange={update('pbsPassword')} /></div>
+                    </div>
+                    {pbsCheck.state === 'challenge' && !pbsLoginChecked && <div className="pbs-challenge">
+                      <label htmlFor="pbs-challenge">{pbsCheck.question || 'Answer to your MyNJ security question'} <span className="required-star">*</span></label>
+                      <input id="pbs-challenge" value={pbsChallengeAnswer} onChange={(e) => setPbsChallengeAnswer(e.target.value)} autoComplete="off" disabled={checking} />
+                    </div>}
+                    {pbsLoginChecked
+                      ? <div className="pbs-check-result ok">{pbsCheck.state === 'ok' ? '✓ Login confirmed. MyNJ accepted it.' : pbsCheck.message || '✓ Login saved.'}</div>
+                      : <div className="pbs-check-row">
+                          <button type="button" className="primary doc-cta" onClick={checkPbsLogin} disabled={checking || !form.pbsUsername.trim() || !form.pbsPassword}>{checking ? 'Checking with MyNJ…' : pbsCheck.state === 'challenge' ? 'Submit answer' : 'Check my login'}</button>
+                          {checking && <span className="pbs-check-hint">This can take up to a minute. Please keep this page open.</span>}
+                        </div>}
+                    {!pbsLoginChecked && pbsCheck.message && pbsCheck.state !== 'checking' && <div className={`pbs-check-result ${pbsCheck.state === 'challenge' ? 'warn' : 'bad'}`}>{pbsCheck.message}</div>}
+                    <p className="pbs-login-note">🔒 We sign in to MyNJ once to confirm the login works. It's stored encrypted, and only COR's team uses it, to work on your PBS account.</p>
+                  </div>}
+                  {!pbsLoginChecked && <a className="pbs-check-link" href="https://my.nj.gov/aui/Login?goto=https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/OEGController?actionToPerform=login" target="_blank" rel="noreferrer">Not sure? Open MyNJ to check, or reset your password ↗</a>}
+                </div>;
+              }
               if (key === 'supporting') return null;
               return null;
             })}
           </div>
-          {documents.length > 0 && <div className="uploaded-docs"><h4>Uploaded</h4>{documents.map((doc) => <div className="uploaded-doc-row" key={doc.id}><span>{documentLabel(doc.document_type)}</span><strong>{doc.filename}</strong><button type="button" className="owner-remove" onClick={() => removeUploadedDocument(doc)} disabled={Boolean(uploadingType)}>Remove</button></div>)}</div>}
+          {otherDocuments.length > 0 && <div className="uploaded-docs"><h4>Also on file</h4>{otherDocuments.map((doc) => <div className="uploaded-doc-row" key={doc.id}><span>{documentLabel(doc.document_type)}</span><strong>{doc.filename}</strong><button type="button" className="owner-remove" onClick={() => removeUploadedDocument(doc)} disabled={Boolean(uploadingType)}>Remove</button></div>)}</div>}
         </div>}
 
         {step === 6 && <div className="content-block review-block">
@@ -1368,7 +1513,7 @@ export default function App({ demoMode = false }) {
             <div><span>Business</span><strong>{form.businessName}</strong><small>{form.address}</small></div>
             <div><span>Program</span><strong>{eligibleProgramName}</strong></div>
             <div><span>Owners</span><strong>{form.owners.length}</strong><small>{ownershipTotal}% ownership accounted for</small></div>
-            <div><span>Documents</span><strong>{documents.length}</strong><small>{hasFormation ? 'Formation document received' : 'No formation document uploaded'}</small></div>
+            <div><span>Documents</span><strong>{documents.length}</strong><small>{hasBrc ? 'BRC received' : 'BRC missing'}{hasFormation ? ' · Certificate of Formation received' : ''}</small></div>
           </div>
           <div className="hint review-consent">By submitting, you authorize COR Solutions to use the information and documents provided to prepare and process your UEZ enrollment and applicable grant application.</div>
           <div className="hint review-consent">Along the way, COR Solutions will likely ask you to complete certain steps that only you, the business owner, are able to perform — COR Solutions cannot take those actions on your behalf.</div>
@@ -1383,7 +1528,7 @@ export default function App({ demoMode = false }) {
           {step === 1 && <button className="primary compact" onClick={() => { setMessage(''); setStep(2); }}>Continue</button>}
           {step === 3 && <button className="primary compact" onClick={saveBusinessStep} disabled={busy}>Continue</button>}
           {step === 4 && <button className="primary compact" onClick={saveOwnerStep} disabled={busy}>Continue</button>}
-          {step === 5 && <button className="primary compact" onClick={continueFromDocuments} disabled={busy || Boolean(uploadingType)}>Continue</button>}
+          {step === 5 && <>{docsMissing.length > 0 && <span className="footer-missing">Still needed: {listSentence(docsMissing)}</span>}<button className="primary compact" onClick={continueFromDocuments} disabled={busy || Boolean(uploadingType) || docsMissing.length > 0}>Continue</button></>}
           {step === 6 && <button className="primary compact" onClick={() => setShowSubmitConfirm(true)} disabled={busy}>{busy ? 'Submitting…' : 'Submit application'}</button>}
         </div>
       </div>

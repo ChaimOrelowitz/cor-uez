@@ -32,7 +32,9 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const message = typeof data === 'string' ? data : data.error;
-    throw new Error(message || 'Something went wrong.');
+    const err = new Error(message || 'Something went wrong.');
+    if (data && typeof data === 'object') { err.code = data.code; err.question = data.question; }
+    throw err;
   }
 
   return data;
