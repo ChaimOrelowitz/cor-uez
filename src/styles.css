@@ -266,3 +266,5 @@ textarea { min-height: 94px; resize: vertical; }
 .payment-terms li.payment-terms-key{position:relative;isolation:isolate;font-weight:600}
 .payment-terms li.payment-terms-key:after{content:'';position:absolute;z-index:-1;inset:-5px -10px -5px -30px;background:#fff4d6;border:1px solid #f0d48a;border-radius:10px}
 .demo-fake-upload{justify-self:start;border:1px dashed #c08a00;background:#fff8e1;color:#7a5600;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+.hero-slim{text-align:center;margin:0 auto 14px;color:#6870d9;font-size:13px;font-weight:800;letter-spacing:.04em}

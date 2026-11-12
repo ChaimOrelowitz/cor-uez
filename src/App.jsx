@@ -1297,11 +1297,13 @@ export default function App({ demoMode = false }) {
 
     <main className={`page-wrap intake-page ${step === 0 ? 'intake-first-screen' : ''}`}>
       {!session && step === 0 && <button type="button" className="secondary intake-back-to-intro" onClick={() => { setShowServiceIntro(true); setMessage(''); setEligibility(null); setAddressSuggestions([]); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>← Back</button>}
-      <section className="hero">
-        <div className="eyebrow">NEW JERSEY UEZ SERVICES</div>
-        <h1>We handle your UEZ signup and grant application.</h1>
-        <p>Start with your business address. COR Solutions will check eligibility, collect what we need, and handle the applications for you.</p>
-      </section>
+      {step === 0
+        ? <section className="hero">
+            <div className="eyebrow">NEW JERSEY UEZ SERVICES</div>
+            <h1>We handle your UEZ signup and grant application.</h1>
+            <p>Start with your business address. COR Solutions will check eligibility, enroll your business in the UEZ, and apply for your Technology Grant.</p>
+          </section>
+        : <div className="hero-slim">{eligibleProgramName || 'UEZ LDC Technology Grant'} · Application</div>}
 
       <div className="wizard-card">
         <div className="wizard-head"><div><span className="step-count">Step {progress}</span><h2>{steps[step]}</h2></div></div>
