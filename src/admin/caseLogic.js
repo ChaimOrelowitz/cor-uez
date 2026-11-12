@@ -636,7 +636,10 @@ export function nextStepStatus(row) {
   const detail = rowDetail(row);
   for (const stepKey of NEXT_STEP_WATERFALL) {
     const { state } = resolveProcessStep(stepKey, detail);
-    if (state !== 'complete' && state !== 'not_applicable') return NEXT_STEP_LABELS[stepKey];
+    if (state === 'complete' || state === 'not_applicable') continue;
+    // Submitted and with the LDC: nothing left to submit, it's their move.
+    if (stepKey === 'grant_submission' && state === 'in_progress') return 'Awaiting LDC';
+    return NEXT_STEP_LABELS[stepKey];
   }
   return 'Complete';
 }

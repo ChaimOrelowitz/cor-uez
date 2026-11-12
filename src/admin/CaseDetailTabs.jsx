@@ -620,6 +620,8 @@ function StepPanel({
     ? `Set by ${step.updatedByName || 'admin'} · ${step.updatedAt ? formatTimestamp(step.updatedAt) : ''}`
     : step.source === 'ldc'
     ? `LDC board approved${app.ldc_board_meeting_date ? ` at the ${app.ldc_board_meeting_date} meeting` : ''} · recorded ${formatTimestamp(step.updatedAt)} · fee non-refundable`
+    : stepKey === 'grant_submission' && app.ldc_application_id
+    ? `(auto) · LDC application #${app.ldc_application_id}`
     : '(auto)';
 
   // Alert content per step

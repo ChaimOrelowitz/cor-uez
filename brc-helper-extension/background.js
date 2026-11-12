@@ -375,7 +375,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // the application is actually marked submitted (see backend/routes/uez.js).
       await api(job, `/api/uez/admin/applications/${job.applicationId}/grant-submission/detected`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: message.submissionId || null })
       });
       await notify(job, 'complete', { ambiguous: true });
       if (job.windowId) setTimeout(() => chrome.windows.remove(job.windowId).catch(() => {}), 1800);

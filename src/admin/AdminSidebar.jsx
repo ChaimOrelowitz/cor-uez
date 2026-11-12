@@ -11,7 +11,7 @@ const SECTION_ORDER = [
   'Call State',
   'Not started', 'Needs BRC', 'Needs PBS', 'Needs TC', 'Needs UEZ',
   'Needs LDC application', 'Needs payment', 'Needs grant submission',
-  'Complete', 'Cancelled',
+  'Awaiting LDC', 'Complete', 'Cancelled',
 ];
 
 function sectionKey(app) {

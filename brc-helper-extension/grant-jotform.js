@@ -265,11 +265,23 @@
       || /your submission has been received/i.test(text);
   }
 
+  // JotForm's thank-you page carries the new submission's ID in its inline
+  // script (same markers jotform.js reads for the LDC form). The LDC's
+  // Airtable stores this as the grant's "Application ID", so capturing it
+  // lets COR link the case to the LDC record exactly.
+  function extractSubmissionId() {
+    const html = document.documentElement?.innerHTML || '';
+    const fromUrl = new URLSearchParams(location.search).get('sid') || new URLSearchParams(location.search).get('submission_id');
+    return html.match(/\bpdfSID\s*=\s*['"](\d{15,})['"]/i)?.[1]
+      || html.match(/submissionID\s*[:=]\s*['"]?(\d{15,})/i)?.[1]
+      || (/^\d{15,}$/.test(fromUrl || '') ? fromUrl : null);
+  }
+
   async function markSubmitted(job) {
     if (finished) return;
     finished = true;
     notice('Lakewood received the grant application. COR is updating the applicant file…');
-    const response = await send({ type: 'COR_LAKEWOOD_SUBMITTED', jobId: job.id, url: location.href });
+    const response = await send({ type: 'COR_LAKEWOOD_SUBMITTED', jobId: job.id, url: location.href, submissionId: extractSubmissionId() });
     if (!response?.ok) {
       finished = false;
       throw new Error(response?.error || 'Lakewood submitted, but COR could not update the applicant status.');

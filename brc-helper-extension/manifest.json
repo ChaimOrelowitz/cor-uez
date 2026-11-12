@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "COR UEZ Document Helper",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Runs BRC, tax-clearance, UEZ certification application, Lakewood LDC, and Lakewood grant-submission workflows from the COR UEZ admin app.",
   "permissions": [
     "storage",

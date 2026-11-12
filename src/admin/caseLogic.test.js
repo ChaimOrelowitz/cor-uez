@@ -682,3 +682,12 @@ describe('LDC board approval', () => {
     expect(resolveProcessStep('grant_submission', detail)).toMatchObject({ state: 'complete', source: 'ldc' });
   });
 });
+
+describe('nextStepStatus after the grant is submitted', () => {
+  it('reads "Awaiting LDC", not "Needs grant submission"', () => {
+    const steps = ['formation', 'brc', 'pbs_mynj', 'tax_clearance', 'uez_enrollment', 'ldc_application', 'payment']
+      .map((key) => ({ step_key: key, state: 'complete' }));
+    expect(nextStepStatus({ status: 'applied', process_steps: steps })).toBe('Awaiting LDC');
+    expect(nextStepStatus({ status: 'applied', ldc_board_approved_at: '2026-11-03', process_steps: steps })).toBe('Complete');
+  });
+});

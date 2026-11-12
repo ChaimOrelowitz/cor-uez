@@ -8,7 +8,7 @@ const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
 const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
-const { syncLdcApprovals, APPROVED_STATUS: LDC_APPROVED_STATUS } = require('../services/ldcApprovals');
+const { syncLdcApprovals, APPROVED_STATUS: LDC_APPROVED_STATUS, LINKED_STATUS: LDC_LINKED_STATUS } = require('../services/ldcApprovals');
 
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
@@ -1432,6 +1432,7 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       + (docTypes.has('ldc_application') ? 1 : 0);
     const latestPayment = (paymentsResult.data || [])[(paymentsResult.data || []).length - 1];
     const ldcApproval = (eventsResult.data || []).find((e) => e.status === LDC_APPROVED_STATUS);
+    const ldcLink = [...(eventsResult.data || [])].reverse().find((e) => e.status === LDC_LINKED_STATUS);
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({
@@ -1439,6 +1440,7 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
         ...application,
         ldc_board_approved_at: ldcApproval?.created_at || null,
         ldc_board_meeting_date: ldcApproval?.metadata?.boardMeetingDate || null,
+        ldc_application_id: ldcLink?.metadata?.ldcApplicationId || ldcApproval?.metadata?.ldcApplicationId || null,
         document_types: [...docTypes],
         required_document_ready_count: requiredDocumentReadyCount,
         payment_status: latestPayment?.status || null,
@@ -1653,16 +1655,28 @@ router.post('/admin/applications/:id/grant-submission/detected', requireUezAdmin
       .single();
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
-    await addStatusEvent(
-      application.id,
-      'grant_submission_detected',
-      'Possible grant submission detected',
-      'The COR extension saw what looks like a successful Lakewood submission page, but there was no submission ID available to confirm it automatically. Review and confirm.',
-      req.user.id,
-      false
-    );
+    // The grant form's JotForm submission ID, when the extension could read it
+    // off the thank-you page - the LDC's Airtable keys the grant on it, so
+    // the LDC sync uses it to link this case exactly (services/ldcApprovals.js).
+    const submissionId = /^\d{15,}$/.test(String(req.body?.submissionId || '')) ? String(req.body.submissionId) : null;
+    const { error: eventError } = await supabase.from('uez_status_events').insert({
+      application_id: application.id,
+      status: 'grant_submission_detected',
+      label: 'Possible grant submission detected',
+      message: submissionId
+        ? `The COR extension saw the Lakewood grant thank-you page (JotForm submission ID ${submissionId}). COR will confirm it against the LDC's records.`
+        : 'The COR extension saw what looks like a successful Lakewood submission page, but there was no submission ID available to confirm it automatically. Review and confirm.',
+      visible_to_applicant: false,
+      created_by: req.user.id,
+      metadata: submissionId ? { grantSubmissionId: submissionId } : {}
+    });
+    if (eventError) throw eventError;
 
-    res.json({ ok: true });
+    // The LDC's JotForm-to-Airtable import takes a moment; look for the new
+    // record shortly after rather than waiting for the 30-minute timer.
+    setTimeout(() => syncLdcApprovals({ force: true }), 2 * 60 * 1000);
+
+    res.json({ ok: true, submissionId });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
