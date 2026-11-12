@@ -8,6 +8,7 @@ const uezDavRoutes = require('./routes/uezDav');
 const davBridgeRoutes = require('./routes/davBridge');
 const uezJotformRoutes = require('./routes/uezJotform');
 const uezJotformTestRoutes = require('./routes/uezJotformTest');
+const { syncLdcApprovals } = require('./services/ldcApprovals');
 
 const app = express();
 const allowedOrigins = [
@@ -65,3 +66,8 @@ app.use('/api/uez', uezRoutes);
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`COR UEZ API listening on ${port}`));
+
+// Record LDC board approvals (fee becomes non-refundable) from the LDC's
+// Airtable: once shortly after boot, then every 30 minutes.
+setTimeout(() => syncLdcApprovals({ force: true }), 15 * 1000);
+setInterval(() => syncLdcApprovals(), 30 * 60 * 1000);

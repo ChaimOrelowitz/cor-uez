@@ -19,3 +19,7 @@ services:
         sync: false
       - key: UEZ_ENCRYPTION_KEY
         sync: false
+      - key: AIRTABLE_API_KEY
+        sync: false
+      - key: AIRTABLE_BASE_ID
+        sync: false

@@ -1323,6 +1323,9 @@ export default function AdminPage() {
                   <option value="cancelled">Cancelled</option>
                 </select>
                 <div className="cockpit-chips-row">
+                  {detail.application.ldc_board_approved_at && <span className="cockpit-chip good" title={`Recorded ${new Date(detail.application.ldc_board_approved_at).toLocaleString()} from the LDC's Airtable. Per COR's terms the fee is no longer refundable.`}>
+                    LDC approved{detail.application.ldc_board_meeting_date ? ` ${detail.application.ldc_board_meeting_date}` : ''} · non-refundable
+                  </span>}
                   <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
                   <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
                   <button

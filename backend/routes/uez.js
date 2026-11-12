@@ -8,6 +8,7 @@ const { encryptText, decryptText } = require('../utils/uezCrypto');
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
 const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
+const { syncLdcApprovals, APPROVED_STATUS: LDC_APPROVED_STATUS } = require('../services/ldcApprovals');
 
 const router = express.Router();
 router.use('/brc', require('./uezBrc'));
@@ -1291,6 +1292,9 @@ router.put('/admin/applications/:id/payment', requireUezAdmin, async (req, res) 
 
 router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
   try {
+    // Opening the admin also nudges the LDC-approval sync (throttled, not
+    // awaited - new approvals show up on the next load).
+    syncLdcApprovals();
     const { data, error } = await supabase.from('uez_applications')
       .select('*')
       .order('created_at', { ascending: false });
@@ -1299,13 +1303,17 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
     const ids = (data || []).map((row) => row.id);
     if (!ids.length) return res.json([]);
 
-    const [ownersResult, docsResult, paymentsResult, processStepsResult] = await Promise.all([
+    const [ownersResult, docsResult, paymentsResult, processStepsResult, ldcApprovalsResult] = await Promise.all([
       supabase.from('uez_owners').select('application_id, first_name, last_name, phone').in('application_id', ids),
       supabase.from('uez_documents').select('application_id, document_type, created_at').in('application_id', ids),
       supabase.from('uez_payments').select('application_id, status, amount, payment_date, created_at').in('application_id', ids).order('created_at'),
-      supabase.from('uez_process_steps').select('*').in('application_id', ids)
+      supabase.from('uez_process_steps').select('*').in('application_id', ids),
+      supabase.from('uez_status_events').select('application_id, created_at').eq('status', LDC_APPROVED_STATUS).in('application_id', ids)
     ]);
     if (ownersResult.error) throw ownersResult.error;
+    if (ldcApprovalsResult.error) throw ldcApprovalsResult.error;
+    const ldcApprovedAt = {};
+    for (const row of ldcApprovalsResult.data || []) ldcApprovedAt[row.application_id] = row.created_at;
     if (docsResult.error) throw docsResult.error;
     if (paymentsResult.error) throw paymentsResult.error;
     if (processStepsResult.error) throw processStepsResult.error;
@@ -1344,6 +1352,7 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
         ...row,
         owner_count: ownerCounts[row.id] || 0,
         owners_search: ownerNames[row.id] || [],
+        ldc_board_approved_at: ldcApprovedAt[row.id] || null,
         document_count: docCounts[row.id] || 0,
         document_types: [...types],
         required_document_ready_count: readyCount,
@@ -1422,11 +1431,14 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       + (docTypes.has('tax_clearance') ? 1 : 0)
       + (docTypes.has('ldc_application') ? 1 : 0);
     const latestPayment = (paymentsResult.data || [])[(paymentsResult.data || []).length - 1];
+    const ldcApproval = (eventsResult.data || []).find((e) => e.status === LDC_APPROVED_STATUS);
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       application: {
         ...application,
+        ldc_board_approved_at: ldcApproval?.created_at || null,
+        ldc_board_meeting_date: ldcApproval?.metadata?.boardMeetingDate || null,
         document_types: [...docTypes],
         required_document_ready_count: requiredDocumentReadyCount,
         payment_status: latestPayment?.status || null,

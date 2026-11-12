@@ -671,3 +671,14 @@ describe('sidebarTurn', () => {
     expect(sidebarTurn({ ...base, process_steps: PROCESS_STEP_KEYS.map(done) })).toBe('done');
   });
 });
+
+describe('LDC board approval', () => {
+  it('completes the grant step and outranks a hand-set chip', () => {
+    const detail = {
+      application: { ldc_board_approved_at: '2026-11-03T12:00:00Z' },
+      documents: [],
+      processSteps: [{ step_key: 'grant_submission', state: 'in_progress' }]
+    };
+    expect(resolveProcessStep('grant_submission', detail)).toMatchObject({ state: 'complete', source: 'ldc' });
+  });
+});

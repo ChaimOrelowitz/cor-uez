@@ -546,6 +546,7 @@ export function deriveDefaultProcessStep(stepKey, detail) {
       return docFor(detail, 'ldc_application') ? { state: 'complete', waitingOn: null } : { state: 'not_started', waitingOn: null };
 
     case 'grant_submission': {
+      if (app.ldc_board_approved_at) return { state: 'complete', waitingOn: null };
       if (app.status === 'applied' || app.status === 'grant_submitted') return { state: 'in_progress', waitingOn: null };
       if (grantSubmissionLikelyDetected(detail)) return { state: 'waiting', waitingOn: 'cor_follow_up' };
       if (packetReady(detail)) return { state: 'not_started', waitingOn: null };
@@ -588,6 +589,11 @@ export function grantSubmitGateReason(detail) {
 // showing via `source`, so "set by Chaim on Aug 28" vs "(auto)" is never
 // ambiguous to whoever's looking at it.
 export function resolveProcessStep(stepKey, detail) {
+  // An LDC board approval is a recorded fact from the LDC's own system - it
+  // outranks any hand-set chip on the grant step.
+  if (stepKey === 'grant_submission' && detail?.application?.ldc_board_approved_at) {
+    return { state: 'complete', waitingOn: null, waitingSince: null, waitingReason: null, manualNote: null, source: 'ldc', updatedByName: 'LDC board', updatedAt: detail.application.ldc_board_approved_at };
+  }
   const explicit = (detail?.processSteps || []).find((s) => s.step_key === stepKey);
   if (explicit) {
     return {
