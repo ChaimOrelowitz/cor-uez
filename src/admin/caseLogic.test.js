@@ -15,6 +15,8 @@ import {
   grantSubmissionLikelyDetected,
   grantSubmitGateReason,
   lastEmailSent,
+  stripQuotedReply,
+  emailLink,
   nextStepStatus,
   packetReady,
   paymentStatusLabel,
@@ -325,14 +327,14 @@ describe('lastEmailSent', () => {
     const detail = { statusEvents: [
       { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-20T10:00:00Z', metadata: { providerMessageId: 'abc-123' } }
     ] };
-    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-20T10:00:00Z', providerMessageId: 'abc-123' });
+    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-20T10:00:00Z', providerMessageId: 'abc-123', link: 'https://resend.com/emails/abc-123' });
   });
 
   it('providerMessageId is null when metadata has none (older events before this field existed)', () => {
     const detail = { statusEvents: [
       { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-20T10:00:00Z' }
     ] };
-    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-20T10:00:00Z', providerMessageId: null });
+    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-20T10:00:00Z', providerMessageId: null, link: null });
   });
 
   it('does not match a failed-send-only history', () => {
@@ -348,7 +350,7 @@ describe('lastEmailSent', () => {
       { status: 'admin_email_sent', label: 'Email sent: tax_issue', created_at: '2026-08-22T09:00:00Z', metadata: { providerMessageId: 'second' } },
       { status: 'admin_email_sent', label: 'Email not sent: tax_issue', created_at: '2026-08-25T09:00:00Z' }
     ] };
-    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-22T09:00:00Z', providerMessageId: 'second' });
+    expect(lastEmailSent(detail, 'tax_issue')).toEqual({ createdAt: '2026-08-22T09:00:00Z', providerMessageId: 'second', link: 'https://resend.com/emails/second' });
   });
 
   it('does not match a different template key', () => {
@@ -689,5 +691,30 @@ describe('nextStepStatus after the grant is submitted', () => {
       .map((key) => ({ step_key: key, state: 'complete' }));
     expect(nextStepStatus({ status: 'applied', process_steps: steps })).toBe('Awaiting LDC');
     expect(nextStepStatus({ status: 'applied', ldc_board_approved_at: '2026-11-03', process_steps: steps })).toBe('Complete');
+  });
+});
+
+describe('stripQuotedReply', () => {
+  it('drops Gmail-style quoted history', () => {
+    expect(stripQuotedReply('Thanks, attached!\n\nOn Tue, Nov 10, 2026 at 3:00 PM COR <uez@corsolutions.io> wrote:\n> Please send the BRC')).toBe('Thanks, attached!');
+  });
+  it('handles the "On ... wrote:" line wrapped over two lines', () => {
+    expect(stripQuotedReply('Done.\nOn Tue, Nov 10, 2026 at 3:00 PM COR\n<uez@corsolutions.io> wrote:\n> hi')).toBe('Done.');
+  });
+  it('drops Outlook-style headers', () => {
+    expect(stripQuotedReply('Yes.\n\nFrom: COR <uez@corsolutions.io>\nSent: Tuesday\nSubject: x')).toBe('Yes.');
+  });
+  it('keeps a message with no quote', () => {
+    expect(stripQuotedReply('Line one\nLine two')).toBe('Line one\nLine two');
+  });
+});
+
+describe('emailLink', () => {
+  it('prefers the Gmail link of the matching message', () => {
+    const detail = { messages: [{ gmailMessageId: 'g1', gmailLink: 'https://mail.google.com/mail/?authuser=x#all/g1' }] };
+    expect(emailLink(detail, { gmailMessageId: 'g1' })).toBe('https://mail.google.com/mail/?authuser=x#all/g1');
+  });
+  it('falls back to Resend for older sends', () => {
+    expect(emailLink({}, { providerMessageId: 'r1' })).toBe('https://resend.com/emails/r1');
   });
 });

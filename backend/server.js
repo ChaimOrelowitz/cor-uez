@@ -9,6 +9,7 @@ const davBridgeRoutes = require('./routes/davBridge');
 const uezJotformRoutes = require('./routes/uezJotform');
 const uezJotformTestRoutes = require('./routes/uezJotformTest');
 const { syncLdcApprovals } = require('./services/ldcApprovals');
+const { syncGmail } = require('./services/gmail');
 
 const app = express();
 const allowedOrigins = [
@@ -71,3 +72,6 @@ app.listen(port, () => console.log(`COR UEZ API listening on ${port}`));
 // Airtable: once shortly after boot, then every 30 minutes.
 setTimeout(() => syncLdcApprovals({ force: true }), 15 * 1000);
 setInterval(() => syncLdcApprovals(), 30 * 60 * 1000);
+// Gmail: pull new client email every 2 minutes (first run also backfills history).
+setTimeout(() => syncGmail({ force: true }), 20 * 1000);
+setInterval(() => syncGmail(), 2 * 60 * 1000);

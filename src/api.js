@@ -307,6 +307,17 @@ export function sendAdminApplicationEmail(applicationId, templateKey, options = 
   });
 }
 
+export function sendAdminFreeEmail(applicationId, { to, subject, body, replyToId } = {}) {
+  return request(`/api/uez/email/admin/applications/${applicationId}/messages/send`, {
+    method: 'POST',
+    body: JSON.stringify({ to, subject, body, replyToId })
+  });
+}
+
+export function syncAdminGmail() {
+  return request('/api/uez/email/admin/gmail/sync', { method: 'POST' });
+}
+
 export function getAdminEmailPreview(applicationId, templateKey) {
   return request(`/api/uez/email/admin/applications/${applicationId}/preview/${encodeURIComponent(templateKey)}`);
 }

@@ -3,6 +3,7 @@ import {
   adminQueueInfo,
   docFor,
   docsFor,
+  emailLink,
   formatDob,
   formatSsn,
   formatTimestamp,
@@ -20,6 +21,7 @@ import {
   resolveProcessStep,
   STEP_STATE_OPTIONS,
   stepStateOption,
+  stripQuotedReply,
 } from './caseLogic';
 import DocThumbnail from './DocThumbnail';
 import BusinessDetailsCard from './BusinessDetailsCard';
@@ -109,7 +111,20 @@ function buildStream(detail) {
       ts: s.updated_at ? new Date(s.updated_at).getTime() : 0,
     }));
 
-  const events = (detail.statusEvents || []).map((e) => ({
+  const messageIds = new Set((detail.messages || []).map((m) => m.gmailMessageId));
+  const emails = (detail.messages || []).map((m) => ({
+    id: `msg-${m.id}`,
+    kind: 'email',
+    message: m,
+    when: formatTimestamp(m.sentAt),
+    ts: new Date(m.sentAt).getTime(),
+  }));
+
+  const events = (detail.statusEvents || [])
+    // A send that's already on the timeline as the email itself doesn't also
+    // need its "Email sent" log line.
+    .filter((e) => !(e.status === 'admin_email_sent' && e.metadata?.gmailMessageId && messageIds.has(e.metadata.gmailMessageId)))
+    .map((e) => ({
     id: `evt-${e.id}`,
     kind: 'event',
     title: e.label || e.status || e.type,
@@ -117,12 +132,15 @@ function buildStream(detail) {
     when: formatTimestamp(e.created_at),
     ts: new Date(e.created_at).getTime(),
     dot: '#6f7883',
-    providerMessageId: e.metadata?.providerMessageId || null,
+    link: emailLink(detail, e.metadata),
   }));
 
-  const all = [...notes, ...stepNotes, ...events].sort((a, b) => b.ts - a.ts);
+  const all = [...notes, ...stepNotes, ...events, ...emails].sort((a, b) => b.ts - a.ts);
+  return buildDividers(all);
+}
 
-  // Inject day dividers
+// Inject day dividers into a newest-first list
+function buildDividers(all) {
   const result = [];
   let lastDay = null;
   for (const item of all) {
@@ -142,6 +160,7 @@ function buildStream(detail) {
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function CaseDetailTabs({
   detail,
+  openFreeEmail,
   busy,
   myNjCredentials,
   brcForm, setBrcForm,
@@ -244,7 +263,12 @@ export default function CaseDetailTabs({
     if (stepPanelRef.current) stepPanelRef.current.scrollTop = 0;
   }, [selectedStep]);
 
-  const stream = buildStream(detail);
+  const [streamFilter, setStreamFilter] = useState('all');
+  const fullStream = buildStream(detail);
+  const emailCount = fullStream.filter((item) => item.kind === 'email').length;
+  const stream = streamFilter === 'email'
+    ? buildDividers(fullStream.filter((item) => item.kind === 'email'))
+    : fullStream;
 
   async function saveNote() {
     const text = noteDraftLocal.trim();
@@ -356,7 +380,13 @@ export default function CaseDetailTabs({
         <aside className="cw-rail">
           <div className="cw-rail-head">
             <span className="cw-rail-label">ACTIVITY</span>
-            <span className="cw-rail-count">{stream.length} entries</span>
+            <span className="cw-rail-filter">
+              <button type="button" className={streamFilter === 'all' ? 'on' : ''} onClick={() => setStreamFilter('all')}>All {fullStream.length}</button>
+              <button type="button" className={streamFilter === 'email' ? 'on' : ''} onClick={() => setStreamFilter('email')}>Email {emailCount}</button>
+            </span>
+            {detail.gmailConnected && openFreeEmail && (
+              <button type="button" className="cw-btn-ghost cw-rail-new-email" onClick={() => openFreeEmail(null)} title="New email to the client">✉ New</button>
+            )}
           </div>
 
           {/* Composer - saves on the button or ⌘/Ctrl+Enter only, never on blur */}
@@ -395,11 +425,13 @@ export default function CaseDetailTabs({
                 )}
                 <div className="cw-stream-row">
                   <div className="cw-stream-gutter">
-                    <span className="cw-stream-dot" style={{ background: item.kind === 'event' ? item.dot : 'var(--cw-muted)' }} />
+                    <span className="cw-stream-dot" style={{ background: item.kind === 'event' ? item.dot : item.kind === 'email' ? (item.message.direction === 'inbound' ? '#60a5fa' : '#34d399') : 'var(--cw-muted)' }} />
                     <span className="cw-stream-spine" />
                   </div>
                   <div className="cw-stream-content">
-                    {(item.kind === 'note' || item.kind === 'stepnote') ? (
+                    {item.kind === 'email' ? (
+                      <EmailCard message={item.message} when={item.when} onReply={detail.gmailConnected && openFreeEmail ? () => openFreeEmail(item.message) : null} />
+                    ) : (item.kind === 'note' || item.kind === 'stepnote') ? (
                       <div className="cw-note-card" style={{ borderLeft: item.kind === 'stepnote' ? '2px solid var(--cw-muted)' : undefined }}>
                         <div className="cw-note-card-head">
                           <span className="cw-initial">{item.initial}</span>
@@ -421,8 +453,8 @@ export default function CaseDetailTabs({
                         {item.body && <span className="cw-event-body">{item.body}</span>}
                         <span className="cw-mono cw-faint3">
                           {item.when}
-                          {item.providerMessageId && (
-                            <> · <a href={`https://resend.com/emails/${item.providerMessageId}`} target="_blank" rel="noreferrer">View email ↗</a></>
+                          {item.link && (
+                            <> · <a href={item.link} target="_blank" rel="noreferrer">View email ↗</a></>
                           )}
                         </span>
                       </div>
@@ -1189,8 +1221,8 @@ function StepActions({
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Btn label={`✉ Request payment${paymentEmailSent ? ' (resend)' : ''}`} onClick={requestPayment} />
-            {paymentEmailSent?.providerMessageId && (
-              <a href={`https://resend.com/emails/${paymentEmailSent.providerMessageId}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>View email ↗</a>
+            {paymentEmailSent?.link && (
+              <a href={paymentEmailSent.link} target="_blank" rel="noreferrer" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>View email ↗</a>
             )}
           </div>
           {latest?.status !== 'paid' && <Btn label="Confirm payment received" onClick={confirmPayment} variant="ok" />}
@@ -1225,4 +1257,51 @@ function StepActions({
 function brcFormHasData(detail) {
   const app = detail.application;
   return !!(app.brc_registered_name || app.registered_business_name || app.business_name_input);
+}
+
+// One email on the case timeline: who/what, the new part of the body (quoted
+// history hidden until expanded), attachments, and Reply / Open in Gmail.
+function EmailCard({ message, when, onReply }) {
+  const [expanded, setExpanded] = useState(false);
+  const inbound = message.direction === 'inbound';
+  const fresh = stripQuotedReply(message.body) || message.snippet || '';
+  const full = String(message.body || '').trim();
+  const text = expanded ? full : fresh;
+  const long = expanded ? false : (fresh.length > 600 || fresh.split('\n').length > 12);
+  const shown = long ? `${fresh.slice(0, 600).split('\n').slice(0, 12).join('\n')}…` : text;
+  const canExpand = full.length > fresh.length || long;
+  const files = (message.attachments || []);
+  return (
+    <div className={`cw-email-card ${inbound ? 'cw-email-in' : 'cw-email-out'}`}>
+      <div className="cw-email-head">
+        <span className="cw-email-dir">{inbound ? '↙ From' : '↗ To'}</span>
+        <span className="cw-email-who" title={inbound ? message.from : message.to.join(', ')}>
+          {inbound ? (message.fromName || message.from) : message.to.join(', ')}
+        </span>
+      </div>
+      <div className="cw-email-subject">{message.subject || '(no subject)'}</div>
+      {shown && <div className="cw-email-body">{shown}</div>}
+      {canExpand && (
+        <button type="button" className="cw-email-more" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show less' : 'Show full email'}
+        </button>
+      )}
+      {files.length > 0 && (
+        <div className="cw-email-files">
+          {files.map((file, i) => (
+            file.url && /^image\//.test(file.mimeType || '')
+              ? <a key={i} href={file.url} target="_blank" rel="noreferrer" className="cw-email-thumb" title={file.filename}><img src={file.url} alt={file.filename} loading="lazy" /></a>
+              : <a key={i} href={file.url || undefined} target="_blank" rel="noreferrer" className="cw-email-file" title={file.url ? file.filename : 'Too large to copy — open in Gmail'}>📎 {file.filename}</a>
+          ))}
+        </div>
+      )}
+      <div className="cw-note-footer cw-email-footer">
+        <span className="cw-mono cw-faint3">{when}{message.templateKey ? ` · ${message.templateKey.replace(/_/g, ' ')}` : ''}</span>
+        <span className="cw-email-actions">
+          {onReply && <button type="button" className="cw-btn-ghost" onClick={onReply}>Reply</button>}
+          {message.gmailLink && <a href={message.gmailLink} target="_blank" rel="noreferrer">Gmail ↗</a>}
+        </span>
+      </div>
+    </div>
+  );
 }

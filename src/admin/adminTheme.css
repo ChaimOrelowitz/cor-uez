@@ -2607,3 +2607,38 @@
   display: flex;
   flex-direction: column;
 }
+
+/* ── Email on the case timeline ─────────────────────────────────────────── */
+.admin-shell .cw-rail-filter { display: inline-flex; gap: 2px; margin-left: auto; margin-right: 6px; }
+.admin-shell .cw-rail-filter button {
+  font-size: 10px; padding: 2px 7px; border-radius: 999px; border: 1px solid transparent;
+  background: none; color: var(--cw-muted3); cursor: pointer;
+}
+.admin-shell .cw-rail-filter button.on { border-color: var(--cw-line); color: var(--cw-text); background: var(--cw-card); }
+.admin-shell .cw-rail-new-email { font-size: 11px; padding: 2px 6px; }
+
+.admin-shell .cw-email-card {
+  background: var(--cw-card);
+  border: 1px solid var(--cw-panel-border);
+  border-left: 2px solid var(--cw-info);
+  border-radius: var(--cw-radius-sm);
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 0;
+}
+.admin-shell .cw-email-out { border-left-color: var(--cw-ok); }
+.admin-shell .cw-email-head { display: flex; gap: 6px; align-items: baseline; min-width: 0; font-size: 11px; }
+.admin-shell .cw-email-dir { color: var(--cw-muted3); flex-shrink: 0; }
+.admin-shell .cw-email-who { color: var(--cw-text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-shell .cw-email-subject { font-size: 12px; font-weight: 600; color: var(--cw-text); overflow-wrap: anywhere; }
+.admin-shell .cw-email-body { font-size: 12px; line-height: 1.5; color: var(--cw-muted4); white-space: pre-wrap; overflow-wrap: anywhere; }
+.admin-shell .cw-email-more { align-self: flex-start; background: none; border: none; padding: 0; font-size: 11px; color: var(--cw-info); cursor: pointer; }
+.admin-shell .cw-email-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.admin-shell .cw-email-thumb img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--cw-line); display: block; }
+.admin-shell .cw-email-file {
+  font-size: 11px; padding: 3px 7px; border: 1px solid var(--cw-line); border-radius: 6px;
+  color: var(--cw-text); text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.admin-shell .cw-email-footer { justify-content: space-between; }
+.admin-shell .cw-email-actions { display: inline-flex; gap: 8px; align-items: center; font-size: 11px; }
+.admin-shell .cw-email-actions .cw-btn-ghost { font-size: 11px; padding: 1px 6px; }

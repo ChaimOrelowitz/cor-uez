@@ -349,7 +349,32 @@ export function lastEmailSent(detail, templateKey) {
     (e) => e.status === 'admin_email_sent' && e.label === `Email sent: ${templateKey}`
   );
   if (!match) return null;
-  return { createdAt: match.created_at, providerMessageId: match.metadata?.providerMessageId || null };
+  return { createdAt: match.created_at, providerMessageId: match.metadata?.providerMessageId || null, link: emailLink(detail, match.metadata) };
+}
+
+// Where "View email" goes for a logged send: the Gmail message (sends since
+// the Gmail switch) or the Resend dashboard (older sends).
+export function emailLink(detail, metadata) {
+  if (metadata?.gmailMessageId) {
+    const message = (detail?.messages || []).find((m) => m.gmailMessageId === metadata.gmailMessageId);
+    return message?.gmailLink || `https://mail.google.com/mail/u/0/#all/${metadata.gmailMessageId}`;
+  }
+  if (metadata?.providerMessageId) return `https://resend.com/emails/${metadata.providerMessageId}`;
+  return null;
+}
+
+// Long client replies quote the whole thread underneath; show only what's new.
+export function stripQuotedReply(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  const cut = lines.findIndex((line, i) => (
+    /^On .+wrote:\s*$/.test(line.trim())
+    || (/^On .+/.test(line.trim()) && /wrote:\s*$/.test((lines[i + 1] || '').trim()))
+    || /^-{2,}\s*Original Message\s*-{2,}/i.test(line.trim())
+    || /^-{5,}\s*Forwarded message/i.test(line.trim())
+    || (/^From: /.test(line) && /^(Sent|Date): /.test(lines[i + 1] || ''))
+  ));
+  const kept = (cut >= 0 ? lines.slice(0, cut) : lines).filter((line) => !/^>/.test(line));
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function applicationDraftFrom(app) {

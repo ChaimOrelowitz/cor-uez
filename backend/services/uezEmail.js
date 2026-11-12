@@ -1,4 +1,5 @@
 const supabase = require('../db/supabase');
+const { gmailConfigured, sendGmail, recordSentMessage } = require('./gmail');
 
 const ACCOUNT_URL = process.env.UEZ_ACCOUNT_URL || 'https://uez.corsolutions.io';
 const FROM_EMAIL = process.env.UEZ_FROM_EMAIL || 'COR UEZ <uez@corsolutions.io>';
@@ -97,6 +98,45 @@ async function renderApplicationEmail(application, templateKey, options = {}) {
   return { template, recipient, subject, body };
 }
 
+async function sendViaResend({ to, subject, body, attachments }) {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: FROM_EMAIL,
+      to: [to],
+      reply_to: REPLY_TO,
+      subject,
+      text: body,
+      html: textToHtml(body),
+      ...(Array.isArray(attachments) && attachments.length
+        ? { attachments: attachments.map((item) => ({ filename: item.filename, content: item.content })) }
+        : {})
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.message || payload?.error || `Resend returned ${response.status}`);
+  return { provider: 'resend', id: payload.id || null };
+}
+
+// Gmail first (lands in Sent, replies thread in the inbox); Resend only if
+// Gmail isn't configured or the Gmail send itself errors.
+async function deliverEmail({ to, subject, body, attachments, threadId, inReplyTo, references }) {
+  if (gmailConfigured()) {
+    try {
+      const sent = await sendGmail({ to, subject, text: body, html: textToHtml(body), attachments, threadId, inReplyTo, references });
+      return { provider: 'gmail', id: sent.id, threadId: sent.threadId };
+    } catch (err) {
+      if (!process.env.RESEND_API_KEY) throw err;
+      console.error(`Gmail send failed, falling back to Resend: ${err.message}`);
+    }
+  }
+  return sendViaResend({ to, subject, body, attachments });
+}
+
 async function sendApplicationEmail(application, templateKey, options = {}) {
   const mode = options.mode === 'manual' ? 'manual' : 'automatic';
   const { template, recipient, subject, body } = await renderApplicationEmail(application, templateKey, options);
@@ -108,9 +148,9 @@ async function sendApplicationEmail(application, templateKey, options = {}) {
     return { sent: existing.status === 'sent', skipped: true, reason: 'duplicate', log: existing };
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    console.warn(`UEZ email ${templateKey} not sent: RESEND_API_KEY is not configured.`);
-    return { sent: false, skipped: true, reason: 'resend_not_configured' };
+  if (!gmailConfigured() && !process.env.RESEND_API_KEY) {
+    console.warn(`UEZ email ${templateKey} not sent: neither Gmail nor Resend is configured.`);
+    return { sent: false, skipped: true, reason: 'email_not_configured' };
   }
 
   let log;
@@ -141,34 +181,16 @@ async function sendApplicationEmail(application, templateKey, options = {}) {
   }
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: [recipient],
-        reply_to: REPLY_TO,
-        subject,
-        text: body,
-        html: textToHtml(body),
-        ...(Array.isArray(options.attachments) && options.attachments.length
-          ? { attachments: options.attachments.map((item) => ({ filename: item.filename, content: item.content })) }
-          : {})
-      })
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.message || payload?.error || `Resend returned ${response.status}`);
+    const delivered = await deliverEmail({ to: recipient, subject, body, attachments: options.attachments });
     const { data: saved, error } = await supabase.from('uez_email_log').update({
-      provider_message_id: payload.id || null,
+      provider_message_id: delivered.id || null,
       status: 'sent',
       sent_at: new Date().toISOString(),
       error: null
     }).eq('id', log.id).select('*').single();
     if (error) throw error;
-    return { sent: true, log: saved };
+    if (delivered.provider === 'gmail') await recordSentMessage(delivered.id, application.id, templateKey);
+    return { sent: true, provider: delivered.provider, log: saved };
   } catch (err) {
     await supabase.from('uez_email_log').update({ status: 'failed', error: String(err.message || err) }).eq('id', log.id).catch(() => {});
     throw err;
@@ -211,5 +233,7 @@ module.exports = {
   renderApplicationEmail,
   sendApplicationEmail,
   safeSendApplicationEmail,
-  ensureTemplateExists
+  ensureTemplateExists,
+  deliverEmail,
+  textToHtml
 };

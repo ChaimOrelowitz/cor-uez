@@ -9,6 +9,7 @@ const { verifyMyNjLogin, USER_FIXABLE_CODES, MYNJ_CHECK_MESSAGES } = require('..
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
 const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
+const { syncGmail, listCaseMessages, gmailConfigured } = require('../services/gmail');
 const { syncLdcApprovals, APPROVED_STATUS: LDC_APPROVED_STATUS, LINKED_STATUS: LDC_LINKED_STATUS } = require('../services/ldcApprovals');
 
 const router = express.Router();
@@ -1345,6 +1346,7 @@ router.get('/admin/applications', requireUezAdmin, async (_req, res) => {
     // Opening the admin also nudges the LDC-approval sync (throttled, not
     // awaited - new approvals show up on the next load).
     syncLdcApprovals();
+    syncGmail();
     const { data, error } = await supabase.from('uez_applications')
       .select('*')
       .order('created_at', { ascending: false });
@@ -1501,7 +1503,12 @@ router.get('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       statusEvents: eventsResult.data || [],
       payments: paymentsResult.data || [],
       notes: await attachAuthorNames(caseNotesResult.data || []),
-      processSteps: await attachUserNames(processStepsResult.data || [], 'updated_by', 'updated_by_name')
+      processSteps: await attachUserNames(processStepsResult.data || [], 'updated_by', 'updated_by_name'),
+      messages: await listCaseMessages(application.id).catch((err) => {
+        console.warn('Case messages failed to load:', err.message);
+        return [];
+      }),
+      gmailConnected: gmailConfigured()
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

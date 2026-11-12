@@ -25,7 +25,7 @@ import {
   saveAdminPayment,
   requestAdminPayment,
   reviewAdminDocument,
-  sendAdminApplicationEmail,
+  sendAdminApplicationEmail, sendAdminFreeEmail,
   updateAdminCaseNote,
   updateAdminProcessStep,
   resetAdminProcessStep,
@@ -972,6 +972,21 @@ export default function AdminPage() {
     }
   }
 
+  // Free-form email from the timeline: a reply (threads in Gmail) when
+  // replyTo is one of detail.messages, otherwise a new email to the client.
+  function openFreeEmail(replyTo) {
+    const application = detail?.application;
+    if (!application) return;
+    emailSentCallbackRef.current = null;
+    const recipient = replyTo
+      ? (replyTo.direction === 'inbound' ? replyTo.from : (replyTo.to || [])[0]) || ''
+      : application.contact_email || '';
+    const subject = replyTo
+      ? (/^re:/i.test(replyTo.subject || '') ? replyTo.subject : `Re: ${replyTo.subject || ''}`)
+      : '';
+    setEmailComposer({ free: true, replyTo: replyTo || null, recipient, subject, body: '', attachments: [], loading: false, sending: false, error: '', sentResult: null });
+  }
+
   function closeEmailComposer() {
     emailSentCallbackRef.current = null;
     setEmailComposer(null);
@@ -982,10 +997,17 @@ export default function AdminPage() {
     if (!applicationId || !emailComposer) return;
     setEmailComposer((prev) => (prev ? { ...prev, sending: true, error: '' } : prev));
     try {
-      const result = await sendAdminApplicationEmail(applicationId, emailComposer.templateKey, {
-        subject: emailComposer.subject,
-        body: emailComposer.body
-      });
+      const result = emailComposer.free
+        ? await sendAdminFreeEmail(applicationId, {
+          to: emailComposer.recipient,
+          subject: emailComposer.subject,
+          body: emailComposer.body,
+          replyToId: emailComposer.replyTo?.id
+        })
+        : await sendAdminApplicationEmail(applicationId, emailComposer.templateKey, {
+          subject: emailComposer.subject,
+          body: emailComposer.body
+        });
       setEmailComposer((prev) => (prev ? { ...prev, sending: false, sentResult: result } : prev));
       if (result?.sent) {
         const onSent = emailSentCallbackRef.current;
@@ -1350,6 +1372,7 @@ export default function AdminPage() {
 
           <CaseDetailTabs
             detail={detail}
+            openFreeEmail={openFreeEmail}
             busy={busy}
             myNjCredentials={myNjCredentials}
             brcForm={brcForm}
@@ -1459,6 +1482,7 @@ export default function AdminPage() {
           composer={emailComposer}
           onChangeSubject={(value) => setEmailComposer((prev) => ({ ...prev, subject: value }))}
           onChangeBody={(value) => setEmailComposer((prev) => ({ ...prev, body: value }))}
+          onChangeRecipient={(value) => setEmailComposer((prev) => ({ ...prev, recipient: value }))}
           onSend={sendComposedEmail}
           onClose={closeEmailComposer}
         />

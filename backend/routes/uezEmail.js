@@ -7,8 +7,10 @@ const {
   updateTemplate,
   renderApplicationEmail,
   sendApplicationEmail,
-  ensureTemplateExists
+  ensureTemplateExists,
+  deliverEmail
 } = require('../services/uezEmail');
+const { gmailConfigured, syncGmail, recordSentMessage, getCaseMessage } = require('../services/gmail');
 
 // Default content for templates that are wired in code but not yet in the DB.
 // ensureTemplateExists inserts only when the row is missing — after first use
@@ -221,14 +223,63 @@ router.post('/admin/applications/:id/send/:key', requireUezAdmin, async (req, re
         ? `Sent to ${result.log?.recipient || application.contact_email}.`
         : (result.error || (result.skipped ? `Skipped (${result.reason}).` : 'Send failed.')),
       userId: req.user.id,
-      // Lets the admin case page link straight to this send in the Resend
-      // dashboard (resend.com/emails/{id}) instead of just noting it happened.
-      metadata: result.sent && result.log?.provider_message_id ? { providerMessageId: result.log.provider_message_id } : {}
+      // Lets the admin case page link straight to this send (in Gmail, or the
+      // Resend dashboard for Resend sends) instead of just noting it happened.
+      metadata: !result.sent || !result.log?.provider_message_id ? {}
+        : result.provider === 'gmail' ? { gmailMessageId: result.log.provider_message_id }
+          : { providerMessageId: result.log.provider_message_id }
     }).catch(() => {});
 
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Free-form email from the case timeline: a reply to one of the case's
+// messages (threads in Gmail) or a brand-new email to the client.
+router.post('/admin/applications/:id/messages/send', requireUezAdmin, async (req, res) => {
+  try {
+    if (!gmailConfigured()) return res.status(400).json({ error: 'Gmail is not connected.' });
+    const application = await applicationForId(req.params.id);
+    if (!application) return res.status(404).json({ error: 'Application not found.' });
+
+    const body = String(req.body?.body || '').trim();
+    if (!body) return res.status(400).json({ error: 'Write a message first.' });
+
+    let replyTo = null;
+    if (req.body?.replyToId) {
+      replyTo = await getCaseMessage(application.id, req.body.replyToId);
+      if (!replyTo) return res.status(404).json({ error: 'That message is no longer on this case.' });
+    }
+    const defaultTo = replyTo
+      ? (replyTo.direction === 'inbound' ? replyTo.from_address : (replyTo.to_addresses || [])[0])
+      : application.contact_email;
+    const to = String(req.body?.to || defaultTo || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return res.status(400).json({ error: 'No valid recipient email.' });
+    const baseSubject = String(req.body?.subject || replyTo?.subject || '').trim();
+    const subject = replyTo && !/^re:/i.test(baseSubject) ? `Re: ${baseSubject}` : baseSubject;
+    if (!subject) return res.status(400).json({ error: 'Add a subject.' });
+
+    const delivered = await deliverEmail({
+      to,
+      subject,
+      body,
+      threadId: replyTo?.gmail_thread_id || undefined,
+      inReplyTo: replyTo?.rfc_message_id || undefined
+    });
+    if (delivered.provider === 'gmail') await recordSentMessage(delivered.id, application.id, null);
+    res.json({ sent: true, provider: delivered.provider, to, subject });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/admin/gmail/sync', requireUezAdmin, async (_req, res) => {
+  try {
+    res.json(await syncGmail({ force: true }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
