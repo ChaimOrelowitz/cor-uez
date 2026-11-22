@@ -1318,10 +1318,6 @@ export default function AdminPage() {
                   <CopyButton value={displayBusinessName(detail.application)} label="business name" />
                 </h1>
                 <div className="cockpit-meta-grid">
-                  {detail.owners?.[0] && <div className="cockpit-meta-item">
-                    <span className="cockpit-meta-label">{detail.owners.length > 1 ? `Owner (+${detail.owners.length - 1})` : 'Owner'}</span>
-                    <div className="cockpit-meta-value">{detail.owners[0].firstName} {detail.owners[0].lastName}</div>
-                  </div>}
                   {detail.application.ein && <div className="cockpit-meta-item">
                     <span className="cockpit-meta-label">EIN</span>
                     <div className="cockpit-meta-value">{detail.application.ein}<CopyButton value={njTaxId(detail.application.ein)} label="EIN" /></div>
@@ -1333,6 +1329,10 @@ export default function AdminPage() {
                   {detail.application.contact_email && <div className="cockpit-meta-item">
                     <span className="cockpit-meta-label">Email</span>
                     <div className="cockpit-meta-value">{detail.application.contact_email}<CopyButton value={detail.application.contact_email} label="email" /></div>
+                  </div>}
+                  {detail.owners?.[0] && <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">{detail.owners.length > 1 ? `Owner (+${detail.owners.length - 1})` : 'Owner'}</span>
+                    <div className="cockpit-meta-value">{detail.owners[0].firstName} {detail.owners[0].lastName}</div>
                   </div>}
                 </div>
               </div>

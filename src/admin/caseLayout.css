@@ -129,10 +129,43 @@
 .admin-shell .cw-owner-sheet .cw-kv { padding-top: 6px; }
 .admin-shell .cw-kv-empty { margin: 0; padding: 12px 16px; color: var(--cw-muted2); }
 
-/* ---- Step tabs: one line ------------------------------------------------- */
-.admin-shell .cw-process-bar { padding: 4px; gap: 2px; }
-.admin-shell .cw-seg { padding: 5px 8px; align-items: center; }
+/* ---- Step tabs: real tabs attached to the top of the step card ----------- */
+.admin-shell .cw-step-col .cw-process-bar {
+  margin: 12px 20px 0;
+  padding: 0 10px;
+  gap: 3px;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+.admin-shell .cw-step-col .cw-seg {
+  padding: 0 8px 7px;
+  align-items: center;
+  overflow: hidden;
+  background: var(--cw-chip-bg);
+  border: 1px solid var(--cw-panel-border);
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+}
+.admin-shell .cw-step-col .cw-seg:hover { background: var(--cw-border-soft); }
+.admin-shell .cw-step-col .cw-seg-active,
+.admin-shell .cw-step-col .cw-seg-active:hover {
+  background: var(--cw-panel);
+  margin-bottom: -1px;           /* covers the card's top border: tab and card join */
+  padding-bottom: 8px;
+}
+/* State color as the tab's top edge */
+.admin-shell .cw-step-col .cw-seg-bar { width: calc(100% + 16px); margin: 0 -8px 6px; height: 3px; border-radius: 0; }
 .admin-shell .cw-seg-title { text-align: center; font-size: 12px; }
+.admin-shell .cw-step-col .cw-seg-active .cw-seg-title { font-weight: 700; }
+.admin-shell .cw-step-col .cw-step-panel {
+  border: 1px solid var(--cw-panel-border);
+  border-radius: 14px;
+  box-shadow: none;
+}
 
 /* ---- Step card ------------------------------------------------------------ */
 .admin-shell .cw-step-header { padding: 12px 16px 10px; }
@@ -176,10 +209,11 @@
     overflow: hidden;
     padding-bottom: 12px;
   }
-  .admin-shell .cw-step-col .cw-process-bar { margin: 12px 20px 0; flex-shrink: 0; box-shadow: none; position: static; }
+  /* The card hugs its content (actions sit right under the step) and only
+     grows to the bottom of the screen if a step really needs the room. */
   .admin-shell .cw-step-col .cw-step-panel {
-    margin: 10px 20px 0;
-    flex: 1 1 auto;
+    margin: 0 20px;
+    flex: 0 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -188,7 +222,7 @@
   .admin-shell .cw-alert-block { flex-shrink: 0; }
   /* If a step ever has more than fits (big inline PDF), only its middle
      scrolls - the header and the action footer stay put. */
-  .admin-shell .cw-doc-fields-grid { flex: 1 1 auto; min-height: 0; overflow: auto; align-content: start; }
+  .admin-shell .cw-doc-fields-grid { flex: 0 1 auto; min-height: 0; overflow: auto; align-content: start; }
   .admin-shell .cw-rail { margin-top: 12px; }
 }
 
@@ -212,6 +246,10 @@
   .admin-shell .cw-state-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .admin-shell .cw-state-chips::-webkit-scrollbar { display: none; }
   .admin-shell .cw-state-chip { flex: 0 0 auto; }
+  /* Tabs stay joined to the card on phone too */
+  .admin-shell .cw-step-col .cw-process-bar { margin: 10px 12px 0; padding: 0 6px; overflow-x: auto; overflow-y: hidden; }
+  .admin-shell .cw-step-col .cw-seg { min-width: 72px; min-height: 40px; flex: 0 0 auto; }
+  .admin-shell .cw-step-col .cw-step-panel { margin: 0 12px 10px; }
 }
 
 /* Keep the header button on one line */
