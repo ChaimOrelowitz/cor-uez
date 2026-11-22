@@ -92,42 +92,136 @@
 .admin-shell .cw-head-card .cw-app-edit-bar button { margin: 0; padding: 4px 12px; min-height: 0; font-size: 12px; }
 .admin-shell .cw-head-card .cw-app-edit-bar.editing .admin-delete-button { margin-left: auto; }
 
-/* ---- Tight label/value sheets (Business, Owner) -------------------------- */
-.admin-shell .cw-kv {
-  margin: 0;
-  padding: 10px 90px 12px 16px; /* right padding clears the floating Edit */
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 6px 24px;
-}
-.admin-shell .cw-kv > div { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
-.admin-shell .cw-kv .cw-kv-wide { grid-column: 1 / -1; }
-.admin-shell .cw-kv dt {
-  flex: 0 0 68px;
+/* ---- Business / Owner detail panels --------------------------------------- */
+/* Rule: every label sits ABOVE its value; values share the label's left edge. */
+.admin-shell .cw-detail dl,
+.admin-shell .cw-detail dd { margin: 0; }
+.admin-shell .cw-df { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.admin-shell .cw-df > dt {
   font-size: 10px;
+  line-height: 14px;
   font-weight: 600;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--cw-muted3);
+  white-space: nowrap;
 }
-.admin-shell .cw-kv dd {
-  margin: 0;
+.admin-shell .cw-df > dd {
   font-size: 13px;
+  line-height: 20px;
   color: var(--cw-text);
   min-width: 0;
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.admin-shell .cw-detail-empty { margin: 0; padding: 12px 16px; font-size: 13px; color: var(--cw-muted2); }
+
+/* Business: address row / facts strip / about */
+.admin-shell .cw-biz {
+  container-type: inline-size;
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.admin-shell .cw-biz-address { padding-right: 80px; } /* clears the floating Edit */
+.admin-shell .cw-biz-address dd {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 14px;
+  font-weight: 500;
 }
-.admin-shell .cw-owner-sheets { display: flex; flex-direction: column; }
-.admin-shell .cw-owner-sheet + .cw-owner-sheet { border-top: 1px solid var(--cw-line); }
-.admin-shell .cw-owner-head { display: flex; gap: 10px; align-items: baseline; padding: 10px 90px 0 16px; }
-.admin-shell .cw-owner-head strong { font-size: 13px; color: var(--cw-text); }
-.admin-shell .cw-owner-head span { font-size: 12px; color: var(--cw-muted2); }
-.admin-shell .cw-owner-sheet .cw-kv { padding-top: 6px; }
-.admin-shell .cw-kv-empty { margin: 0; padding: 12px 16px; color: var(--cw-muted2); }
+.admin-shell .cw-biz-address .cw-cv { margin-right: 12px; } /* room for the hover icon before the tags */
+.admin-shell .cw-biz-facts { display: flex; flex-wrap: wrap; gap: 10px 32px; }
+.admin-shell .cw-biz-facts > .cw-df { flex: 0 1 auto; max-width: 280px; }
+.admin-shell .cw-biz-about dd { color: var(--cw-text-soft); line-height: 19px; max-width: 88ch; }
+
+/* Owners: one row group per owner, all sharing one column grid */
+.admin-shell .cw-owners { container-type: inline-size; }
+.admin-shell .cw-owner { padding: 12px 16px 14px; }
+.admin-shell .cw-owner + .cw-owner { border-top: 1px solid var(--cw-line); }
+.admin-shell .cw-owner-head { display: flex; align-items: center; gap: 8px; min-height: 20px; min-width: 0; }
+.admin-shell .cw-owner:first-child .cw-owner-head { padding-right: 80px; } /* clears the floating Edit */
+.admin-shell .cw-owner-head strong { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--cw-text); }
+.admin-shell .cw-owner-role { font-size: 12px; color: var(--cw-muted2); }
+.admin-shell .cw-owner-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(200px, 1.2fr) 116px 88px 100px minmax(200px, 1.8fr);
+  gap: 8px 28px;
+}
+
+/* Copy-on-click values */
+.admin-shell .cw-cv {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  max-width: calc(100% + 8px);
+  margin: -1px -4px;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: copy;
+  transition: background-color .12s;
+}
+.admin-shell .cw-cv:hover { background: var(--cw-chip-bg); }
+.admin-shell .cw-cv:focus-visible { outline: 2px solid var(--admin-accent-ring); outline-offset: 1px; }
+.admin-shell .cw-cv-icon {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: 3px;
+  transform: translateY(-50%);
+  color: var(--cw-muted3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s;
+}
+.admin-shell .cw-cv:hover .cw-cv-icon,
+.admin-shell .cw-cv:focus-visible .cw-cv-icon { opacity: 1; }
+.admin-shell .cw-cv.copied { background: var(--cw-ok-bg); }
+.admin-shell .cw-cv.copied .cw-cv-icon { opacity: 1; color: var(--cw-ok); }
+.admin-shell .cw-cv-empty { color: var(--cw-muted2); }
+.admin-shell .cw-cv-secret .cw-ssn-full { display: none; }
+.admin-shell .cw-cv-secret:hover .cw-ssn-full,
+.admin-shell .cw-cv-secret:focus-visible .cw-ssn-full { display: inline; }
+.admin-shell .cw-cv-secret:hover .cw-ssn-mask,
+.admin-shell .cw-cv-secret:focus-visible .cw-ssn-mask { display: none; }
+@media (hover: none) {
+  .admin-shell .cw-cv-icon { display: none; } /* touch: the green flash is the feedback */
+}
+
+/* Panel-width breakpoints (the panel is ~1000px at 1440 but ~660px at 1100) */
+@container (max-width: 820px) {
+  .admin-shell .cw-owner-grid { grid-template-columns: minmax(180px, 1fr) 116px 88px 100px; }
+  .admin-shell .cw-owner-grid .cw-df-home { grid-column: 1 / -1; }
+}
+@container (max-width: 520px) {
+  .admin-shell .cw-biz-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+  .admin-shell .cw-biz-facts > .cw-df { max-width: none; }
+  .admin-shell .cw-biz-facts > .cw-df-wide { grid-column: 1 / -1; }
+  .admin-shell .cw-owner-grid { grid-template-columns: repeat(3, max-content); column-gap: 24px; }
+  .admin-shell .cw-owner-grid .cw-df-email,
+  .admin-shell .cw-owner-grid .cw-df-home { grid-column: 1 / -1; }
+}
+
+@media (max-width: 900px) {
+  /* match the header card's 14px gutter; bigger tap targets on copy values */
+  .admin-shell .cw-biz { padding: 12px 14px 14px; }
+  .admin-shell .cw-owner { padding: 12px 14px 14px; }
+  .admin-shell .cw-detail-empty { padding: 12px 14px; }
+  .admin-shell .cw-df > dd { font-size: 14px; }
+  .admin-shell .cw-cv { margin: -3px -6px; padding: 3px 6px; max-width: calc(100% + 12px); }
+}
 
 /* ---- Step tabs: real tabs attached to the top of the step card ----------- */
 .admin-shell .cw-step-col .cw-process-bar {
@@ -238,9 +332,6 @@
   .admin-shell .cw-head-card .cw-facts { padding: 0 14px 10px; flex-wrap: wrap; overflow: visible; }
   .admin-shell .cw-head-card .cw-fact { min-height: 40px; flex: 1 1 0; justify-content: center; }
   .admin-shell .cw-head-card .cw-facts-panel { max-height: none; }
-  .admin-shell .cw-kv { grid-template-columns: 1fr; padding-right: 16px; padding-top: 48px; }
-  .admin-shell .cw-owner-head { padding-right: 16px; padding-top: 48px; }
-  .admin-shell .cw-owner-sheet .cw-kv { padding-top: 6px; }
   .admin-shell .cw-actions-section { flex-direction: column; align-items: stretch; }
   .admin-shell .cw-actions-section .cw-step-nav { justify-content: space-between; }
   .admin-shell .cw-state-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }

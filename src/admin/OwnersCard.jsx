@@ -1,4 +1,5 @@
 import React from 'react';
+import CopyValue from './CopyValue';
 import { formatDob, formatDobInput, formatPhoneInput, formatSsn, formatSsnInput } from './caseLogic';
 
 const OWNER_TITLES = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Rabbi'];
@@ -63,26 +64,40 @@ export default function OwnersCard({ owners, editMode, ownerDrafts, onChangeOwne
         </div>}
     </>
   );
-  // bare (the header's Owner panel): one tight sheet per owner when viewing.
+  // bare (the header's Owner panel): one row group per owner, all on one
+  // shared column grid so values line up down the list. Click a value to copy.
   if (bare && !editMode) {
+    if (owners.length === 0) return <p className="cw-detail-empty">No owners on file.</p>;
     return (
-      <div className="cw-owner-sheets">
-        {owners.map((owner) => (
-          <div className="cw-owner-sheet" key={owner.id}>
-            <div className="cw-owner-head">
-              <strong>{[owner.title, owner.firstName, owner.lastName].filter(Boolean).join(' ')}</strong>
-              <span>{owner.positionTitle || (owners.length === 1 ? 'Owner' : 'Partner')} · {owner.ownershipPercent}%</span>
-            </div>
-            <dl className="cw-kv">
-              <div><dt>Email</dt><dd>{owner.email || '—'}</dd></div>
-              <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>
-              <div><dt>DOB</dt><dd>{formatDob(owner.dob) || '—'}</dd></div>
-              <div><dt>SSN</dt><dd>{formatSsn(owner.ssn) || '—'}</dd></div>
-              <div className="cw-kv-wide"><dt>Home</dt><dd>{[owner.addressLine1, owner.addressLine2, owner.city, owner.state, owner.zip].filter(Boolean).join(', ') || '—'}</dd></div>
-            </dl>
-          </div>
-        ))}
-        {owners.length === 0 && <p className="cw-kv-empty">No owners on file.</p>}
+      <div className="cw-detail cw-owners">
+        {owners.map((owner) => {
+          const name = [owner.title, owner.firstName, owner.lastName].filter(Boolean).join(' ');
+          const home = [owner.addressLine1, owner.addressLine2, owner.city, owner.state, owner.zip].filter(Boolean).join(', ');
+          const ssnDigits = String(owner.ssn || '').replace(/\D/g, '');
+          const ssnFull = ssnDigits ? formatSsn(owner.ssn) : '';
+          return (
+            <section className="cw-owner" key={owner.id}>
+              <header className="cw-owner-head">
+                <strong>{name || '—'}</strong>
+                <span className="cw-owner-role">{owner.positionTitle || (owners.length === 1 ? 'Owner' : 'Partner')}</span>
+                {owner.ownershipPercent != null && owner.ownershipPercent !== '' && <span className="cw-fact-tag">{owner.ownershipPercent}%</span>}
+              </header>
+              <dl className="cw-owner-grid">
+                <div className="cw-df cw-df-email"><dt>Email</dt><dd><CopyValue label="email" value={owner.email} /></dd></div>
+                <div className="cw-df"><dt>Phone</dt><dd><CopyValue label="phone" value={owner.phone} /></dd></div>
+                <div className="cw-df"><dt>DOB</dt><dd><CopyValue label="date of birth" value={owner.dob ? formatDob(owner.dob) : ''} /></dd></div>
+                <div className="cw-df"><dt>SSN</dt><dd>
+                  {/* Masked until hovered/focused; copying gives the full number. */}
+                  <CopyValue label="SSN" value={ssnFull} className="cw-cv-secret">
+                    <span className="cw-ssn-mask">{ssnDigits.length >= 4 ? `•••-••-${ssnDigits.slice(-4)}` : ssnFull}</span>
+                    <span className="cw-ssn-full">{ssnFull}</span>
+                  </CopyValue>
+                </dd></div>
+                <div className="cw-df cw-df-home"><dt>Home</dt><dd><CopyValue label="home address" value={home} /></dd></div>
+              </dl>
+            </section>
+          );
+        })}
       </div>
     );
   }
