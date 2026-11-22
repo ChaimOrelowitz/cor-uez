@@ -9,7 +9,7 @@ const OWNER_TITLES = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Rabbi'];
 // typing - both already unit tested in caseLogic.test.js.
 export default function OwnersCard({ owners, editMode, ownerDrafts, onChangeOwnerField, onAddOwner, onRemoveOwner }) {
   return (
-    <details className="admin-accordion">
+    <details className="admin-accordion" open>
       <summary><strong>Owners</strong><span>{`${owners.length} owner${owners.length === 1 ? '' : 's'}`}</span></summary>
       <section className="admin-card admin-wide admin-owners-card admin-secondary-card">
         <div className="admin-card-head"><h3>Owners</h3><span className="status-pill">{editMode ? ownerDrafts.length : owners.length}</span></div>

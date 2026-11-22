@@ -34,7 +34,6 @@ import {
 } from './api';
 import {
   applicationDraftFrom,
-  attentionItems,
   brcFormFrom,
   displayBusinessName,
   docsFor,
@@ -1354,8 +1353,6 @@ export default function AdminPage() {
                   {detail.application.ldc_board_approved_at && <span className="cockpit-chip good" title={`Recorded ${new Date(detail.application.ldc_board_approved_at).toLocaleString()} from the LDC's Airtable. Per COR's terms the fee is no longer refundable.`}>
                     LDC approved{detail.application.ldc_board_meeting_date ? ` ${detail.application.ldc_board_meeting_date}` : ''} · non-refundable
                   </span>}
-                  <span className="cockpit-chip">{readyDocumentCount(detail)}/5 docs</span>
-                  <span className={`cockpit-chip ${detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? 'good' : detail.payments?.[detail.payments.length - 1]?.status === 'client_reported' ? 'warn' : ''}`}>{paymentStatusLabel(detail.payments?.[detail.payments.length - 1]?.status)}</span>
                   <button
                     className="cockpit-open-pbs-btn"
                     onClick={runPbsLogin}
@@ -1367,15 +1364,8 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* attentionItems' checks are the same URGENT_REVIEW_ITEMS
-              definition (caseLogic.js) that used to also drive the
-              recommended-action banner before it was replaced above — this
-              strip shows every open urgent item that needs a human look. */}
-          {attentionItems(detail).length > 0 && <div className="ops-attention-strip">
-            <strong>Needs attention</strong>
-            <div>{attentionItems(detail).map((item) => <span key={item}>{item}</span>)}</div>
-          </div>}
-
+          {/* Docs, payment, address and attention items live in the facts
+              header at the top of CaseDetailTabs. */}
           <CaseDetailTabs
             detail={detail}
             openFreeEmail={openFreeEmail}

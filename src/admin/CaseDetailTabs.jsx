@@ -23,6 +23,8 @@ import {
   stepStateOption,
   stripQuotedReply,
   addressZoneWarning,
+  attentionItems,
+  businessAddressLine,
 } from './caseLogic';
 import DocThumbnail from './DocThumbnail';
 import BusinessDetailsCard from './BusinessDetailsCard';
@@ -60,9 +62,9 @@ function stateStyle(state) {
 // ── Segment bar colour ────────────────────────────────────────────────────────
 function segBarColor(state) {
   switch (state) {
-    case 'complete':       return '#34d399';
-    case 'in_progress':   return '#60a5fa';
-    case 'waiting':       return '#fbbf24';
+    case 'complete':       return 'var(--cw-state-complete)';
+    case 'in_progress':   return 'var(--cw-state-in-progress)';
+    case 'waiting':       return 'var(--cw-state-waiting)';
     // Neutral/not-started track - a fixed dark hex here read as a hard grey
     // line on the light theme's tabs; var() resolves per-theme instead.
     case 'not_applicable':return 'var(--cw-bar-empty)';
@@ -241,8 +243,12 @@ export default function CaseDetailTabs({
   const defaultStep = adminQueueInfo(app).stepKey || PROCESS_STEP_KEYS[0];
 
   const [selectedStep, setSelectedStep] = useState(defaultStep);
-  const [footerOpen, setFooterOpen] = useState(false);
-  const [footerTab, setFooterTab] = useState('docs');
+  // Facts header: which inline panel is expanded under it (null = none).
+  // It pushes the page down - nothing floats over the step or activity.
+  const [factsPanel, setFactsPanel] = useState(null);
+  const toggleFacts = (panel) => setFactsPanel((open) => (open === panel ? null : panel));
+  // Phone only: the step and the activity can't sit side by side.
+  const [mobilePane, setMobilePane] = useState('work');
   // Note drafts are kept per application, so switching cases mid-sentence
   // neither loses the draft nor posts it to the wrong business.
   const [noteDrafts, setNoteDrafts] = useState({});
@@ -256,8 +262,12 @@ export default function CaseDetailTabs({
   useEffect(() => {
     const next = adminQueueInfo(detail.application).stepKey || PROCESS_STEP_KEYS[0];
     setSelectedStep(next);
-    setFooterOpen(false);
+    setFactsPanel(null);
+    setMobilePane('work');
   }, [detail.application.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Editing the application always shows the panel being edited.
+  useEffect(() => { if (editMode) setFactsPanel('details'); }, [editMode]);
 
   // Scroll step panel to top on step change
   useEffect(() => {
@@ -292,6 +302,33 @@ export default function CaseDetailTabs({
 
   return (
     <div className="cw-shell">
+      {/* ── Facts header ─────────────────────────────────────────────────────── */}
+      <CaseFacts
+        detail={detail}
+        myNjCredentials={myNjCredentials}
+        factsPanel={factsPanel}
+        toggleFacts={toggleFacts}
+        goToStep={(key) => { setSelectedStep(key); setMobilePane('work'); }}
+      />
+      {factsPanel && (
+        <div className="cw-facts-panel">
+          <div className="cw-facts-panel-head">
+            <div className="cw-footer-tabs">
+              {[['details', 'Business & owners'], ['docs', 'Documents']].map(([t, label]) => (
+                <button key={t} type="button"
+                  className={`cw-footer-tab${factsPanel === t ? ' cw-footer-tab-active' : ''}`}
+                  onClick={() => setFactsPanel(t)}>{label}</button>
+              ))}
+            </div>
+            <button type="button" className="cw-facts-close" onClick={() => setFactsPanel(null)} aria-label="Close">✕</button>
+          </div>
+          <div className="cw-facts-panel-body">
+            {factsPanel === 'docs' && renderDocs()}
+            {factsPanel === 'details' && renderDetails()}
+          </div>
+        </div>
+      )}
+
       {/* ── Process bar ──────────────────────────────────────────────────────── */}
       <div className="cw-process-bar">
         {PROCESS_STEP_KEYS.map((key) => {
@@ -315,7 +352,7 @@ export default function CaseDetailTabs({
       </div>
 
       {/* ── Body: step panel + activity rail ─────────────────────────────────── */}
-      <div className="cw-body">
+      <div className={`cw-body cw-pane-${mobilePane}`}>
 
         {/* Step panel */}
         <div className="cw-step-col" ref={stepPanelRef}>
@@ -426,7 +463,7 @@ export default function CaseDetailTabs({
                 )}
                 <div className="cw-stream-row">
                   <div className="cw-stream-gutter">
-                    <span className="cw-stream-dot" style={{ background: item.kind === 'event' ? item.dot : item.kind === 'email' ? (item.message.direction === 'inbound' ? '#60a5fa' : '#34d399') : 'var(--cw-muted)' }} />
+                    <span className="cw-stream-dot" style={{ background: item.kind === 'event' ? item.dot : item.kind === 'email' ? (item.message.direction === 'inbound' ? 'var(--cw-info)' : 'var(--cw-state-complete)') : 'var(--cw-muted)' }} />
                     <span className="cw-stream-spine" />
                   </div>
                   <div className="cw-stream-content">
@@ -469,33 +506,17 @@ export default function CaseDetailTabs({
         </aside>
       </div>
 
-      {/* ── Footer drawer ────────────────────────────────────────────────────── */}
-      <div className="cw-footer">
-        <button className="cw-footer-toggle" onClick={() => setFooterOpen((o) => !o)}>
-          <span className="cw-rail-label">CASE FILE</span>
-          <span className="cw-footer-summary">
-            {REQUIRED_GRANT_DOCUMENTS.filter(([type]) => docFor(detail, type)).length}/{REQUIRED_GRANT_DOCUMENTS.length} docs ready
-            {detail.payments?.[detail.payments.length - 1]?.status === 'paid' ? ' · Paid' : ''}
-          </span>
-          <span className="cw-footer-chevron">{footerOpen ? '▾' : '▴'}</span>
-        </button>
+      {/* ── Phone: switch between the step and the activity ──────────────────── */}
+      <nav className="cw-mobile-tabs" aria-label="Case sections">
+        <button type="button" className={mobilePane === 'work' ? 'on' : ''} onClick={() => setMobilePane('work')}>Step</button>
+        <button type="button" className={mobilePane === 'activity' ? 'on' : ''} onClick={() => setMobilePane('activity')}>Activity <small>{fullStream.length}</small></button>
+        <button type="button" className={factsPanel === 'docs' ? 'on' : ''} onClick={() => { toggleFacts('docs'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Docs</button>
+      </nav>
+    </div>
+  );
 
-        {footerOpen && (
-          <div className="cw-footer-body">
-            <div className="cw-footer-tabs">
-              {['docs', 'applicant'].map((t) => (
-                <button
-                  key={t}
-                  className={`cw-footer-tab${footerTab === t ? ' cw-footer-tab-active' : ''}`}
-                  onClick={() => setFooterTab(t)}
-                >
-                  {t === 'docs' ? 'Documents' : 'Application'}
-                </button>
-              ))}
-            </div>
-
-            <div className="cw-footer-panel">
-              {footerTab === 'docs' && (
+  function renderDocs() {
+    return (
                 <div className="cw-docs-tab-body">
                   <div className="cw-docs-grid">
                     {REQUIRED_GRANT_DOCUMENTS.map(([type, label]) => {
@@ -554,9 +575,11 @@ export default function CaseDetailTabs({
                     </button>
                   </div>
                 </div>
-              )}
+    );
+  }
 
-              {footerTab === 'applicant' && (
+  function renderDetails() {
+    return (
                 <div className="cw-applicant-view">
                   {/* ── Edit / Save / Cancel / Delete row ── */}
                   <div className="cw-app-edit-bar">
@@ -566,7 +589,7 @@ export default function CaseDetailTabs({
                         <button className="secondary" onClick={cancelEditing}>Cancel</button>
                       </>
                     ) : (
-                      <button className="secondary" onClick={() => { startEditing(); setFooterOpen(true); setFooterTab('applicant'); }}>Edit application</button>
+                      <button className="secondary" onClick={startEditing}>Edit application</button>
                     )}
                     <button className="admin-delete-button" onClick={deleteApplication}>Delete application</button>
                   </div>
@@ -589,11 +612,63 @@ export default function CaseDetailTabs({
                     onRemoveOwner={removeOwner}
                   />
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Facts header: the case's standing facts, always visible above the steps.
+// Chips that hold more detail expand an inline panel (pushes content down);
+// chips that belong to a step jump to that step.
+function CaseFacts({ detail, myNjCredentials, factsPanel, toggleFacts, goToStep }) {
+  const app = detail.application;
+  const address = businessAddressLine(app);
+  const zoneWarning = addressZoneWarning(app);
+  const fromBrc = app.brc_status === 'found' && app.brc_data?.address
+    && address && address.toUpperCase() === String(app.brc_data.address).toUpperCase();
+  const owners = detail.owners || [];
+  const first = owners[0];
+  const docsReady = REQUIRED_GRANT_DOCUMENTS.filter(([type]) => docFor(detail, type)).length;
+  const payment = detail.payments?.[detail.payments.length - 1]?.status;
+  const alerts = attentionItems(detail);
+
+  return (
+    <div className="cw-facts" role="toolbar" aria-label="Case facts">
+      <button type="button" className={`cw-fact cw-fact-address${factsPanel === 'details' ? ' on' : ''}${zoneWarning ? ' warn' : ''}`}
+        onClick={() => toggleFacts('details')} title={zoneWarning || app.zone_name || ''}>
+        <span className="cw-fact-k">Address</span>
+        <span className="cw-fact-v">{address || 'No address'}</span>
+        {zoneWarning
+          ? <span className="cw-fact-tag warn">⚠ {app.brc_data?.zoneCheck?.status === 'po_box' ? 'PO Box' : 'Not in UEZ'}</span>
+          : app.zone_name ? <span className="cw-fact-tag good">✓ UEZ</span> : null}
+        {fromBrc && <span className="cw-fact-tag">BRC</span>}
+      </button>
+
+      <button type="button" className={`cw-fact${factsPanel === 'details' ? ' on' : ''}`} onClick={() => toggleFacts('details')}>
+        <span className="cw-fact-k">Owners</span>
+        <span className="cw-fact-v">
+          {first ? `${first.firstName || ''} ${first.lastName || ''}`.trim() : 'None'}
+          {first?.ownershipPercent ? ` · ${first.ownershipPercent}%` : ''}
+          {owners.length > 1 ? ` +${owners.length - 1}` : ''}
+        </span>
+      </button>
+
+      <button type="button" className={`cw-fact${factsPanel === 'docs' ? ' on' : ''}${docsReady === REQUIRED_GRANT_DOCUMENTS.length ? ' good' : ''}`} onClick={() => toggleFacts('docs')}>
+        <span className="cw-fact-k">Docs</span>
+        <span className="cw-fact-v">{docsReady}/{REQUIRED_GRANT_DOCUMENTS.length}</span>
+      </button>
+
+      <button type="button" className={`cw-fact${payment === 'paid' ? ' good' : payment === 'client_reported' ? ' warn' : ''}`} onClick={() => goToStep('payment')}>
+        <span className="cw-fact-k">Payment</span>
+        <span className="cw-fact-v">{paymentStatusLabel(payment)}</span>
+      </button>
+
+      <button type="button" className={`cw-fact${myNjCredentials ? '' : ' muted'}`} onClick={() => goToStep('pbs_mynj')}>
+        <span className="cw-fact-k">MyNJ</span>
+        <span className="cw-fact-v">{myNjCredentials ? 'Saved' : 'None'}</span>
+      </button>
+
+      {alerts.map((item) => <span key={item} className="cw-fact-alert">⚠ {item}</span>)}
     </div>
   );
 }

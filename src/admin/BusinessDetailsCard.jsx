@@ -7,7 +7,7 @@ import { formatPhoneInput, programLabel, displayBusinessName, businessAddressLin
 // report field changes upward via onChangeField.
 export default function BusinessDetailsCard({ application, editMode, draft, onChangeField }) {
   return (
-    <details className="admin-accordion">
+    <details className="admin-accordion" open>
       <summary><strong>Business details</strong><span>{application.ein || 'No EIN'}</span></summary>
       <section className="admin-card admin-business-card admin-secondary-card">
         <div className="admin-card-head"><h3>Business</h3><span className="status-pill">{programLabel(application.program_code)}</span></div>

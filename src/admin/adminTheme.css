@@ -24,45 +24,42 @@
 .admin-shell,
 .app-shell.admin-login-shell,
 .app-shell.auth-loading-shell.admin-loading {
-  --admin-bg: #fbf3e3;              /* vanilla cream page bg */
-  --admin-surface: #fffdf8;         /* card surface — slightly whiter than the page for lift */
-  --admin-surface-sunken: #f3e7cf;  /* hover rows, inset wells — deeper cream */
-  --admin-border: #e6d7b8;
-  --admin-border-strong: #d9c69a;
+  /* Cool neutral base (page + sidebar share it), ONE accent (blue), and
+     green / amber / red reserved for status - so color always means something. */
+  --admin-bg: #f5f6f8;
+  --admin-surface: #ffffff;
+  --admin-surface-sunken: #eef0f3;
+  --admin-border: #e1e4e9;
+  --admin-border-strong: #cdd2d9;
 
-  --admin-text: #1c1f26;
-  --admin-text-muted: #6b6255;
-  --admin-text-faint: #948a7a;
+  --admin-text: #1b1f24;
+  --admin-text-muted: #5b6470;
+  --admin-text-faint: #8a929c;
 
-  /* sidebar — dusty slate blue, the true color-wheel complement of the
-     cream body (cream sits at ~40°, this is ~220°) - reads as clearly its
-     own zone without being another heavy dark panel. Brand's sage green
-     stays as the accent for active/selected states. */
-  --admin-sidebar-bg:           #eef2f7;
-  --admin-sidebar-surface:      #e4eaf2;
-  --admin-sidebar-text:         #22364c;
-  --admin-sidebar-text-muted:   #62789a;
-  --admin-sidebar-border:       #d7e0ea;
-  --admin-sidebar-hover:        rgba(34,54,76,.05);
-  --admin-sidebar-active-bg:    #dfe8f2;
-  --admin-sidebar-active-bar:   #4f9d69;
+  --admin-sidebar-bg:           #fbfbfc;
+  --admin-sidebar-surface:      #f1f3f5;
+  --admin-sidebar-text:         #1b1f24;
+  --admin-sidebar-text-muted:   #5b6470;
+  --admin-sidebar-border:       #e1e4e9;
+  --admin-sidebar-hover:        rgba(27,31,36,.04);
+  --admin-sidebar-active-bg:    #e8f0fd;
+  --admin-sidebar-active-bar:   #2f6fdb;
+  --admin-chip-neutral:         rgba(27,31,36,.06);
 
-  /* accent — sage green, unified with the success/"done" scale below */
-  --admin-accent: #4f9d69;
-  --admin-accent-hover: #3a7a4e;
-  --admin-accent-soft: #e9f4ec;
-  --admin-accent-ring: rgba(79, 157, 105, .25);
+  --admin-accent: #2f6fdb;
+  --admin-accent-hover: #2459b5;
+  --admin-accent-soft: #e8f0fd;
+  --admin-accent-ring: rgba(47, 111, 219, .25);
 
-  /* step pipeline dots — four semantic states */
-  --dot-done:       #4f9d69;
-  --dot-active:     #2563eb;
-  --dot-waiting:    #f59e0b;
-  --dot-idle:       #d1d5db;
-  --dot-na:         #e5e7eb;
+  --dot-done:       #2f8a57;
+  --dot-active:     #2f6fdb;
+  --dot-waiting:    #d48a12;
+  --dot-idle:       #cdd2d9;
+  --dot-na:         #e1e4e9;
 
-  --admin-good-bg: #e3f0e8;   --admin-good-text: #2f7d52;  --admin-good-border: #b9d9c5;
-  --admin-warn-bg: #f5efe4;   --admin-warn-text: #8a6a2e;  --admin-warn-border: #e6d9bd;
-  --admin-danger-bg: #f6ecea; --admin-danger-text: #9c4a3f; --admin-danger-border: #e3cac5;
+  --admin-good-bg: #e6f4ec;   --admin-good-text: #23784a;  --admin-good-border: #b8dcc6;
+  --admin-warn-bg: #fdf3e1;   --admin-warn-text: #94580a;  --admin-warn-border: #f0d7a6;
+  --admin-danger-bg: #fcebea; --admin-danger-text: #b3362c; --admin-danger-border: #f2c4bf;
 
   --admin-radius-sm: 6px;
   --admin-radius-md: 8px;
@@ -253,12 +250,12 @@
 }
 .admin-shell .admin-filter-row button:hover { color: var(--admin-sidebar-text); }
 .admin-shell .admin-filter-row button.active {
-  background: rgba(79, 157, 105, .18);
-  color: #8fd6ab;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
 }
 .admin-shell .admin-filter-row button.active span {
-  background: rgba(79, 157, 105, .32);
-  color: #c8ecd6;
+  background: var(--admin-accent);
+  color: #fff;
 }
 
 /* ── Application list rows ────────────────────────────────────────────────── */
@@ -378,7 +375,7 @@
 .admin-shell .sidebar-group-count {
   font-size: 10px;
   font-weight: 700;
-  background: rgba(34,54,76,.08);
+  background: var(--admin-chip-neutral);
   color: var(--admin-sidebar-text-muted);
   padding: 1px 7px;
   border-radius: 20px;
@@ -387,14 +384,14 @@
 /* Color-code each section by what it means - "needs X" sections share one
    accent (matching the per-row next-step badge), Complete is the app's
    good/green, Cancelled and Not started stay neutral. */
-.admin-shell [class*="sidebar-group-needs-"] .sidebar-group-label { color: #6b46c1; }
-.admin-shell [class*="sidebar-group-needs-"] .sidebar-group-count { background: #ece5fb; color: #6b46c1; }
+.admin-shell [class*="sidebar-group-needs-"] .sidebar-group-label { color: var(--admin-accent); }
+.admin-shell [class*="sidebar-group-needs-"] .sidebar-group-count { background: var(--admin-accent-soft); color: var(--admin-accent); }
 .admin-shell .sidebar-group-complete .sidebar-group-label { color: var(--admin-good-text); }
 .admin-shell .sidebar-group-complete .sidebar-group-count { background: var(--admin-good-bg); color: var(--admin-good-text); }
 .admin-shell .sidebar-group-cancelled .sidebar-group-label { color: var(--admin-sidebar-text-muted); opacity: .75; }
-.admin-shell .sidebar-group-call-state .sidebar-group-header { background: #ece5fb; }
-.admin-shell .sidebar-group-call-state .sidebar-group-label { color: #6b46c1; }
-.admin-shell .sidebar-group-call-state .sidebar-group-count { background: #fff; color: #6b46c1; }
+.admin-shell .sidebar-group-call-state .sidebar-group-header { background: var(--admin-danger-bg); }
+.admin-shell .sidebar-group-call-state .sidebar-group-label { color: var(--admin-danger-text); }
+.admin-shell .sidebar-group-call-state .sidebar-group-count { background: var(--admin-surface); color: var(--admin-danger-text); }
 
 /* Whose-turn blocks: My move on top at full strength, Waiting below it
    visibly quieter - it's the "check in on these" pile, not the work queue. */
@@ -411,7 +408,7 @@
 .admin-shell .sidebar-turn-waiting { margin-top: 10px; border-top: 1px solid var(--admin-sidebar-border); }
 .admin-shell .sidebar-turn-waiting .sidebar-turn-title { color: var(--admin-sidebar-text-muted); }
 .admin-shell .sidebar-turn-waiting [class*="sidebar-group-needs-"] .sidebar-group-label { color: var(--admin-sidebar-text-muted); }
-.admin-shell .sidebar-turn-waiting [class*="sidebar-group-needs-"] .sidebar-group-count { background: rgba(34,54,76,.08); color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-turn-waiting [class*="sidebar-group-needs-"] .sidebar-group-count { background: var(--admin-chip-neutral); color: var(--admin-sidebar-text-muted); }
 .admin-shell .sidebar-turn-waiting .application-list-item:not(.active) { opacity: .8; }
 /* Not completed: signups that never pressed Submit. Parked at the bottom,
    collapsed, so half-filled applications stay out of the work queue. */
@@ -481,28 +478,28 @@
   color: var(--admin-warn-text);
 }
 .admin-shell .sidebar-badge.payment-unpaid {
-  background: rgba(34,54,76,.07);
+  background: var(--admin-chip-neutral);
   color: var(--admin-sidebar-text-muted);
 }
 /* Global-status badge — same 5 groups as the section headers above, shown on
    every row too so the status reads at a glance without tracking which
    section you're scrolled into. */
-.admin-shell .sidebar-badge.status-not_started { background: rgba(34,54,76,.07); color: var(--admin-sidebar-text-muted); }
-.admin-shell .sidebar-badge.status-in_progress { background: #dce9fb; color: #2f5fa3; }
+.admin-shell .sidebar-badge.status-not_started { background: var(--admin-chip-neutral); color: var(--admin-sidebar-text-muted); }
+.admin-shell .sidebar-badge.status-in_progress { background: var(--admin-accent-soft); color: var(--admin-accent); }
 .admin-shell .sidebar-badge.status-ready       { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
 .admin-shell .sidebar-badge.status-submitted   { background: var(--admin-good-bg); color: var(--admin-good-text); }
 .admin-shell .sidebar-badge.status-cancelled   { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
-.admin-shell .sidebar-badge.status-call_state  { background: #ece5fb; color: #6b46c1; }
+.admin-shell .sidebar-badge.status-call_state  { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
 /* Granular "what's actually next" badge — the same waterfall the sidebar
    sections group by (see nextStepStatus() in caseLogic.js); shown on every
    row too, not just the section header, so it's still readable once a
    section is scrolled past or if sections get reordered/filtered later. */
-.admin-shell .sidebar-badge.next-step { background: #ece5fb; color: #6b46c1; }
+.admin-shell .sidebar-badge.next-step { background: var(--admin-accent-soft); color: var(--admin-accent); }
 .admin-shell .sidebar-badge.next-step.next-step-complete { background: var(--admin-good-bg); color: var(--admin-good-text); }
 /* Aging badges — only on in_progress rows */
 .admin-shell .sidebar-badge.aging { font-variant-numeric: tabular-nums; }
 .admin-shell .sidebar-badge.age-warn   { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
-.admin-shell .sidebar-badge.age-orange { background: #fbe2cf; color: #a4501a; }
+.admin-shell .sidebar-badge.age-orange { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
 .admin-shell .sidebar-badge.age-red    { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
 /* Cancelled rows get dimmer */
 .admin-shell .sidebar-group-item-cancelled { opacity: .55; }
@@ -630,8 +627,8 @@
   cursor: pointer;
   user-select: none;
 }
-.admin-shell .cockpit-call-state input { width: 15px; height: 15px; accent-color: #6b46c1; cursor: pointer; }
-.admin-shell .cockpit-call-state:has(input:checked) { color: #6b46c1; }
+.admin-shell .cockpit-call-state input { width: 15px; height: 15px; accent-color: #2f6fdb; cursor: pointer; }
+.admin-shell .cockpit-call-state:has(input:checked) { color: #2f6fdb; }
 
 /* Pipeline strip — 8 step dots, dark-bg version */
 .admin-shell .cockpit-pipeline {
@@ -743,8 +740,8 @@
   color: var(--cw-text-mute);
 }
 .admin-shell .cockpit-status-select.gs-in_progress {
-  background-color: #e6eefb;
-  color: #3a6ea8;
+  background-color: var(--admin-accent-soft);
+  color: var(--admin-accent);
 }
 .admin-shell .cockpit-status-select.gs-applied {
   background-color: var(--admin-good-bg);
@@ -759,12 +756,12 @@
   color: var(--admin-danger-text);
 }
 .admin-shell .cockpit-status-select.gs-call_state {
-  background-color: #ece5fb;
-  color: #6b46c1;
+  background-color: var(--admin-danger-bg);
+  color: var(--admin-danger-text);
 }
 /* native option elements inherit background from browser; override the arrow tint per variant */
 .admin-shell .cockpit-status-select.gs-in_progress {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233a6ea8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%232f6fdb' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .admin-shell .cockpit-status-select.gs-applied {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%232f7d52' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -776,7 +773,7 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239c4a3f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .admin-shell .cockpit-status-select.gs-call_state {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b46c1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23b3362c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .admin-shell .admin-message { background: var(--admin-accent-soft); color: var(--admin-accent); border-radius: var(--admin-radius-sm); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .admin-shell .admin-message-close { flex: 0 0 auto; background: none; border: 0; color: inherit; font-size: 16px; line-height: 1; padding: 0 2px; cursor: pointer; opacity: .6; }
@@ -1018,7 +1015,7 @@
 .admin-shell .admin-help { color: var(--admin-text-faint); }
 
 /* Small accent-colored links/icons scattered across admin cards — same
-   graphite accent instead of the client's indigo #626bd7. */
+   graphite accent instead of the client's indigo #2f6fdb. */
 .admin-shell .credential-grid button,
 .admin-shell .owner-admin-title span,
 .admin-shell .admin-document-list b,
@@ -1200,10 +1197,21 @@
   --admin-text-muted:     #8b949e;
   --admin-text-faint:     #6e7681;
 
-  --admin-accent:         #5fbf82;
-  --admin-accent-hover:   #7ed6a0;
-  --admin-accent-soft:    rgba(95,191,130,.10);
-  --admin-accent-ring:    rgba(95,191,130,.25);
+  --admin-accent:         #5b9cff;
+  --admin-accent-hover:   #82b4ff;
+  --admin-accent-soft:    rgba(91,156,255,.13);
+  --admin-accent-ring:    rgba(91,156,255,.28);
+
+  --admin-sidebar-bg:           #0f1318;
+  --admin-sidebar-surface:      #161b22;
+  --admin-sidebar-text:         #e6edf3;
+  --admin-sidebar-text-muted:   #8b949e;
+  --admin-sidebar-border:       #262c34;
+  --admin-sidebar-hover:        rgba(255,255,255,.04);
+  --admin-sidebar-active-bg:    rgba(91,156,255,.13);
+  --admin-sidebar-active-bar:   #5b9cff;
+  --admin-chip-neutral:         rgba(255,255,255,.07);
+  --dot-active:                 #5b9cff;
 
   --admin-good-bg:        rgba(46,160,67,.15);
   --admin-good-text:      #3fb950;
@@ -1562,24 +1570,24 @@
   --cw-danger:       #f87171;
   --cw-danger-bg:    #2b0f0f;
 
-  --cw-info:         #60a5fa;
+  --cw-info:         #5b9cff;
   --cw-thumb-a:      #1c2028;
   --cw-thumb-b:      #232830;
 
   /* State bar colors */
   --cw-state-complete:    #3dd68c;
-  --cw-state-in-progress: #60a5fa;
+  --cw-state-in-progress: #5b9cff;
   --cw-state-waiting:     #f59e42;
   --cw-state-not-started: #5c6470;
   --cw-state-na:          #3a3f4a;
-  --cw-state-manual:      #a78bfa;
+  --cw-state-manual:      #94a3b8;
   --cw-state-cancelled:   #3a3f4a;
 
   /* Step state chips/pills: background, border, text (CaseDetailTabs) */
   --cw-st-complete-bg: #1a2c1e;       --cw-st-complete-border: #2d5035;       --cw-st-complete-fg: #34d399;
-  --cw-st-in_progress-bg: #182030;    --cw-st-in_progress-border: #2a3a54;    --cw-st-in_progress-fg: #60a5fa;
+  --cw-st-in_progress-bg: #182030;    --cw-st-in_progress-border: #2a3a54;    --cw-st-in_progress-fg: #5b9cff;
   --cw-st-waiting-bg: #2a1f08;        --cw-st-waiting-border: #4a3610;        --cw-st-waiting-fg: #fbbf24;
-  --cw-st-manual-bg: #1e1a28;         --cw-st-manual-border: #352d44;         --cw-st-manual-fg: #a08cd8;
+  --cw-st-manual-bg: #1a1f27;         --cw-st-manual-border: #2c3340;         --cw-st-manual-fg: #94a3b8;
   --cw-st-cancelled-bg: #261519;      --cw-st-cancelled-border: #3d2228;      --cw-st-cancelled-fg: #c0726a;
   --cw-st-not_applicable-bg: #1a1c20; --cw-st-not_applicable-border: #2c3038; --cw-st-not_applicable-fg: #6f7883;
   --cw-st-not_started-bg: #181b1f;    --cw-st-not_started-border: #262c34;    --cw-st-not_started-fg: #6f7883;
@@ -1593,29 +1601,29 @@
 
 .admin-shell[data-theme="light"] .cw-shell,
 .admin-shell[data-theme="light"] {
-  --cw-app-bg:       #fbf3e3;
-  --cw-rail-bg:      #f3e7cf;
-  --cw-panel:        #fffdf8;
-  --cw-card:         #f8efdc;
-  --cw-input:        #fffdf8;
-  --cw-tile:         #fffdf8;
-  --cw-frame-border: #e2d3ae;
-  --cw-line:         #ecdfc2;
-  --cw-panel-border: #e6d7b8;
-  --cw-input-border: #ddc99e;
-  --cw-border-strong:#d9c69a;
-  --cw-border-soft:  #efe3c9;
-  --cw-chip-bg:      #f3e7cf;
-  --cw-divider:      #eee0c4;
-  --cw-bar-empty:    #e3d4b0;
+  --cw-app-bg:       #f5f6f8;
+  --cw-rail-bg:      #eef0f3;
+  --cw-panel:        #ffffff;
+  --cw-card:         #f3f4f7;
+  --cw-input:        #ffffff;
+  --cw-tile:         #ffffff;
+  --cw-frame-border: #dde1e6;
+  --cw-line:         #e6e9ed;
+  --cw-panel-border: #e1e4e9;
+  --cw-input-border: #d3d8de;
+  --cw-border-strong:#cdd2d9;
+  --cw-border-soft:  #eaedf0;
+  --cw-chip-bg:      #eef0f3;
+  --cw-divider:      #e7eaee;
+  --cw-bar-empty:    #dfe3e8;
 
-  --cw-st-complete-bg: #e3f0e8;       --cw-st-complete-border: #b9d9c5;       --cw-st-complete-fg: #2f7d52;
-  --cw-st-in_progress-bg: #e7eef8;    --cw-st-in_progress-border: #c3d4ec;    --cw-st-in_progress-fg: #2f5f9e;
-  --cw-st-waiting-bg: #f8eccf;        --cw-st-waiting-border: #e8d2a0;        --cw-st-waiting-fg: #8a6a2e;
-  --cw-st-manual-bg: #efe9f8;         --cw-st-manual-border: #d9cdee;         --cw-st-manual-fg: #6b46c1;
-  --cw-st-cancelled-bg: #f6ecea;      --cw-st-cancelled-border: #e3cac5;      --cw-st-cancelled-fg: #9c4a3f;
-  --cw-st-not_applicable-bg: #f3e7cf; --cw-st-not_applicable-border: #e2d3ae; --cw-st-not_applicable-fg: #6b6255;
-  --cw-st-not_started-bg: #f3e7cf;    --cw-st-not_started-border: #e2d3ae;    --cw-st-not_started-fg: #6b6255;
+  --cw-st-complete-bg: #e6f4ec;       --cw-st-complete-border: #b8dcc6;       --cw-st-complete-fg: #23784a;
+  --cw-st-in_progress-bg: #e8f0fd;    --cw-st-in_progress-border: #c4d6f6;    --cw-st-in_progress-fg: #2459b5;
+  --cw-st-waiting-bg: #fdf3e1;        --cw-st-waiting-border: #f0d7a6;        --cw-st-waiting-fg: #94580a;
+  --cw-st-manual-bg: #eef0f3;         --cw-st-manual-border: #d3d8de;         --cw-st-manual-fg: #5b6470;
+  --cw-st-cancelled-bg: #fcebea;      --cw-st-cancelled-border: #f2c4bf;      --cw-st-cancelled-fg: #b3362c;
+  --cw-st-not_applicable-bg: #eef0f3; --cw-st-not_applicable-border: #dde1e6; --cw-st-not_applicable-fg: #5b6470;
+  --cw-st-not_started-bg: #eef0f3;    --cw-st-not_started-border: #dde1e6;    --cw-st-not_started-fg: #5b6470;
 
   --cw-text:         #16191d;
   --cw-text-soft:    #282d34;
@@ -1626,29 +1634,29 @@
   --cw-muted4:       #a2a9b2;
   --cw-faint:        #b8bec6;
 
-  --cw-ok:           #2f7d52;
-  --cw-ok-bg:        #e3f0e8;
-  --cw-warn:         #a8641a;
-  --cw-warn-bg:      #f8ecd9;
-  --cw-alert-bg:     #fdf5e8;
-  --cw-alert-border: #ecdcc0;
-  --cw-alert-text:   #7a5c2e;
-  --cw-danger:       #b23b31;
-  --cw-danger-bg:    #f7e4e1;
+  --cw-ok:           #23784a;
+  --cw-ok-bg:        #e6f4ec;
+  --cw-warn:         #94580a;
+  --cw-warn-bg:      #fdf3e1;
+  --cw-alert-bg:     #fdf6e9;
+  --cw-alert-border: #f0dfbf;
+  --cw-alert-text:   #7d4f0e;
+  --cw-danger:       #b3362c;
+  --cw-danger-bg:    #fcebea;
 
-  --cw-info:         #3a6ea8;
-  --cw-thumb-a:      #f1e6cf;
-  --cw-thumb-b:      #f8efdc;
+  --cw-info:         #2f6fdb;
+  --cw-thumb-a:      #eef0f3;
+  --cw-thumb-b:      #f3f4f7;
 
-  --cw-state-complete:    #2f7d52;
-  --cw-state-in-progress: #2563eb;
-  --cw-state-waiting:     #a8641a;
+  --cw-state-complete:    #23784a;
+  --cw-state-in-progress: #2f6fdb;
+  --cw-state-waiting:     #94580a;
   --cw-state-not-started: #8d949e;
   --cw-state-na:          #c9d0d8;
-  --cw-state-manual:      #7c3aed;
+  --cw-state-manual:      #64748b;
   --cw-state-cancelled:   #c9d0d8;
 
-  --cw-shadow: 0 22px 44px rgba(30,20,5,.10);
+  --cw-shadow: 0 22px 44px rgba(16,24,40,.10);
 }
 
 /* ---- Layout shell -------------------------------------------------------- */
@@ -1754,7 +1762,7 @@
   min-height: 0;
   overflow-y: auto;
   background: var(--cw-app-bg);
-  padding-bottom: 80px; /* space for footer drawer */
+  padding-bottom: 24px;
 }
 
 /* ---- Step panel ---------------------------------------------------------- */
@@ -2351,50 +2359,7 @@
 }
 .admin-shell .cw-copy-btn:hover { background: var(--cw-border-soft); color: var(--cw-text); }
 
-/* ---- Footer drawer ------------------------------------------------------- */
-
-.admin-shell .cw-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 290px; /* stop short of the activity rail */
-  background: var(--cw-panel);
-  border-top: 1px solid var(--cw-panel-border);
-  box-shadow: 0 -18px 40px -20px rgba(0, 0, 0, 0.75);
-  z-index: 10;
-}
-/* In light mode the shadow is softer */
-.admin-shell[data-theme="light"] .cw-footer {
-  box-shadow: 0 -12px 30px -16px rgba(0, 0, 0, 0.18);
-}
-
-.admin-shell .cw-footer-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid transparent;
-  cursor: pointer;
-  text-align: left;
-}
-.admin-shell .cw-footer-toggle:hover { background: var(--cw-chip-bg); }
-
-.admin-shell .cw-footer-summary {
-  font-size: 11px;
-  color: var(--cw-muted2);
-  flex: 1;
-}
-.admin-shell .cw-footer-chevron {
-  font-size: 11px;
-  color: var(--cw-muted3);
-}
-
-.admin-shell .cw-footer-body {
-  border-top: 1px solid var(--cw-line);
-}
+/* ---- Facts panel tabs (formerly the footer drawer) ---------------------- */
 
 .admin-shell .cw-footer-tabs {
   display: flex;
@@ -2416,8 +2381,6 @@
   color: var(--cw-text);
   border-bottom-color: var(--admin-accent);
 }
-
-.admin-shell .cw-footer-panel { padding: 12px 14px; max-height: 340px; overflow-y: auto; }
 
 /* ---- Footer docs grid ---------------------------------------------------- */
 
@@ -2659,4 +2622,221 @@
   font-size: 11px;
   color: var(--cw-muted);
   padding-bottom: 6px;
+}
+
+
+/* ==========================================================================
+   Facts header - the case's standing facts, always visible above the steps.
+   Expanding a chip opens an inline panel that pushes content down; nothing
+   overlays the step or the activity rail.
+   ========================================================================== */
+.admin-shell .cw-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 20px 0;
+  flex-shrink: 0;
+}
+.admin-shell .cw-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--cw-panel-border);
+  border-radius: 8px;
+  background: var(--cw-panel);
+  color: var(--cw-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.admin-shell .cw-fact:hover { border-color: var(--cw-border-strong); }
+.admin-shell .cw-fact.on { border-color: var(--admin-accent); box-shadow: 0 0 0 2px var(--admin-accent-ring); }
+.admin-shell .cw-fact-k {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--cw-muted2);
+}
+.admin-shell .cw-fact-v { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-shell .cw-fact.good .cw-fact-v { color: var(--cw-ok); }
+.admin-shell .cw-fact.warn { border-color: var(--admin-warn-border); }
+.admin-shell .cw-fact.muted .cw-fact-v { color: var(--cw-muted2); }
+.admin-shell .cw-fact-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--cw-chip-bg);
+  color: var(--cw-muted2);
+}
+.admin-shell .cw-fact-tag.good { background: var(--cw-ok-bg); color: var(--cw-ok); }
+.admin-shell .cw-fact-tag.warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+.admin-shell .cw-fact-alert {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--admin-danger-bg);
+  border: 1px solid var(--admin-danger-border);
+  color: var(--admin-danger-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-shell .cw-facts-panel {
+  margin: 8px 20px 0;
+  background: var(--cw-panel);
+  border: 1px solid var(--cw-panel-border);
+  border-radius: 12px;
+  flex-shrink: 0;
+  max-height: 46vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.admin-shell .cw-facts-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--cw-line);
+}
+.admin-shell .cw-facts-panel-head .cw-footer-tabs { border-bottom: 0; }
+.admin-shell .cw-facts-close {
+  border: 0;
+  background: none;
+  color: var(--cw-muted2);
+  font-size: 14px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.admin-shell .cw-facts-close:hover { color: var(--cw-text); }
+.admin-shell .cw-facts-panel-body { padding: 12px 14px; overflow-y: auto; }
+
+/* Phone-only switcher (hidden on desktop) */
+.admin-shell .cw-mobile-tabs { display: none; }
+
+/* ==========================================================================
+   Mobile - one column, the page scrolls (no nested scroll areas), thumb-sized
+   targets, and a bottom bar to switch Step / Activity / Docs.
+   ========================================================================== */
+@media (max-width: 900px) {
+  /* Old mobile rules (workflow.css) used indigo; bring them onto the palette */
+  .admin-shell .admin-sidebar,
+  .admin-shell .admin-sidebar-head,
+  .admin-shell .admin-filter-row { background: var(--admin-sidebar-bg); }
+  .admin-shell .admin-sidebar-head input { background: var(--admin-surface); border-color: var(--admin-border); color: var(--admin-text); }
+  .admin-shell .admin-filter-row button { background: var(--admin-surface); border-color: var(--admin-border); }
+  .admin-shell .admin-filter-row button.active { background: var(--admin-accent); border-color: var(--admin-accent); color: #fff; }
+  .admin-shell .application-list-item { background: var(--admin-surface); border-color: var(--admin-border); }
+  .admin-shell .application-list-item.active { background: var(--admin-accent-soft); border-color: var(--admin-accent); }
+  .admin-shell .mobile-detail-nav { background: var(--admin-surface); border-color: var(--admin-border); }
+  .admin-shell .mobile-detail-nav > button { background: var(--admin-surface-sunken); color: var(--admin-accent); min-height: 40px; }
+  .admin-shell .mobile-detail-nav strong { color: var(--admin-text); }
+  .admin-shell .mobile-detail-nav small { color: var(--admin-text-faint); }
+
+  /* Header: identity stacks, controls go full width under it */
+  .admin-shell .cockpit-strip { flex-direction: column; gap: 10px; }
+  .admin-shell .cockpit-controls { align-items: stretch; width: 100%; }
+  .admin-shell .cockpit-status-select { width: 100%; min-height: 40px; }
+  .admin-shell .cockpit-chips-row { flex-wrap: wrap; }
+  .admin-shell .cockpit-meta-grid { gap: 8px 16px; }
+  .admin-shell .cockpit-header h1 { font-size: 20px; }
+
+  /* The case workspace stops being a fixed-height app pane */
+  .admin-shell .admin-detail { padding: 0 0 calc(76px + env(safe-area-inset-bottom)); }
+  .admin-shell .cw-shell { overflow: visible; min-height: 0; }
+  .admin-shell .cw-body { display: block; }
+  .admin-shell .cw-step-col { overflow: visible; padding-bottom: 12px; }
+  .admin-shell .cw-rail { width: auto; border-left: 0; overflow: visible; }
+  .admin-shell .cw-pane-work .cw-rail { display: none; }
+  .admin-shell .cw-pane-activity .cw-step-col { display: none; }
+  .admin-shell .cw-stream { overflow: visible; max-height: none; }
+
+  /* Facts: one swipeable row instead of wrapping into a tall block */
+  .admin-shell .cw-facts { flex-wrap: nowrap; overflow-x: auto; padding: 10px 12px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .admin-shell .cw-facts::-webkit-scrollbar { display: none; }
+  .admin-shell .cw-fact, .admin-shell .cw-fact-alert { flex: 0 0 auto; min-height: 40px; }
+  .admin-shell .cw-fact-address .cw-fact-v { max-width: 60vw; }
+  .admin-shell .cw-facts-panel { margin: 8px 12px 0; max-height: none; overflow: visible; }
+  .admin-shell .cw-facts-panel-body { overflow: visible; }
+
+  /* Steps: swipeable tabs */
+  .admin-shell .cw-process-bar { margin: 10px 12px 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .admin-shell .cw-process-bar::-webkit-scrollbar { display: none; }
+  .admin-shell .cw-seg { flex: 0 0 auto; min-width: 96px; min-height: 44px; }
+
+  .admin-shell .cw-step-panel { margin: 10px 12px; }
+  .admin-shell .cw-fields,
+  .admin-shell .cw-doc-fields-grid { grid-template-columns: 1fr; }
+  .admin-shell .cw-action-btn,
+  .admin-shell .cw-copy-btn,
+  .admin-shell .cw-state-chips button { min-height: 40px; }
+  .admin-shell .cw-action-btn-row { flex-wrap: wrap; }
+  .admin-shell input, .admin-shell select, .admin-shell textarea { font-size: 16px; } /* stops iOS zoom-on-focus */
+
+  /* Modals become full-screen sheets */
+  .admin-shell .document-modal {
+    width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+    border-radius: 0; margin: 0;
+  }
+
+  /* Bottom bar */
+  .admin-shell .cw-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 40;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    gap: 6px;
+    background: var(--admin-surface);
+    border-top: 1px solid var(--admin-border);
+  }
+  .admin-shell .cw-mobile-tabs button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: var(--admin-text-muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .admin-shell .cw-mobile-tabs button.on { background: var(--admin-accent-soft); color: var(--admin-accent); }
+  .admin-shell .cw-mobile-tabs small { font-weight: 600; opacity: .7; }
+}
+
+/* Palette cleanup: the logo and step tabs no longer carry the old indigo /
+   browser-default borders. */
+.admin-shell .brand-mark { background: var(--admin-accent); box-shadow: none; }
+.admin-shell .cw-seg { border: 1px solid transparent; }
+.admin-shell .cw-seg-active { border-color: var(--cw-panel-border); }
+@media (max-width: 900px) {
+  .admin-shell .application-list-item { min-height: 0; padding: 12px 13px; margin: 6px 0; box-shadow: none; }
+  .admin-shell .admin-topbar { background: var(--admin-surface); }
+}
+
+/* Links inside the activity stream / steps follow the accent in both themes */
+.admin-shell .cw-shell a { color: var(--admin-accent); }
+/* Native dropdown list is light even in dark mode - keep options readable */
+.admin-shell.dark .cockpit-status-select option { background: var(--admin-surface); color: var(--admin-text); }
+
+@media (max-width: 900px) {
+  /* Phone header: compact identity card */
+  .admin-shell .cockpit-header { margin: 8px 12px 0; padding: 0; }
+  .admin-shell .cockpit-strip { padding: 14px; border-radius: 14px; }
+  .admin-shell .cockpit-header .eyebrow { display: none; }
+  .admin-shell .cockpit-meta-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .admin-shell .cockpit-meta-item { min-width: 0; }
+  .admin-shell .cockpit-meta-value { overflow: hidden; text-overflow: ellipsis; }
+  .admin-shell .cockpit-controls { flex-direction: row; align-items: center; }
+  .admin-shell .cockpit-status-select { flex: 1; }
+  .admin-shell .cw-step-title { font-size: 18px; }
 }
