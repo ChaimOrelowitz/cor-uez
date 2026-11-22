@@ -31,15 +31,21 @@ import BusinessDetailsCard from './BusinessDetailsCard';
 import OwnersCard from './OwnersCard';
 
 // ── Segment labels shown on the process bar (short form) ─────────────────────
+// Short state words for the step tabs (full wording is on the step itself).
+const SEG_STATE = {
+  not_started: 'To do', in_progress: 'Active', waiting: 'Waiting',
+  complete: 'Done', not_applicable: 'N/A', manual: 'Manual', cancelled: 'Cancelled'
+};
+
 const SEG_LABEL = {
   formation:        'CoF',
   brc:              'BRC',
-  pbs_mynj:         'PBS / MyNJ',
-  tax_clearance:    'Tax Clearance',
-  uez_enrollment:   'UEZ Enrollment',
-  ldc_application:  'LDC Application',
+  pbs_mynj:         'PBS',
+  tax_clearance:    'Tax',
+  uez_enrollment:   'UEZ',
+  ldc_application:  'LDC',
   payment:          'Payment',
-  grant_submission: 'Grant Submission',
+  grant_submission: 'Grant',
 };
 
 // Documents owned by each step (for the doc tile)
@@ -318,33 +324,34 @@ export default function CaseDetailTabs({
         </div>
       )}
 
-      {/* ── Process bar ──────────────────────────────────────────────────────── */}
-      <div className="cw-process-bar">
-        {PROCESS_STEP_KEYS.map((key) => {
-          const step = resolveProcessStep(key, detail);
-          const active = key === selectedStep;
-          return (
-            <button
-              key={key}
-              type="button"
-              className={`cw-seg${active ? ' cw-seg-active' : ''}`}
-              onClick={() => setSelectedStep(key)}
-            >
-              <span className="cw-seg-bar" style={{ background: segBarColor(step.state), opacity: active ? 1 : 0.7 }} />
-              <span className="cw-seg-title">{SEG_LABEL[key]}</span>
-              <span className="cw-seg-state" style={{ color: active ? segBarColor(step.state) : undefined }}>
-                {PROCESS_STEP_STATE_LABELS[step.state] || step.state}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* ── Body: step panel + activity rail ─────────────────────────────────── */}
       <div className={`cw-body cw-pane-${mobilePane}`}>
 
         {/* Step panel */}
         <div className="cw-step-col" ref={stepPanelRef}>
+          {/* ── Process bar ──────────────────────────────────────────────────────── */}
+          <div className="cw-process-bar">
+            {PROCESS_STEP_KEYS.map((key) => {
+              const step = resolveProcessStep(key, detail);
+              const active = key === selectedStep;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={`cw-seg${active ? ' cw-seg-active' : ''}`}
+                  onClick={() => setSelectedStep(key)}
+                  title={PROCESS_STEP_TITLES[key]}
+                >
+                  <span className="cw-seg-bar" style={{ background: segBarColor(step.state), opacity: active ? 1 : 0.7 }} />
+                  <span className="cw-seg-title">{SEG_LABEL[key]}</span>
+                  <span className="cw-seg-state" style={{ color: active ? segBarColor(step.state) : undefined }}>
+                    {SEG_STATE[step.state] || PROCESS_STEP_STATE_LABELS[step.state] || step.state}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <StepPanel
             stepKey={selectedStep}
             stepIdx={stepIdx}

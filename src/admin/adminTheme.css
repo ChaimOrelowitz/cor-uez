@@ -2898,3 +2898,20 @@
 @media (min-width: 901px) {
   .admin-shell .cw-rail { width: clamp(320px, 38%, 520px); }
 }
+
+/* Step tabs live in the middle column (not full width), sticky at its top,
+   so the activity rail runs all the way up beside them. */
+@media (min-width: 901px) {
+  .admin-shell .cw-step-col .cw-process-bar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin: 12px 20px 0;
+    box-shadow: 0 6px 12px -8px rgba(16, 24, 40, .25);
+  }
+  .admin-shell .cw-step-col .cw-step-panel { margin-top: 12px; }
+  .admin-shell .cw-step-col .cw-seg { padding: 6px 8px; }
+  .admin-shell .cw-facts-panel + .cw-body,
+  .admin-shell .cw-facts + .cw-body { margin-top: 12px; }
+  .admin-shell .cw-rail { border-top: 1px solid var(--cw-line); border-top-left-radius: 12px; }
+}
