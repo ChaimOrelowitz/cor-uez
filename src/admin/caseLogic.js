@@ -377,12 +377,41 @@ export function stripQuotedReply(text) {
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+export function businessAddressLine(app) {
+  return [app?.address_line1, app?.address_line2, app?.city, [app?.state, app?.zip].filter(Boolean).join(' ')]
+    .map((v) => String(v || '').trim()).filter(Boolean).join(', ');
+}
+
+// The BRC card's editable fields, always seeded from the case's current
+// identity - re-run after every refresh so a finished Fetch BRC shows up
+// (and "Save" never pushes stale values back).
+export function brcFormFrom(app) {
+  const brc = app?.brc_data || {};
+  return {
+    registeredBusinessName: displayBusinessName(app),
+    tradeName: brc.tradeName || '',
+    address: businessAddressLine(app) || brc.address || ''
+  };
+}
+
+// Result of checking the business address against the UEZ map (set when the
+// BRC or a manual edit changed it). null = never checked / in the zone.
+export function addressZoneWarning(app) {
+  const check = app?.brc_data?.zoneCheck;
+  if (!check || check.inUez !== false) return null;
+  if (check.status === 'po_box') return 'This is a PO Box, not a physical address in the UEZ.';
+  if (check.status === 'address_not_found') return 'This address could not be found on the UEZ map.';
+  if (check.status === 'inactive_uez') return 'This address is in an inactive UEZ.';
+  return 'This address is NOT in the UEZ.';
+}
+
 export function applicationDraftFrom(app) {
   return {
     contactEmail: app.contact_email || '',
     contactPhone: formatPhoneInput(app.contact_phone),
-    businessName: app.business_name_input || '',
-    registeredBusinessName: app.registered_business_name || '',
+    // One name: the case's business name (BRC name once found). Saving it
+    // writes every name column, so there's no separate "registered" field.
+    businessName: displayBusinessName(app),
     ein: app.ein || '',
     businessDescription: app.business_description || '',
     yearFounded: app.year_founded ?? '',

@@ -35,6 +35,7 @@ import {
 import {
   applicationDraftFrom,
   attentionItems,
+  brcFormFrom,
   displayBusinessName,
   docsFor,
   documentLabel,
@@ -115,6 +116,8 @@ export default function AdminPage() {
   const [pbsAnswerDraft, setPbsAnswerDraft] = useState('');
   const [pbsLoginDraft, setPbsLoginDraft] = useState({ username: '', password: '' });
   const [editMode, setEditMode] = useState(false);
+  const editModeRef = useRef(false);
+  editModeRef.current = editMode;
   const [applicationDraft, setApplicationDraft] = useState(null);
   const [ownerDrafts, setOwnerDrafts] = useState([]);
   const [myNjCredentials, setMyNjCredentials] = useState(null);
@@ -260,7 +263,13 @@ export default function AdminPage() {
     setApplications(rows || []);
     if (selectedIdRef.current === applicationId) {
       const data = await getAdminApplication(applicationId);
-      if (selectedIdRef.current === applicationId) setDetail(data);
+      if (selectedIdRef.current === applicationId) {
+        setDetail(data);
+        // Fetch BRC (and other jobs) can change the name/address - re-seed the
+        // forms that mirror them so nothing stale gets saved back.
+        setBrcForm(brcFormFrom(data.application));
+        if (!editModeRef.current) setApplicationDraft(applicationDraftFrom(data.application));
+      }
     }
   }
 
@@ -305,12 +314,7 @@ export default function AdminPage() {
       setApplicationDraft(applicationDraftFrom(app));
       setOwnerDrafts((data.owners || []).map(ownerDraftFrom));
       setEditMode(false);
-      const brc = app.brc_data || {};
-      setBrcForm({
-        registeredBusinessName: app.brc_registered_name || app.registered_business_name || app.business_name_input || '',
-        tradeName: brc.tradeName || '',
-        address: brc.address || ''
-      });
+      setBrcForm(brcFormFrom(app));
       const latestPayment = [...(data.payments || [])].reverse()[0];
       setPaymentDraft({
         amount: String(latestPayment?.amount ?? app.payment_expected_amount ?? 500),
@@ -886,7 +890,9 @@ export default function AdminPage() {
     try {
       await markAdminBrcFound(detail.application.id, brcForm);
       await refreshList(detail.application.id);
-      setMessage('BRC confirmed and the application was updated.');
+      setMessage(detail.application.brc_status === 'found'
+        ? 'Saved. The business name and address were updated everywhere.'
+        : 'BRC confirmed. The business name and address were updated everywhere.');
     } catch (err) {
       showError(err.message);
     } finally {

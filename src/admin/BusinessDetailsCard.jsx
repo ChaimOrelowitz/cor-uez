@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatPhoneInput, programLabel } from './caseLogic';
+import { formatPhoneInput, programLabel, displayBusinessName, businessAddressLine, addressZoneWarning } from './caseLogic';
 
 // editMode/draft/save-all live in the parent (shared with OwnersCard - they're
 // one edit session under a single Edit/Save/Cancel row, not two independent
@@ -13,7 +13,6 @@ export default function BusinessDetailsCard({ application, editMode, draft, onCh
         <div className="admin-card-head"><h3>Business</h3><span className="status-pill">{programLabel(application.program_code)}</span></div>
         {editMode ? <div className="admin-edit-grid">
           <div><label>Business name <span className="required-star">*</span></label><input value={draft.businessName} onChange={(e) => onChangeField('businessName', e.target.value)} /></div>
-          <div><label>Registered business name</label><input value={draft.registeredBusinessName} onChange={(e) => onChangeField('registeredBusinessName', e.target.value)} /></div>
           <div><label>Contact email <span className="required-star">*</span></label><input type="email" value={draft.contactEmail} onChange={(e) => onChangeField('contactEmail', e.target.value)} /></div>
           <div><label>Contact phone</label><input inputMode="tel" value={draft.contactPhone} onChange={(e) => onChangeField('contactPhone', formatPhoneInput(e.target.value))} /></div>
           <div><label>EIN <span className="required-star">*</span></label><input inputMode="numeric" value={draft.ein} onChange={(e) => onChangeField('ein', e.target.value.replace(/\D/g, '').slice(0, 9))} /></div>
@@ -31,12 +30,11 @@ export default function BusinessDetailsCard({ application, editMode, draft, onCh
           <label className="admin-checkbox"><input type="checkbox" checked={draft.isSoleProprietorship} onChange={(e) => onChangeField('isSoleProprietorship', e.target.checked)} /> Sole proprietorship</label>
           <div className="admin-edit-wide"><label>Business description</label><textarea rows="4" value={draft.businessDescription} onChange={(e) => onChangeField('businessDescription', e.target.value)} /></div>
         </div> : <dl className="data-grid">
-          <div><dt>Business name</dt><dd>{application.business_name_input}</dd></div>
-          <div><dt>Registered name</dt><dd>{application.registered_business_name || '—'}</dd></div>
+          <div><dt>Business name</dt><dd>{displayBusinessName(application) || '—'}</dd></div>
           <div><dt>Contact email</dt><dd>{application.contact_email || '—'}</dd></div>
           <div><dt>Contact phone</dt><dd>{application.contact_phone || '—'}</dd></div>
           <div><dt>EIN</dt><dd>{application.ein || '—'}</dd></div>
-          <div><dt>Address</dt><dd>{[application.address_line1, application.address_line2, application.city, application.state, application.zip].filter(Boolean).join(', ') || '—'}</dd></div>
+          <div><dt>Address</dt><dd>{businessAddressLine(application) || '—'}{addressZoneWarning(application) && <div className="cw-zone-warn">⚠ {addressZoneWarning(application)}</div>}</dd></div>
           <div><dt>UEZ</dt><dd>{application.zone_name || '—'}</dd></div>
           <div><dt>Founded</dt><dd>{application.year_founded || '—'}</dd></div>
           <div><dt>Employees</dt><dd>{application.full_time_employees ?? 0} FT · {application.part_time_employees ?? 0} PT</dd></div>

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  brcFormFrom,
+  addressZoneWarning,
   PROCESS_STEP_KEYS,
   adminQueueInfo,
   attentionItems,
@@ -716,5 +718,26 @@ describe('emailLink', () => {
   });
   it('falls back to Resend for older sends', () => {
     expect(emailLink({}, { providerMessageId: 'r1' })).toBe('https://resend.com/emails/r1');
+  });
+});
+
+describe('brcFormFrom / addressZoneWarning', () => {
+  it('seeds the BRC card from the case identity, not stale typed values', () => {
+    const app = {
+      business_name_input: 'S30 Basso St Llc', registered_business_name: 'S30 BASSO ST LLC',
+      address_line1: '101 Chase Ave', address_line2: 'Suite 102A', city: 'Lakewood', state: 'NJ', zip: '08701',
+      brc_data: { tradeName: 'Basso', address: '101 CHASE AVE, SUITE 102A LAKEWOOD, NJ 08701' }
+    };
+    expect(brcFormFrom(app)).toEqual({
+      registeredBusinessName: 'S30 BASSO ST LLC',
+      tradeName: 'Basso',
+      address: '101 Chase Ave, Suite 102A, Lakewood, NJ 08701'
+    });
+  });
+  it('flags out-of-zone and PO Box addresses only', () => {
+    expect(addressZoneWarning({ brc_data: { zoneCheck: { status: 'in_uez', inUez: true } } })).toBeNull();
+    expect(addressZoneWarning({ brc_data: { zoneCheck: { status: 'po_box', inUez: false } } })).toMatch(/PO Box/);
+    expect(addressZoneWarning({ brc_data: { zoneCheck: { status: 'not_in_uez', inUez: false } } })).toMatch(/NOT in the UEZ/);
+    expect(addressZoneWarning({})).toBeNull();
   });
 });

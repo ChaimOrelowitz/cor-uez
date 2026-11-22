@@ -5,6 +5,7 @@ const supabase = require('../db/supabase');
 const { requireUezAuth, requireUezAdmin } = require('../middleware/uezAuth');
 const { brcLookupDescriptor, lookupBrc } = require('../utils/uezBrc');
 const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
+const { resolveBrcAddress, identityPatch, logIdentityChanges } = require('../services/businessIdentity');
 
 const router = express.Router();
 const BRC_FORM_URL = 'https://www1.state.nj.us/TYTR_BRC/jsp/BRCLoginJsp.jsp';
@@ -217,6 +218,27 @@ async function safeStatusEvent(...args) {
   }
 }
 
+// A found BRC becomes the case's business name + address everywhere (see
+// services/businessIdentity.js). The BRC's taxpayer name wins; the address is
+// split into street/city/state/zip and checked against the UEZ map.
+async function applyFoundBrc(application, brcData, checkedAt, userId) {
+  const name = brcData.taxpayerName || brcData.tradeName || application.business_name_input;
+  const resolved = brcData.address ? await resolveBrcAddress(brcData.address).catch(() => null) : null;
+  const { patch, changes } = identityPatch(application, {
+    name,
+    address: resolved?.address,
+    zoneCheck: resolved?.zoneCheck,
+    brcData: { ...brcData, rawAddress: brcData.address || null }
+  });
+  const { data, error } = await supabase.from('uez_applications').update({
+    ...patch,
+    brc_status: 'found', brc_checked_at: checkedAt, brc_last_error: null, updated_at: checkedAt
+  }).eq('id', application.id).select('*').single();
+  if (error) throw error;
+  await logIdentityChanges(application.id, changes, 'brc', userId, resolved?.zoneCheck);
+  return data;
+}
+
 const EXTENSION_KEY = process.env.COR_EXTENSION_KEY || 'cor-uez-extension-sec-2026';
 
 function verifyExtensionKey(req) {
@@ -289,13 +311,7 @@ router.post('/:id/admin/captured-certificate', requireUezAdmin, async (req, res)
       effectiveDate: result.effectiveDate || null,
       issuanceDate: result.issuanceDate || null
     };
-    const canonicalName = result.taxpayerName || result.tradeName || application.business_name_input;
-    const { data: updated, error: updateError } = await supabase.from('uez_applications').update({
-      brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: canonicalName,
-      registered_business_name: canonicalName, brc_data: brcData, brc_last_error: null,
-      updated_at: checkedAt
-    }).eq('id', application.id).select('*').single();
-    if (updateError) throw updateError;
+    const updated = await applyFoundBrc(application, brcData, checkedAt, req.user.id);
     await safeStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
     // MyNJ/PBS credential creation is a separate explicit admin action now
     // (POST /admin/applications/:id/credentials/mynj) — not a side effect of BRC confirmation.
@@ -320,9 +336,7 @@ router.post('/:id/request-check', async (req, res) => {
 
     if (result.status === 'found') {
       const brcData = { taxpayerName: result.taxpayerName, tradeName: result.tradeName, address: result.address, certificateNumber: result.certificateNumber, effectiveDate: result.effectiveDate, issuanceDate: result.issuanceDate };
-      const canonicalName = result.taxpayerName || result.tradeName || application.business_name_input;
-      const { data, error } = await supabase.from('uez_applications').update({ brc_status: 'found', brc_checked_at: checkedAt, brc_registered_name: canonicalName, registered_business_name: canonicalName, brc_data: brcData, brc_last_error: null, updated_at: checkedAt }).eq('id', application.id).select('*').single();
-      if (error) throw error;
+      const data = await applyFoundBrc(application, brcData, checkedAt, req.user.id);
       await clearExplicitProcessStep(application.id, 'brc');
       await safeStatusEvent(application.id, 'brc_confirmed', 'BRC confirmed', 'Your New Jersey Business Registration Certificate has been confirmed. We can continue to the next step.', req.user.id, true);
       // MyNJ/PBS credential creation is a separate explicit admin action now.

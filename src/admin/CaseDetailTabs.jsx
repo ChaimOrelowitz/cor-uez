@@ -22,6 +22,7 @@ import {
   STEP_STATE_OPTIONS,
   stepStateOption,
   stripQuotedReply,
+  addressZoneWarning,
 } from './caseLogic';
 import DocThumbnail from './DocThumbnail';
 import BusinessDetailsCard from './BusinessDetailsCard';
@@ -901,10 +902,14 @@ function StepFields({
             onChange={(v) => setBrcForm((f) => ({ ...f, registeredBusinessName: v }))} />
           <FieldPair label="Trade name / DBA" value={brcForm.tradeName}
             onChange={(v) => setBrcForm((f) => ({ ...f, tradeName: v }))} />
-          <FieldPair label="Address" value={brcForm.address}
+          <FieldPair label="Business address" value={brcForm.address}
             onChange={(v) => setBrcForm((f) => ({ ...f, address: v }))} />
+          {addressZoneWarning(app) && (
+            <span className="cw-field-value cw-zone-warn">⚠ {addressZoneWarning(app)}</span>
+          )}
+          <span className="cw-field-hint">Name and address here are the case's business name and address. Saving a change updates them everywhere.</span>
           <span className="cw-field-label">BRC status</span>
-          <span className="cw-field-value">{app.brc_status || '—'}</span>
+          <span className="cw-field-value">{app.brc_status || '—'}{app.brc_data?.certificateNumber ? ` · Cert ${app.brc_data.certificateNumber}` : ''}</span>
         </div>
       );
 
@@ -1123,9 +1128,15 @@ function StepActions({
       return (
         <>
           <Btn label="🔍 Fetch BRC" onClick={runBrcLookup} />
-          <Btn label="✓ Save BRC found" variant="ok"
-            onClick={() => { saveBrcFound(); saveStep('complete'); }}
-            disabled={!brcFormHasData(detail)} />
+          {detail.application.brc_status === 'found' ? (
+            <Btn label="💾 Save name / address" variant="ok"
+              onClick={() => { saveBrcFound(); if (brcState !== 'complete') saveStep('complete'); }}
+              disabled={!brcFormHasData(detail)} />
+          ) : (
+            <Btn label="✓ Save BRC found" variant="ok"
+              onClick={() => { saveBrcFound(); saveStep('complete'); }}
+              disabled={!brcFormHasData(detail)} />
+          )}
           {brcState !== 'complete' && (
             <Btn label="Mark not found"
               onClick={() => { saveBrcNotFound(); saveStep('waiting'); }} />

@@ -9,6 +9,7 @@ const { verifyMyNjLogin, USER_FIXABLE_CODES, MYNJ_CHECK_MESSAGES } = require('..
 const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyNj');
 const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
 const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
+const { clean, formatAddress, checkZone, resolveBrcAddress, identityPatch, logIdentityChanges } = require('../services/businessIdentity');
 const { syncGmail, listCaseMessages, gmailConfigured } = require('../services/gmail');
 const { syncLdcApprovals, APPROVED_STATUS: LDC_APPROVED_STATUS, LINKED_STATUS: LDC_LINKED_STATUS } = require('../services/ldcApprovals');
 
@@ -1549,8 +1550,6 @@ router.patch('/admin/applications/:id', requireUezAdmin, async (req, res) => {
     const patch = {
       contact_email: String(body.contactEmail).trim().toLowerCase(),
       contact_phone: String(body.contactPhone || '').trim() || null,
-      business_name_input: String(body.businessName).trim(),
-      registered_business_name: String(body.registeredBusinessName || '').trim() || null,
       ein,
       business_description: String(body.businessDescription || '').trim() || null,
       year_founded: yearFounded,
@@ -1560,20 +1559,41 @@ router.patch('/admin/applications/:id', requireUezAdmin, async (req, res) => {
       has_dba: body.hasDba === true,
       dba_name: body.hasDba === true ? String(body.dbaName || '').trim() : null,
       grant_amount_requested: grantAmountRequested ?? (application.program_code === 'lakewood_technology_grant' ? 5000 : application.grant_amount_requested),
-      address_line1: String(body.addressLine1 || '').trim() || null,
-      address_line2: String(body.addressLine2 || '').trim() || null,
-      city: String(body.city || '').trim() || null,
-      state: String(body.state || 'NJ').trim().toUpperCase().slice(0, 2) || 'NJ',
-      zip: String(body.zip || '').trim() || null,
       updated_at: new Date().toISOString()
     };
 
+    // Name + address go through the shared identity rule: whatever is typed
+    // here becomes the business name/address everywhere (all name columns,
+    // the address columns, and the BRC card), and each change is logged.
+    const address = {
+      addressLine1: clean(body.addressLine1),
+      addressLine2: clean(body.addressLine2),
+      city: clean(body.city),
+      state: clean(body.state || 'NJ').toUpperCase().slice(0, 2) || 'NJ',
+      zip: clean(body.zip)
+    };
+    const caseAddress = formatAddress({ addressLine1: application.address_line1, addressLine2: application.address_line2, city: application.city, state: application.state, zip: application.zip });
+    const addressChanged = formatAddress(address).toUpperCase() !== caseAddress.toUpperCase();
+    let zoneCheck = null;
+    if (addressChanged && address.addressLine1) zoneCheck = await checkZone(formatAddress(address)).catch(() => null);
+    const identity = identityPatch(application, {
+      name: clean(body.businessName),
+      address: addressChanged && address.addressLine1 ? address : undefined,
+      zoneCheck
+    });
+    // Clearing the street entirely is allowed here (it was before) - it just
+    // isn't something the BRC card can propagate.
+    if (addressChanged && !address.addressLine1) {
+      Object.assign(identity.patch, { address_line1: null, address_line2: address.addressLine2 || null, city: address.city || null, state: address.state, zip: address.zip || null });
+    }
+
     const { data, error } = await supabase.from('uez_applications')
-      .update(patch)
+      .update({ ...patch, ...identity.patch })
       .eq('id', application.id)
       .select('*')
       .single();
     if (error) throw error;
+    await logIdentityChanges(application.id, identity.changes, 'drawer', req.user.id, zoneCheck);
     res.json(data);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1616,29 +1636,53 @@ router.post('/admin/applications/:id/brc-found', requireUezAdmin, async (req, re
     if (appError || !application) return res.status(404).json({ error: 'Application not found' });
 
     const body = req.body || {};
-    const registeredBusinessName = String(body.registeredBusinessName || application.business_name_input || '').trim();
+    const registeredBusinessName = clean(body.registeredBusinessName) || clean(application.registered_business_name || application.brc_registered_name || application.business_name_input);
     if (!registeredBusinessName) return res.status(400).json({ error: 'Enter the official registered business name.' });
 
+    // Merge onto what's already captured - this button must never blank out a
+    // certificate number/dates the extension saved, and a form that still shows
+    // the current values changes nothing.
+    const existing = application.brc_data || {};
+    const keep = (key) => clean(body[key]) || existing[key] || null;
     const brcData = {
+      ...existing,
       taxpayerName: registeredBusinessName,
-      tradeName: body.tradeName || null,
-      address: body.address || null,
-      certificateNumber: body.certificateNumber || null,
-      effectiveDate: body.effectiveDate || null,
-      issuanceDate: body.issuanceDate || null
+      tradeName: body.tradeName === undefined ? (existing.tradeName || null) : (clean(body.tradeName) || null),
+      certificateNumber: keep('certificateNumber'),
+      effectiveDate: keep('effectiveDate'),
+      issuanceDate: keep('issuanceDate')
     };
 
+    // The BRC card's address is one line. If it differs from the case's
+    // address, it becomes the case address everywhere (newest edit wins).
+    const typedAddress = clean(body.address);
+    const caseAddress = formatAddress({ addressLine1: application.address_line1, addressLine2: application.address_line2, city: application.city, state: application.state, zip: application.zip });
+    let resolved = null;
+    if (typedAddress && typedAddress.toUpperCase() !== caseAddress.toUpperCase()) {
+      resolved = await resolveBrcAddress(typedAddress).catch(() => null);
+      if (!resolved) return res.status(400).json({ error: 'Could not read that address. Use the form "123 Main St, Lakewood, NJ 08701".' });
+    }
+
+    const { patch, changes } = identityPatch(application, {
+      name: registeredBusinessName,
+      address: resolved?.address,
+      zoneCheck: resolved?.zoneCheck,
+      brcData
+    });
     const checkedAt = new Date().toISOString();
     const { data, error } = await supabase.from('uez_applications').update({
+      ...patch,
       brc_status: 'found',
-      brc_checked_at: checkedAt,
-      brc_registered_name: registeredBusinessName,
-      registered_business_name: registeredBusinessName,
-      brc_data: brcData,
+      brc_checked_at: application.brc_status === 'found' && application.brc_checked_at ? application.brc_checked_at : checkedAt,
       brc_last_error: null,
       updated_at: checkedAt
     }).eq('id', application.id).select('*').single();
     if (error) throw error;
+    await logIdentityChanges(application.id, changes, 'brc_card', req.user.id, resolved?.zoneCheck);
+
+    // Re-saving an already-found BRC is just an edit - don't stack up another
+    // "BRC confirmed" event (and applicant-visible message) every click.
+    if (application.brc_status === 'found') return res.json(data);
     await clearExplicitProcessStep(application.id, 'brc');
 
     await addStatusEvent(

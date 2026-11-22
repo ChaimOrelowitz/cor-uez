@@ -2642,3 +2642,21 @@
 .admin-shell .cw-email-footer { justify-content: space-between; }
 .admin-shell .cw-email-actions { display: inline-flex; gap: 8px; align-items: center; font-size: 11px; }
 .admin-shell .cw-email-actions .cw-btn-ghost { font-size: 11px; padding: 1px 6px; }
+
+/* Business address outside the UEZ (set by BRC capture / manual edits) */
+.admin-shell .cw-zone-warn {
+  display: block;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--admin-warn-border);
+  background: var(--admin-warn-bg);
+  color: var(--admin-warn-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.admin-shell .cw-field-hint {
+  font-size: 11px;
+  color: var(--cw-muted);
+  padding-bottom: 6px;
+}
