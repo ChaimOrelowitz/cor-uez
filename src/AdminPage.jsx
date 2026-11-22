@@ -30,6 +30,7 @@ import {
   updateAdminProcessStep,
   resetAdminProcessStep,
   uploadApplicationDocument,
+  fileEmailAttachment as fileEmailAttachmentApi,
   whoAmI
 } from './api';
 import {
@@ -453,6 +454,18 @@ export default function AdminPage() {
   // Uploads straight into a specific document-type slot on a step panel
   // (e.g. the Formation tab's doc container), skipping the generic "pick a
   // type from a dropdown" uploader in the case-file drawer.
+  // Files an attachment from a client's email as one of the case documents.
+  async function fileEmailAttachment(body) {
+    setMessage('Filing the email attachment…');
+    try {
+      await fileEmailAttachmentApi(detail.application.id, body);
+      await refreshList(detail.application.id);
+      setMessage('Attachment filed to the applicant file.');
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
   async function uploadDocumentDirect(docType, file) {
     if (!file) return;
     setDirectUploadType(docType);
@@ -1311,6 +1324,7 @@ export default function AdminPage() {
           {/* The header card itself (with the Business / Owner / Docs buttons
               that expand it) is rendered by CaseDetailTabs. */}
           <CaseDetailTabs
+            fileEmailAttachment={fileEmailAttachment}
             header={<>
               <div className="cockpit-identity">
                 <h1 title={displayBusinessName(detail.application)}>

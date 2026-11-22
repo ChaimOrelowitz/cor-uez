@@ -162,6 +162,15 @@ export function uploadApplicationDocument(applicationId, documentType, file) {
   });
 }
 
+// File an attachment from a client email as one of the case's documents.
+export function fileEmailAttachment(applicationId, { messageId, attachmentIndex, documentType }) {
+  return request(`/api/uez/admin/applications/${applicationId}/documents/from-message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messageId, attachmentIndex, documentType })
+  });
+}
+
 export function getDocumentUrl(applicationId, documentId) {
   return request(`/api/uez/applications/${applicationId}/documents/${documentId}/url`);
 }

@@ -28,6 +28,7 @@ import {
 import DocThumbnail from './DocThumbnail';
 import BusinessDetailsCard from './BusinessDetailsCard';
 import OwnersCard from './OwnersCard';
+import DocsChecklist from './DocsChecklist';
 
 // ── Segment labels shown on the process bar (short form) ─────────────────────
 // Short state words for the step tabs (full wording is on the step itself).
@@ -244,6 +245,7 @@ export default function CaseDetailTabs({
   cancelEditing,
   deleteApplication,
   header,
+  fileEmailAttachment,
 }) {
   const app = detail.application;
   const defaultStep = adminQueueInfo(app).stepKey || PROCESS_STEP_KEYS[0];
@@ -514,64 +516,14 @@ export default function CaseDetailTabs({
 
   function renderDocs() {
     return (
-                <div className="cw-docs-tab-body">
-                  <div className="cw-docs-grid">
-                    {REQUIRED_GRANT_DOCUMENTS.map(([type, label]) => {
-                      const doc = docFor(detail, type);
-                      return (
-                        <div key={type} className="cw-doc-tile" onClick={() => doc && previewDocument(doc)}>
-                          <div className="cw-doc-thumb">
-                            {doc ? <DocThumbnail doc={doc} applicationId={app.id} onClick={() => previewDocument(doc)} /> : <span className="cw-doc-missing">—</span>}
-                          </div>
-                          <div className="cw-doc-info">
-                            <span className="cw-doc-label">{label}</span>
-                            <span className="cw-mono cw-faint2">{doc ? doc.filename : 'nothing on file'}</span>
-                            <span className={`cw-doc-status ${doc ? 'ok' : 'missing'}`}>{doc ? 'ON FILE' : 'MISSING'}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {/* Tax clearance issue screenshots — supplemental, shown when present */}
-                    {[...(detail.documents || [])].filter((d) => d.document_type === 'tax_clearance_issue').map((doc) => (
-                      <div key={doc.id} className="cw-doc-tile" onClick={() => previewDocument(doc)}>
-                        <div className="cw-doc-thumb">
-                          <DocThumbnail doc={doc} applicationId={app.id} onClick={() => previewDocument(doc)} />
-                        </div>
-                        <div className="cw-doc-info">
-                          <span className="cw-doc-label">TC Issue Screenshot</span>
-                          <span className="cw-mono cw-faint2">{doc.filename}</span>
-                          <span className="cw-doc-status warn">ISSUE</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* ── Upload ── */}
-                  <div className="cw-footer-upload">
-                    <span className="cw-rail-label">UPLOAD</span>
-                    <select value={manualDocType} onChange={(e) => setManualDocType(e.target.value)}>
-                      <option value="formation">Certificate of Formation</option>
-                      <option value="brc">Business Registration Certificate</option>
-                      <option value="uez_pending_certification">UEZ Pending Certification</option>
-                      <option value="uez_approval_email">UEZ Approval Email</option>
-                      <option value="tax_clearance">Tax Clearance Letter</option>
-                      <option value="tax_clearance_issue">Tax Clearance Issue Screenshot</option>
-                      <option value="ldc_application">Signed LDC Application</option>
-                      <option value="supporting">Other / Supporting</option>
-                    </select>
-                    <label className="cw-footer-file-label">
-                      {manualDocFile ? manualDocFile.name : 'Choose file…'}
-                      <input type="file" accept=".pdf,.eml,image/*" style={{ display: 'none' }} onChange={(e) => setManualDocFile(e.target.files?.[0] || null)} />
-                    </label>
-                    <button
-                      className="secondary"
-                      onClick={uploadManualAdminDocument}
-                      disabled={manualDocUploading || !manualDocFile}
-                    >
-                      {manualDocUploading ? 'Uploading…' : 'Upload'}
-                    </button>
-                  </div>
-                </div>
+      <DocsChecklist
+        detail={detail}
+        previewDocument={previewDocument}
+        uploadDocumentDirect={uploadDocumentDirect}
+        directUploadType={directUploadType}
+        goToStep={(key) => { setSelectedStep(key); setMobilePane('work'); }}
+        fileEmailAttachment={fileEmailAttachment}
+      />
     );
   }
 

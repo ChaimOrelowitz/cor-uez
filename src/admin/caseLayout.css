@@ -345,3 +345,143 @@
 
 /* Keep the header button on one line */
 .admin-shell .cw-head-card .cockpit-open-pbs-btn { white-space: nowrap; }
+
+/* ---- Docs panel: a checklist, not a gallery ------------------------------- */
+.admin-shell .cw-docs { padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 10px; }
+.admin-shell .cw-dl-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 0;
+  border-radius: 8px;
+}
+.admin-shell .cw-dl-head > strong { font-size: 12px; color: var(--cw-text); white-space: nowrap; }
+.admin-shell .cw-dl-dropzone {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px dashed var(--cw-border-strong);
+  border-radius: 8px;
+  background: none;
+  color: var(--cw-muted2);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+.admin-shell .cw-dl-dropzone:hover { border-color: var(--admin-accent); color: var(--admin-accent); }
+.admin-shell .cw-dl-head.drop .cw-dl-dropzone,
+.admin-shell .cw-dl-row.drop { background: var(--admin-accent-soft); border-color: var(--admin-accent); }
+.admin-shell .cw-dl-pending { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--cw-muted2); min-width: 0; }
+.admin-shell .cw-dl-pending-name { color: var(--cw-text); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-shell .cw-dl-pending select,
+.admin-shell .cw-dl-fileas select { font-size: 12px; padding: 3px 6px; min-height: 0; width: auto; margin: 0; }
+
+.admin-shell .cw-dl { list-style: none; margin: 0; padding: 0; border: 1px solid var(--cw-line); border-radius: 10px; overflow: hidden; }
+.admin-shell .cw-dl-row {
+  display: grid;
+  grid-template-columns: 18px minmax(170px, 210px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-bottom-color: var(--cw-line);
+  font-size: 13px;
+}
+.admin-shell .cw-dl-row:last-child { border-bottom-color: transparent; }
+.admin-shell .cw-dl-row:hover { background: var(--cw-chip-bg); }
+.admin-shell .cw-dl-icon { font-size: 13px; font-weight: 700; text-align: center; }
+.admin-shell .tone-ok .cw-dl-icon { color: var(--cw-ok); }
+.admin-shell .tone-warn .cw-dl-icon { color: var(--admin-warn-text); }
+.admin-shell .tone-review .cw-dl-icon { color: var(--admin-accent); }
+.admin-shell .tone-missing .cw-dl-icon,
+.admin-shell .tone-muted .cw-dl-icon { color: var(--cw-muted3); }
+.admin-shell .cw-dl-name {
+  border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--cw-text);
+  text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.admin-shell .cw-dl-name:hover { color: var(--admin-accent); }
+.admin-shell .cw-dl-meta { display: flex; align-items: center; gap: 4px 10px; min-width: 0; font-size: 12px; color: var(--cw-muted2); flex-wrap: wrap; }
+.admin-shell .cw-dl-file {
+  border: 0; background: none; padding: 0; font: inherit; color: var(--cw-text); cursor: pointer;
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none;
+}
+.admin-shell .cw-dl-file:hover { color: var(--admin-accent); text-decoration: underline; }
+.admin-shell .cw-dl-status { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--cw-chip-bg); color: var(--cw-muted2); white-space: nowrap; }
+.admin-shell .cw-dl-status.tone-ok { background: var(--cw-ok-bg); color: var(--cw-ok); }
+.admin-shell .cw-dl-status.tone-warn { background: var(--admin-warn-bg); color: var(--admin-warn-text); }
+.admin-shell .cw-dl-status.tone-review { background: var(--admin-accent-soft); color: var(--admin-accent); }
+.admin-shell .cw-dl-status.tone-missing { background: none; padding: 0; color: var(--cw-muted3); font-weight: 500; }
+.admin-shell .cw-dl-more { border: 0; background: none; padding: 0; font: inherit; font-size: 11px; color: var(--admin-accent); cursor: pointer; }
+.admin-shell .cw-dl-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.admin-shell .cw-dl-btn {
+  margin: 0;
+  padding: 3px 10px;
+  min-height: 0;
+  border: 1px solid var(--cw-panel-border);
+  border-radius: 6px;
+  background: var(--cw-panel);
+  color: var(--cw-text-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.admin-shell .cw-dl-btn:hover:not(:disabled) { border-color: var(--admin-accent); color: var(--admin-accent); }
+.admin-shell .cw-dl-btn:disabled { opacity: .5; cursor: default; }
+.admin-shell .cw-dl-btn.primary-ish { background: var(--admin-accent); border-color: var(--admin-accent); color: #fff; }
+.admin-shell .cw-dl-earlier { grid-column: 3 / -1; list-style: none; margin: 0; padding: 2px 0 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--cw-muted2); }
+.admin-shell .cw-dl-earlier li { display: flex; gap: 10px; }
+
+.admin-shell .cw-dl-section h4 {
+  margin: 0 0 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--cw-muted3);
+}
+.admin-shell .cw-dl-section h4 span { margin-left: 4px; font-weight: 500; }
+.admin-shell .cw-dl-simple { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.admin-shell .cw-dl-simple li {
+  display: grid;
+  grid-template-columns: minmax(120px, 210px) minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.admin-shell .cw-dl-simple li:hover { background: var(--cw-chip-bg); }
+.admin-shell .cw-dl-kind { color: var(--cw-muted2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-shell .cw-dl-sub { color: var(--cw-muted3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-shell .cw-dl-fileas { display: flex; gap: 4px; align-items: center; }
+.admin-shell .cw-dl-emails li { grid-template-columns: 18px minmax(0, auto) minmax(0, 1fr) auto; }
+.admin-shell .cw-dl-fileas select { width: 170px; }
+/* The Docs panel can run taller than the other two (desktop only - on a
+   phone the page itself scrolls, so no cap) */
+@media (min-width: 901px) {
+  .admin-shell .cw-head-card .cw-facts-panel:has(.cw-docs) { max-height: 52vh; }
+}
+
+@media (max-width: 900px) {
+  .admin-shell .cw-docs { padding: 10px 14px 12px; }
+  .admin-shell .cw-dl-head { flex-wrap: wrap; }
+  .admin-shell .cw-dl-pending { flex-wrap: wrap; }
+  .admin-shell .cw-dl-row {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    grid-template-areas: "icon name actions" ". meta meta";
+    row-gap: 2px;
+    padding: 8px 10px;
+  }
+  .admin-shell .cw-dl-icon { grid-area: icon; }
+  .admin-shell .cw-dl-name { grid-area: name; white-space: normal; }
+  .admin-shell .cw-dl-meta { grid-area: meta; }
+  .admin-shell .cw-dl-actions { grid-area: actions; }
+  .admin-shell .cw-dl-earlier { grid-column: 2 / -1; }
+  .admin-shell .cw-dl-btn { padding: 6px 12px; }
+  .admin-shell .cw-dl-simple li { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; padding: 6px 10px; }
+  .admin-shell .cw-dl-simple .cw-dl-kind { grid-column: 1 / -1; }
+  .admin-shell .cw-dl-emails li { grid-template-columns: 18px minmax(0, 1fr) auto; }
+  .admin-shell .cw-dl-emails .cw-dl-kind { grid-column: auto; }
+  .admin-shell .cw-dl-emails .cw-dl-sub { grid-column: 2 / -1; }
+  .admin-shell .cw-dl-fileas { grid-column: 1 / -1; }
+  .admin-shell .cw-dl-fileas select { flex: 1; width: auto; }
+  .admin-shell .cw-dl-file { max-width: 100%; }
+}

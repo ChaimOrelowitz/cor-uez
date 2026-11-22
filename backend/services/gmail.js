@@ -501,8 +501,10 @@ async function listCaseMessages(applicationId) {
     body: m.body_text,
     templateKey: m.template_key,
     sentAt: m.sent_at,
-    attachments: (m.attachments || []).map((a) => ({
-      filename: a.filename, mimeType: a.mimeType, size: a.size, inline: a.inline, url: a.storagePath ? urls.get(a.storagePath) || null : null
+    // index = position in the stored list; the Docs panel uses it to file one
+    // attachment onto the case (POST .../documents/from-message).
+    attachments: (m.attachments || []).map((a, index) => ({
+      index, filename: a.filename, mimeType: a.mimeType, size: a.size, inline: a.inline, url: a.storagePath ? urls.get(a.storagePath) || null : null
     }))
   }));
 }

@@ -10,7 +10,7 @@ const { decryptCredential, ensureMyNjCredentials } = require('../services/uezMyN
 const { safeSendApplicationEmail, ensureTemplateExists } = require('../services/uezEmail');
 const { clearExplicitProcessStep } = require('../services/uezProcessSteps');
 const { clean, formatAddress, checkZone, resolveBrcAddress, identityPatch, logIdentityChanges } = require('../services/businessIdentity');
-const { syncGmail, listCaseMessages, gmailConfigured } = require('../services/gmail');
+const { syncGmail, listCaseMessages, gmailConfigured, getCaseMessage } = require('../services/gmail');
 const { syncLdcApprovals, APPROVED_STATUS: LDC_APPROVED_STATUS, LINKED_STATUS: LDC_LINKED_STATUS } = require('../services/ldcApprovals');
 
 const router = express.Router();
@@ -440,6 +440,169 @@ router.put('/applications/:id/owners', async (req, res) => {
   }
 });
 
+// What happens when a document of a given type lands on a case - shared by
+// uploads and by filing an email attachment, so both move the case the same way.
+async function applyDocumentSideEffects(application, documentType, userId) {
+  if (documentType === 'formation') {
+    await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
+    await clearExplicitProcessStep(application.id, 'formation');
+    await addStatusEvent(
+      application.id,
+      'formation_uploaded',
+      'Certificate of Formation uploaded',
+      'Certificate of Formation uploaded and awaiting review.',
+      userId,
+      true
+    );
+  }
+
+  if (documentType === 'brc') {
+    await supabase.from('uez_applications').update({
+      brc_status: 'uploaded',
+      updated_at: new Date().toISOString()
+    }).eq('id', application.id);
+    await clearExplicitProcessStep(application.id, 'brc');
+
+    await addStatusEvent(
+      application.id,
+      'brc_uploaded',
+      'BRC uploaded',
+      'We received your Business Registration Certificate. COR will review it and continue your application.',
+      userId,
+      true
+    );
+  }
+
+  if (documentType === 'ldc_application') {
+    // deriveDefaultProcessStep for this step is purely "does the document
+    // exist" - nothing else to update, just make sure a stale manual
+    // override can't outlive the real document state.
+    await clearExplicitProcessStep(application.id, 'ldc_application');
+  }
+
+  if (documentType === 'uez_pending_certification') {
+    // Uploading the pending-certification application is the "applied,
+    // waiting on the state" milestone — advance it here so the admin
+    // doesn't have to also flip the process-flags toggle by hand. Skip
+    // only if it's already past this point (approved) so a later
+    // re-upload can't demote an approved application back to "applied".
+    const now = new Date().toISOString();
+    if (application.uez_application_status !== 'approved') {
+      const { error: appError } = await supabase.from('uez_applications').update({
+        uez_application_status: 'applied',
+        uez_application_submitted: true,
+        updated_at: now
+      }).eq('id', application.id);
+      if (appError) throw appError;
+
+      await clearExplicitProcessStep(application.id, 'uez_enrollment');
+      await addStatusEvent(
+        application.id,
+        'uez_application_submitted',
+        'UEZ application submitted',
+        'Your UEZ Pending Certification application was submitted and is awaiting New Jersey state approval.',
+        userId,
+        true
+      );
+    }
+  }
+
+  if (documentType === 'uez_approval_email') {
+    // The file arriving is a fact; whether it's actually a valid approval
+    // email is a verdict the software can't read from a PDF — that stays a
+    // deliberate admin click (documents/:id/review's "✓ Approve" / "Wrong
+    // document"), not something the upload itself decides.
+    const now = new Date().toISOString();
+    const { error: appError } = await supabase.from('uez_applications').update({
+      pbs_status: 'uez_approval_uploaded',
+      uez_approval_review_status: 'not_reviewed',
+      updated_at: now
+    }).eq('id', application.id);
+    if (appError) throw appError;
+    await clearExplicitProcessStep(application.id, 'uez_enrollment');
+
+    await addStatusEvent(
+      application.id,
+      'uez_approval_uploaded',
+      'UEZ approval email uploaded',
+      'We received your Notice of Certification Application Approved email. COR will verify it and continue your application.',
+      userId,
+      true
+    );
+  }
+
+  if (documentType === 'tax_clearance') {
+    await supabase.from('uez_applications').update({ tax_clearance_good: true, tax_clearance_status: 'good', tax_clearance_recheck_requested_at: null, updated_at: new Date().toISOString() }).eq('id', application.id);
+    await clearExplicitProcessStep(application.id, 'tax_clearance');
+    await addStatusEvent(
+      application.id,
+      'tax_clearance_received',
+      'Tax-clearance letter received',
+      'COR retrieved the New Jersey tax-clearance letter and added it to your UEZ application.',
+      userId,
+      true
+    );
+  }
+
+  if (documentType === 'tax_clearance_issue') {
+    await supabase.from('uez_applications').update({
+      tax_clearance_good: false,
+      tax_clearance_status: 'issue',
+      tax_clearance_recheck_requested_at: null,
+      updated_at: new Date().toISOString()
+    }).eq('id', application.id);
+    await clearExplicitProcessStep(application.id, 'tax_clearance');
+  }
+}
+
+// File an attachment from a client email (already stored by the Gmail sync)
+// as one of the case's documents. The file is copied, not moved, so deleting
+// the document later never breaks the email's own attachment link.
+router.post('/admin/applications/:id/documents/from-message', requireUezAdmin, async (req, res) => {
+  try {
+    const { data: application, error: appError } = await supabase.from('uez_applications')
+      .select('*').eq('id', req.params.id).single();
+    if (appError || !application) return res.status(404).json({ error: 'Application not found' });
+
+    const documentType = String(req.body?.documentType || '').trim().toLowerCase();
+    if (!documentType) return res.status(400).json({ error: 'Choose what this document is.' });
+    const message = await getCaseMessage(application.id, String(req.body?.messageId || ''));
+    if (!message) return res.status(404).json({ error: 'Email not found on this case.' });
+    const attachment = (message.attachments || [])[Number(req.body?.attachmentIndex)];
+    if (!attachment?.storagePath) return res.status(400).json({ error: 'That attachment was not saved from Gmail, so it cannot be filed.' });
+    const mimeType = attachment.mimeType || 'application/octet-stream';
+    if (!ALLOWED_MIME_TYPES.has(mimeType)) return res.status(400).json({ error: 'Only PDF and image attachments can be filed as documents.' });
+
+    const storagePath = `${application.applicant_user_id}/${application.id}/${Date.now()}-${crypto.randomUUID()}-${safeFilename(attachment.filename || 'attachment')}`;
+    const { error: copyError } = await supabase.storage.from(DOCUMENT_BUCKET).copy(attachment.storagePath, storagePath);
+    if (copyError) throw copyError;
+
+    const { data, error } = await supabase.from('uez_documents').insert({
+      application_id: application.id,
+      document_type: documentType,
+      storage_path: storagePath,
+      filename: attachment.filename || 'attachment',
+      source: 'email',
+      status: 'received',
+      metadata: {
+        mimeType,
+        size: attachment.size || null,
+        fromMessageId: message.id,
+        attachmentIndex: Number(req.body?.attachmentIndex),
+        emailFrom: message.from_address || null,
+        emailSentAt: message.sent_at || null
+      },
+      created_by: req.user.id
+    }).select('id, document_type, filename, source, status, metadata, created_at').single();
+    if (error) throw error;
+
+    await applyDocumentSideEffects(application, documentType, req.user.id);
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/applications/:id/documents', upload.single('file'), async (req, res) => {
   try {
     const application = await getOwnedApplication(req.params.id, req.user);
@@ -482,116 +645,7 @@ router.post('/applications/:id/documents', upload.single('file'), async (req, re
 
     if (error) throw error;
 
-    if (documentType === 'formation') {
-      await supabase.from('uez_applications').update({ formation_review_status: 'not_reviewed', updated_at: new Date().toISOString() }).eq('id', application.id);
-      await clearExplicitProcessStep(application.id, 'formation');
-      await addStatusEvent(
-        application.id,
-        'formation_uploaded',
-        'Certificate of Formation uploaded',
-        'Certificate of Formation uploaded and awaiting review.',
-        req.user.id,
-        true
-      );
-    }
-
-    if (documentType === 'brc') {
-      await supabase.from('uez_applications').update({
-        brc_status: 'uploaded',
-        updated_at: new Date().toISOString()
-      }).eq('id', application.id);
-      await clearExplicitProcessStep(application.id, 'brc');
-
-      await addStatusEvent(
-        application.id,
-        'brc_uploaded',
-        'BRC uploaded',
-        'We received your Business Registration Certificate. COR will review it and continue your application.',
-        req.user.id,
-        true
-      );
-    }
-
-    if (documentType === 'ldc_application') {
-      // deriveDefaultProcessStep for this step is purely "does the document
-      // exist" - nothing else to update, just make sure a stale manual
-      // override can't outlive the real document state.
-      await clearExplicitProcessStep(application.id, 'ldc_application');
-    }
-
-    if (documentType === 'uez_pending_certification') {
-      // Uploading the pending-certification application is the "applied,
-      // waiting on the state" milestone — advance it here so the admin
-      // doesn't have to also flip the process-flags toggle by hand. Skip
-      // only if it's already past this point (approved) so a later
-      // re-upload can't demote an approved application back to "applied".
-      const now = new Date().toISOString();
-      if (application.uez_application_status !== 'approved') {
-        const { error: appError } = await supabase.from('uez_applications').update({
-          uez_application_status: 'applied',
-          uez_application_submitted: true,
-          updated_at: now
-        }).eq('id', application.id);
-        if (appError) throw appError;
-
-        await clearExplicitProcessStep(application.id, 'uez_enrollment');
-        await addStatusEvent(
-          application.id,
-          'uez_application_submitted',
-          'UEZ application submitted',
-          'Your UEZ Pending Certification application was submitted and is awaiting New Jersey state approval.',
-          req.user.id,
-          true
-        );
-      }
-    }
-
-    if (documentType === 'uez_approval_email') {
-      // The file arriving is a fact; whether it's actually a valid approval
-      // email is a verdict the software can't read from a PDF — that stays a
-      // deliberate admin click (documents/:id/review's "✓ Approve" / "Wrong
-      // document"), not something the upload itself decides.
-      const now = new Date().toISOString();
-      const { error: appError } = await supabase.from('uez_applications').update({
-        pbs_status: 'uez_approval_uploaded',
-        uez_approval_review_status: 'not_reviewed',
-        updated_at: now
-      }).eq('id', application.id);
-      if (appError) throw appError;
-      await clearExplicitProcessStep(application.id, 'uez_enrollment');
-
-      await addStatusEvent(
-        application.id,
-        'uez_approval_uploaded',
-        'UEZ approval email uploaded',
-        'We received your Notice of Certification Application Approved email. COR will verify it and continue your application.',
-        req.user.id,
-        true
-      );
-    }
-
-    if (documentType === 'tax_clearance') {
-      await supabase.from('uez_applications').update({ tax_clearance_good: true, tax_clearance_status: 'good', tax_clearance_recheck_requested_at: null, updated_at: new Date().toISOString() }).eq('id', application.id);
-      await clearExplicitProcessStep(application.id, 'tax_clearance');
-      await addStatusEvent(
-        application.id,
-        'tax_clearance_received',
-        'Tax-clearance letter received',
-        'COR retrieved the New Jersey tax-clearance letter and added it to your UEZ application.',
-        req.user.id,
-        true
-      );
-    }
-
-    if (documentType === 'tax_clearance_issue') {
-      await supabase.from('uez_applications').update({
-        tax_clearance_good: false,
-        tax_clearance_status: 'issue',
-        tax_clearance_recheck_requested_at: null,
-        updated_at: new Date().toISOString()
-      }).eq('id', application.id);
-      await clearExplicitProcessStep(application.id, 'tax_clearance');
-    }
+    await applyDocumentSideEffects(application, documentType, req.user.id);
 
     res.status(201).json(data);
   } catch (err) {
