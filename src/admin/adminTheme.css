@@ -2840,3 +2840,61 @@
   .admin-shell .cockpit-status-select { flex: 1; }
   .admin-shell .cw-step-title { font-size: 18px; }
 }
+
+/* ---- Facts panels: compact, dense, no card chrome ------------------------ */
+.admin-shell .cw-facts-panel-head { padding: 6px 6px 6px 14px; }
+.admin-shell .cw-facts-panel-head strong { font-size: 12px; font-weight: 700; color: var(--cw-text); }
+.admin-shell .cw-facts-panel-body { padding: 0; }
+.admin-shell .cw-facts-panel .cw-applicant-view { gap: 0; }
+.admin-shell .cw-facts-panel .cw-app-edit-bar {
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--cw-line);
+  background: none;
+}
+.admin-shell .cw-facts-panel .cw-app-edit-bar button { padding: 5px 12px; min-height: 0; font-size: 12px; }
+.admin-shell .cw-facts-panel .cw-app-edit-bar .admin-delete-button { margin-left: auto; }
+.admin-shell .cw-bare-card { padding: 8px 14px 12px; }
+.admin-shell .cw-bare-card .data-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0 18px;
+}
+.admin-shell .cw-bare-card .data-grid > div { padding: 6px 0; }
+.admin-shell .cw-bare-card .data-grid dt { font-size: 9px; }
+.admin-shell .cw-bare-card .data-grid dd { margin-top: 1px; font-size: 12px; }
+.admin-shell .cw-bare-card .data-grid .data-wide { grid-column: 1 / -1; }
+.admin-shell .cw-bare-card .admin-edit-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 6px 12px;
+  padding-top: 4px;
+}
+.admin-shell .cw-bare-card .admin-edit-grid label { font-size: 10px; margin-bottom: 2px; }
+.admin-shell .cw-bare-card .admin-edit-grid input,
+.admin-shell .cw-bare-card .admin-edit-grid select { padding: 5px 8px; min-height: 0; }
+.admin-shell .cw-bare-card .admin-edit-grid .admin-edit-wide { grid-column: span 2; }
+.admin-shell .cw-bare-card .owner-admin-list { display: grid; gap: 8px; }
+.admin-shell .cw-bare-card .owner-admin-card { padding: 8px 12px; }
+.admin-shell .cw-bare-card .owner-admin-title { font-size: 12px; }
+.admin-shell .cw-facts-panel .cw-docs-tab-body { padding: 10px 14px; }
+.admin-shell .cw-facts-panel .cw-doc-tile { width: 84px; }
+.admin-shell .cw-facts-panel .cw-doc-thumb { width: 84px; height: 100px; }
+@media (max-width: 900px) {
+  .admin-shell .cw-bare-card .data-grid,
+  .admin-shell .cw-bare-card .admin-edit-grid { grid-template-columns: 1fr 1fr !important; }
+  .admin-shell .cw-bare-card .data-grid > div { padding: 5px 0; }
+  .admin-shell .cw-bare-card .admin-edit-grid input,
+  .admin-shell .cw-bare-card .admin-edit-grid select { min-height: 38px; }
+  .admin-shell .cw-bare-card .admin-edit-grid .admin-edit-wide,
+  .admin-shell .cw-bare-card .data-grid .data-wide { grid-column: 1 / -1; }
+  .admin-shell .cw-bare-card .admin-edit-grid input,
+  .admin-shell .cw-bare-card .admin-edit-grid select { padding: 8px; }
+  .admin-shell .cw-facts-panel .cw-app-edit-bar button { min-height: 36px; }
+}
+
+.admin-shell .cw-facts-panel .cw-app-edit-bar button { margin: 0; }
+.admin-shell .cw-bare-card .owner-admin-card .data-grid { margin-top: 4px; }
+.admin-shell .cw-bare-card dd { overflow-wrap: anywhere; }
+
+/* Activity rail gets the width the step column wasn't using */
+@media (min-width: 901px) {
+  .admin-shell .cw-rail { width: clamp(320px, 38%, 520px); }
+}

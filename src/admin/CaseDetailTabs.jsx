@@ -267,7 +267,7 @@ export default function CaseDetailTabs({
   }, [detail.application.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Editing the application always shows the panel being edited.
-  useEffect(() => { if (editMode) setFactsPanel('details'); }, [editMode]);
+  useEffect(() => { if (editMode) setFactsPanel((open) => (open === 'business' || open === 'owner' ? open : 'business')); }, [editMode]);
 
   // Scroll step panel to top on step change
   useEffect(() => {
@@ -303,28 +303,17 @@ export default function CaseDetailTabs({
   return (
     <div className="cw-shell">
       {/* ── Facts header ─────────────────────────────────────────────────────── */}
-      <CaseFacts
-        detail={detail}
-        myNjCredentials={myNjCredentials}
-        factsPanel={factsPanel}
-        toggleFacts={toggleFacts}
-        goToStep={(key) => { setSelectedStep(key); setMobilePane('work'); }}
-      />
+      <CaseFacts detail={detail} factsPanel={factsPanel} toggleFacts={toggleFacts} />
       {factsPanel && (
         <div className="cw-facts-panel">
           <div className="cw-facts-panel-head">
-            <div className="cw-footer-tabs">
-              {[['details', 'Business & owners'], ['docs', 'Documents']].map(([t, label]) => (
-                <button key={t} type="button"
-                  className={`cw-footer-tab${factsPanel === t ? ' cw-footer-tab-active' : ''}`}
-                  onClick={() => setFactsPanel(t)}>{label}</button>
-              ))}
-            </div>
+            <strong>{{ business: 'Business', owner: 'Owners', docs: 'Documents' }[factsPanel]}</strong>
             <button type="button" className="cw-facts-close" onClick={() => setFactsPanel(null)} aria-label="Close">✕</button>
           </div>
           <div className="cw-facts-panel-body">
+            {factsPanel === 'business' && renderBusiness()}
+            {factsPanel === 'owner' && renderOwners()}
             {factsPanel === 'docs' && renderDocs()}
-            {factsPanel === 'details' && renderDetails()}
           </div>
         </div>
       )}
@@ -578,40 +567,40 @@ export default function CaseDetailTabs({
     );
   }
 
-  function renderDetails() {
+  // Edit / Save / Cancel is one session across business + owners (the parent
+  // saves both together), so the same bar sits on both panels.
+  function editBar(withDelete) {
     return (
-                <div className="cw-applicant-view">
-                  {/* ── Edit / Save / Cancel / Delete row ── */}
-                  <div className="cw-app-edit-bar">
-                    {editMode ? (
-                      <>
-                        <button className="primary" onClick={saveAdminEdits}>{busy ? 'Saving…' : 'Save all changes'}</button>
-                        <button className="secondary" onClick={cancelEditing}>Cancel</button>
-                      </>
-                    ) : (
-                      <button className="secondary" onClick={startEditing}>Edit application</button>
-                    )}
-                    <button className="admin-delete-button" onClick={deleteApplication}>Delete application</button>
-                  </div>
+      <div className="cw-app-edit-bar">
+        {editMode ? (
+          <>
+            <button className="primary" onClick={saveAdminEdits}>{busy ? 'Saving…' : 'Save changes'}</button>
+            <button className="secondary" onClick={cancelEditing}>Cancel</button>
+          </>
+        ) : (
+          <button className="secondary" onClick={startEditing}>✎ Edit</button>
+        )}
+        {withDelete && !editMode && <button className="admin-delete-button" onClick={deleteApplication}>Delete application</button>}
+      </div>
+    );
+  }
 
-                  {/* ── Business (reuses the existing editable card) ── */}
-                  <BusinessDetailsCard
-                    application={app}
-                    editMode={editMode}
-                    draft={applicationDraft}
-                    onChangeField={updateApplicationDraft}
-                  />
+  function renderBusiness() {
+    return (
+      <div className="cw-applicant-view">
+        {editBar(true)}
+        <BusinessDetailsCard bare application={app} editMode={editMode} draft={applicationDraft} onChangeField={updateApplicationDraft} />
+      </div>
+    );
+  }
 
-                  {/* ── Owners (reuses the existing editable card) ── */}
-                  <OwnersCard
-                    owners={detail.owners || []}
-                    editMode={editMode}
-                    ownerDrafts={ownerDrafts}
-                    onChangeOwnerField={updateOwnerDraft}
-                    onAddOwner={addOwner}
-                    onRemoveOwner={removeOwner}
-                  />
-                </div>
+  function renderOwners() {
+    return (
+      <div className="cw-applicant-view">
+        {editBar(false)}
+        <OwnersCard bare owners={detail.owners || []} editMode={editMode} ownerDrafts={ownerDrafts}
+          onChangeOwnerField={updateOwnerDraft} onAddOwner={addOwner} onRemoveOwner={removeOwner} />
+      </div>
     );
   }
 }
@@ -620,7 +609,7 @@ export default function CaseDetailTabs({
 // Facts header: the case's standing facts, always visible above the steps.
 // Chips that hold more detail expand an inline panel (pushes content down);
 // chips that belong to a step jump to that step.
-function CaseFacts({ detail, myNjCredentials, factsPanel, toggleFacts, goToStep }) {
+function CaseFacts({ detail, factsPanel, toggleFacts }) {
   const app = detail.application;
   const address = businessAddressLine(app);
   const zoneWarning = addressZoneWarning(app);
@@ -629,14 +618,13 @@ function CaseFacts({ detail, myNjCredentials, factsPanel, toggleFacts, goToStep 
   const owners = detail.owners || [];
   const first = owners[0];
   const docsReady = REQUIRED_GRANT_DOCUMENTS.filter(([type]) => docFor(detail, type)).length;
-  const payment = detail.payments?.[detail.payments.length - 1]?.status;
   const alerts = attentionItems(detail);
 
   return (
     <div className="cw-facts" role="toolbar" aria-label="Case facts">
-      <button type="button" className={`cw-fact cw-fact-address${factsPanel === 'details' ? ' on' : ''}${zoneWarning ? ' warn' : ''}`}
-        onClick={() => toggleFacts('details')} title={zoneWarning || app.zone_name || ''}>
-        <span className="cw-fact-k">Address</span>
+      <button type="button" className={`cw-fact cw-fact-address${factsPanel === 'business' ? ' on' : ''}${zoneWarning ? ' warn' : ''}`}
+        onClick={() => toggleFacts('business')} title={zoneWarning || app.zone_name || ''}>
+        <span className="cw-fact-k">Business</span>
         <span className="cw-fact-v">{address || 'No address'}</span>
         {zoneWarning
           ? <span className="cw-fact-tag warn">⚠ {app.brc_data?.zoneCheck?.status === 'po_box' ? 'PO Box' : 'Not in UEZ'}</span>
@@ -644,8 +632,8 @@ function CaseFacts({ detail, myNjCredentials, factsPanel, toggleFacts, goToStep 
         {fromBrc && <span className="cw-fact-tag">BRC</span>}
       </button>
 
-      <button type="button" className={`cw-fact${factsPanel === 'details' ? ' on' : ''}`} onClick={() => toggleFacts('details')}>
-        <span className="cw-fact-k">Owners</span>
+      <button type="button" className={`cw-fact${factsPanel === 'owner' ? ' on' : ''}`} onClick={() => toggleFacts('owner')}>
+        <span className="cw-fact-k">{owners.length > 1 ? 'Owners' : 'Owner'}</span>
         <span className="cw-fact-v">
           {first ? `${first.firstName || ''} ${first.lastName || ''}`.trim() : 'None'}
           {first?.ownershipPercent ? ` · ${first.ownershipPercent}%` : ''}
@@ -656,16 +644,6 @@ function CaseFacts({ detail, myNjCredentials, factsPanel, toggleFacts, goToStep 
       <button type="button" className={`cw-fact${factsPanel === 'docs' ? ' on' : ''}${docsReady === REQUIRED_GRANT_DOCUMENTS.length ? ' good' : ''}`} onClick={() => toggleFacts('docs')}>
         <span className="cw-fact-k">Docs</span>
         <span className="cw-fact-v">{docsReady}/{REQUIRED_GRANT_DOCUMENTS.length}</span>
-      </button>
-
-      <button type="button" className={`cw-fact${payment === 'paid' ? ' good' : payment === 'client_reported' ? ' warn' : ''}`} onClick={() => goToStep('payment')}>
-        <span className="cw-fact-k">Payment</span>
-        <span className="cw-fact-v">{paymentStatusLabel(payment)}</span>
-      </button>
-
-      <button type="button" className={`cw-fact${myNjCredentials ? '' : ' muted'}`} onClick={() => goToStep('pbs_mynj')}>
-        <span className="cw-fact-k">MyNJ</span>
-        <span className="cw-fact-v">{myNjCredentials ? 'Saved' : 'None'}</span>
       </button>
 
       {alerts.map((item) => <span key={item} className="cw-fact-alert">⚠ {item}</span>)}

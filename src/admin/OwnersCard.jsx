@@ -7,12 +7,9 @@ const OWNER_TITLES = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Rabbi'];
 // row, lives in the parent). This card handles real SSN/DOB - formatSsn/
 // formatDob mask on display, formatSsnInput/formatDobInput format while
 // typing - both already unit tested in caseLogic.test.js.
-export default function OwnersCard({ owners, editMode, ownerDrafts, onChangeOwnerField, onAddOwner, onRemoveOwner }) {
-  return (
-    <details className="admin-accordion" open>
-      <summary><strong>Owners</strong><span>{`${owners.length} owner${owners.length === 1 ? '' : 's'}`}</span></summary>
-      <section className="admin-card admin-wide admin-owners-card admin-secondary-card">
-        <div className="admin-card-head"><h3>Owners</h3><span className="status-pill">{editMode ? ownerDrafts.length : owners.length}</span></div>
+export default function OwnersCard({ owners, editMode, ownerDrafts, onChangeOwnerField, onAddOwner, onRemoveOwner, bare = false }) {
+  const body = (
+    <>
         {editMode ? <>
           <div className="owner-admin-list owner-edit-list">
             {ownerDrafts.map((owner, index) => (
@@ -64,6 +61,15 @@ export default function OwnersCard({ owners, editMode, ownerDrafts, onChangeOwne
             </div>
           ))}
         </div>}
+    </>
+  );
+  if (bare) return <div className="cw-bare-card">{body}</div>;
+  return (
+    <details className="admin-accordion" open>
+      <summary><strong>Owners</strong><span>{`${owners.length} owner${owners.length === 1 ? '' : 's'}`}</span></summary>
+      <section className="admin-card admin-wide admin-owners-card admin-secondary-card">
+        <div className="admin-card-head"><h3>Owners</h3><span className="status-pill">{editMode ? ownerDrafts.length : owners.length}</span></div>
+        {body}
       </section>
     </details>
   );

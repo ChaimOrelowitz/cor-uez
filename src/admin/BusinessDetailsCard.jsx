@@ -5,12 +5,9 @@ import { formatPhoneInput, programLabel, displayBusinessName, businessAddressLin
 // one edit session under a single Edit/Save/Cancel row, not two independent
 // forms). This card is purely: show the read view, or show the edit grid and
 // report field changes upward via onChangeField.
-export default function BusinessDetailsCard({ application, editMode, draft, onChangeField }) {
-  return (
-    <details className="admin-accordion" open>
-      <summary><strong>Business details</strong><span>{application.ein || 'No EIN'}</span></summary>
-      <section className="admin-card admin-business-card admin-secondary-card">
-        <div className="admin-card-head"><h3>Business</h3><span className="status-pill">{programLabel(application.program_code)}</span></div>
+export default function BusinessDetailsCard({ application, editMode, draft, onChangeField, bare = false }) {
+  const body = (
+    <>
         {editMode ? <div className="admin-edit-grid">
           <div><label>Business name <span className="required-star">*</span></label><input value={draft.businessName} onChange={(e) => onChangeField('businessName', e.target.value)} /></div>
           <div><label>Contact email <span className="required-star">*</span></label><input type="email" value={draft.contactEmail} onChange={(e) => onChangeField('contactEmail', e.target.value)} /></div>
@@ -30,10 +27,10 @@ export default function BusinessDetailsCard({ application, editMode, draft, onCh
           <label className="admin-checkbox"><input type="checkbox" checked={draft.isSoleProprietorship} onChange={(e) => onChangeField('isSoleProprietorship', e.target.checked)} /> Sole proprietorship</label>
           <div className="admin-edit-wide"><label>Business description</label><textarea rows="4" value={draft.businessDescription} onChange={(e) => onChangeField('businessDescription', e.target.value)} /></div>
         </div> : <dl className="data-grid">
-          <div><dt>Business name</dt><dd>{displayBusinessName(application) || '—'}</dd></div>
-          <div><dt>Contact email</dt><dd>{application.contact_email || '—'}</dd></div>
-          <div><dt>Contact phone</dt><dd>{application.contact_phone || '—'}</dd></div>
-          <div><dt>EIN</dt><dd>{application.ein || '—'}</dd></div>
+          {!bare && <div><dt>Business name</dt><dd>{displayBusinessName(application) || '—'}</dd></div>}
+          {!bare && <div><dt>Contact email</dt><dd>{application.contact_email || '—'}</dd></div>}
+          {!bare && <div><dt>Contact phone</dt><dd>{application.contact_phone || '—'}</dd></div>}
+          {!bare && <div><dt>EIN</dt><dd>{application.ein || '—'}</dd></div>}
           <div><dt>Address</dt><dd>{businessAddressLine(application) || '—'}{addressZoneWarning(application) && <div className="cw-zone-warn">⚠ {addressZoneWarning(application)}</div>}</dd></div>
           <div><dt>UEZ</dt><dd>{application.zone_name || '—'}</dd></div>
           <div><dt>Founded</dt><dd>{application.year_founded || '—'}</dd></div>
@@ -43,6 +40,16 @@ export default function BusinessDetailsCard({ application, editMode, draft, onCh
           <div><dt>Grant amount</dt><dd>{application.grant_amount_requested == null ? '—' : `$${Number(application.grant_amount_requested).toLocaleString()}`}</dd></div>
           <div className="data-wide"><dt>Description</dt><dd>{application.business_description || '—'}</dd></div>
         </dl>}
+    </>
+  );
+  // bare: just the fields, for the facts panel (no accordion / card chrome).
+  if (bare) return <div className="cw-bare-card">{body}</div>;
+  return (
+    <details className="admin-accordion" open>
+      <summary><strong>Business details</strong><span>{application.ein || 'No EIN'}</span></summary>
+      <section className="admin-card admin-business-card admin-secondary-card">
+        <div className="admin-card-head"><h3>Business</h3><span className="status-pill">{programLabel(application.program_code)}</span></div>
+        {body}
       </section>
     </details>
   );

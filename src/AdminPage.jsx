@@ -1329,10 +1329,6 @@ export default function AdminPage() {
                     <span className="cockpit-meta-label">Email</span>
                     <div className="cockpit-meta-value">{detail.application.contact_email}<CopyButton value={detail.application.contact_email} label="email" /></div>
                   </div>}
-                  {detail.owners?.[0] && <div className="cockpit-meta-item">
-                    <span className="cockpit-meta-label">Primary owner</span>
-                    <div className="cockpit-meta-value">{detail.owners[0].firstName} {detail.owners[0].lastName}</div>
-                  </div>}
                 </div>
               </div>
               <div className="cockpit-controls">
