@@ -43,6 +43,32 @@ export default function BusinessDetailsCard({ application, editMode, draft, onCh
     </>
   );
   // bare: just the fields, for the facts panel (no accordion / card chrome).
+  // bare (the header's Business panel): a tight label/value sheet when
+  // viewing, the normal edit grid when editing.
+  if (bare && !editMode) {
+    const zoneWarning = addressZoneWarning(application);
+    const brc = application.brc_data || {};
+    const fromBrc = application.brc_status === 'found' && brc.address
+      && businessAddressLine(application).toUpperCase() === String(brc.address).toUpperCase();
+    return (
+      <dl className="cw-kv">
+        <div className="cw-kv-wide"><dt>Address</dt><dd>
+          {businessAddressLine(application) || '—'}
+          {zoneWarning ? <span className="cw-fact-tag warn">⚠ {zoneWarning}</span>
+            : application.zone_name ? <span className="cw-fact-tag good">✓ {application.zone_name.replace(' Urban Enterprise Zone (UEZ)', ' UEZ')}</span> : null}
+          {fromBrc && <span className="cw-fact-tag">from BRC</span>}
+        </dd></div>
+        <div><dt>Type</dt><dd>{application.is_sole_proprietorship ? 'Sole proprietorship' : 'Entity'}</dd></div>
+        <div><dt>DBA</dt><dd>{application.has_dba == null ? '—' : application.has_dba ? (application.dba_name || 'Yes') : 'No'}</dd></div>
+        <div><dt>Founded</dt><dd>{application.year_founded || '—'}</dd></div>
+        <div><dt>Employees</dt><dd>{application.full_time_employees ?? 0} FT · {application.part_time_employees ?? 0} PT</dd></div>
+        <div><dt>Grant</dt><dd>{application.grant_amount_requested == null ? '—' : '$' + Number(application.grant_amount_requested).toLocaleString()}</dd></div>
+        <div><dt>Program</dt><dd>{programLabel(application.program_code)}</dd></div>
+        {brc.certificateNumber && <div><dt>BRC cert</dt><dd>{brc.certificateNumber}</dd></div>}
+        <div className="cw-kv-wide"><dt>About</dt><dd>{application.business_description || '—'}</dd></div>
+      </dl>
+    );
+  }
   if (bare) return <div className="cw-bare-card">{body}</div>;
   return (
     <details className="admin-accordion" open>

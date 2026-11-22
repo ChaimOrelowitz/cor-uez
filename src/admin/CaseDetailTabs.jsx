@@ -24,7 +24,6 @@ import {
   stripQuotedReply,
   addressZoneWarning,
   attentionItems,
-  businessAddressLine,
 } from './caseLogic';
 import DocThumbnail from './DocThumbnail';
 import BusinessDetailsCard from './BusinessDetailsCard';
@@ -244,6 +243,7 @@ export default function CaseDetailTabs({
   saveAdminEdits,
   cancelEditing,
   deleteApplication,
+  header,
 }) {
   const app = detail.application;
   const defaultStep = adminQueueInfo(app).stepKey || PROCESS_STEP_KEYS[0];
@@ -308,21 +308,24 @@ export default function CaseDetailTabs({
 
   return (
     <div className="cw-shell">
-      {/* ── Facts header ─────────────────────────────────────────────────────── */}
-      <CaseFacts detail={detail} factsPanel={factsPanel} toggleFacts={toggleFacts} />
-      {factsPanel && (
-        <div className="cw-facts-panel">
-          <div className="cw-facts-panel-head">
-            <strong>{{ business: 'Business', owner: 'Owners', docs: 'Documents' }[factsPanel]}</strong>
-            <button type="button" className="cw-facts-close" onClick={() => setFactsPanel(null)} aria-label="Close">✕</button>
+      {/* ── Header card: identity + Business / Owner / Docs, expands downward ── */}
+      <div className="cw-head-card">
+        <div className="cockpit-strip cw-head-top">{header}</div>
+        <CaseFacts detail={detail} factsPanel={factsPanel} toggleFacts={toggleFacts} />
+        {factsPanel && (
+          <div className="cw-facts-panel">
+            <div className="cw-facts-panel-head">
+              <strong>{{ business: 'Business', owner: 'Owners', docs: 'Documents' }[factsPanel]}</strong>
+              <button type="button" className="cw-facts-close" onClick={() => setFactsPanel(null)} aria-label="Close">✕</button>
+            </div>
+            <div className="cw-facts-panel-body">
+              {factsPanel === 'business' && renderBusiness()}
+              {factsPanel === 'owner' && renderOwners()}
+              {factsPanel === 'docs' && renderDocs()}
+            </div>
           </div>
-          <div className="cw-facts-panel-body">
-            {factsPanel === 'business' && renderBusiness()}
-            {factsPanel === 'owner' && renderOwners()}
-            {factsPanel === 'docs' && renderDocs()}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Body: step panel + activity rail ─────────────────────────────────── */}
       <div className={`cw-body cw-pane-${mobilePane}`}>
@@ -340,13 +343,11 @@ export default function CaseDetailTabs({
                   type="button"
                   className={`cw-seg${active ? ' cw-seg-active' : ''}`}
                   onClick={() => setSelectedStep(key)}
-                  title={PROCESS_STEP_TITLES[key]}
+                  title={`${PROCESS_STEP_TITLES[key]} · ${SEG_STATE[step.state] || PROCESS_STEP_STATE_LABELS[step.state] || step.state}`}
                 >
+                  {/* One line: the color bar carries the state, ✓ marks done. */}
                   <span className="cw-seg-bar" style={{ background: segBarColor(step.state), opacity: active ? 1 : 0.7 }} />
-                  <span className="cw-seg-title">{SEG_LABEL[key]}</span>
-                  <span className="cw-seg-state" style={{ color: active ? segBarColor(step.state) : undefined }}>
-                    {SEG_STATE[step.state] || PROCESS_STEP_STATE_LABELS[step.state] || step.state}
-                  </span>
+                  <span className="cw-seg-title">{SEG_LABEL[key]}{step.state === 'complete' ? ' ✓' : ''}</span>
                 </button>
               );
             })}
@@ -578,16 +579,17 @@ export default function CaseDetailTabs({
   // saves both together), so the same bar sits on both panels.
   function editBar(withDelete) {
     return (
-      <div className="cw-app-edit-bar">
+      <div className={`cw-app-edit-bar${editMode ? ' editing' : ''}`}>
         {editMode ? (
           <>
             <button className="primary" onClick={saveAdminEdits}>{busy ? 'Saving…' : 'Save changes'}</button>
             <button className="secondary" onClick={cancelEditing}>Cancel</button>
+            {/* Rare + destructive: only offered while editing, not on a panel opened all day. */}
+            {withDelete && <button className="admin-delete-button" onClick={deleteApplication}>Delete application</button>}
           </>
         ) : (
           <button className="secondary" onClick={startEditing}>✎ Edit</button>
         )}
-        {withDelete && !editMode && <button className="admin-delete-button" onClick={deleteApplication}>Delete application</button>}
       </div>
     );
   }
@@ -618,39 +620,23 @@ export default function CaseDetailTabs({
 // chips that belong to a step jump to that step.
 function CaseFacts({ detail, factsPanel, toggleFacts }) {
   const app = detail.application;
-  const address = businessAddressLine(app);
   const zoneWarning = addressZoneWarning(app);
-  const fromBrc = app.brc_status === 'found' && app.brc_data?.address
-    && address && address.toUpperCase() === String(app.brc_data.address).toUpperCase();
   const owners = detail.owners || [];
-  const first = owners[0];
   const docsReady = REQUIRED_GRANT_DOCUMENTS.filter(([type]) => docFor(detail, type)).length;
   const alerts = attentionItems(detail);
 
   return (
     <div className="cw-facts" role="toolbar" aria-label="Case facts">
-      <button type="button" className={`cw-fact cw-fact-address${factsPanel === 'business' ? ' on' : ''}${zoneWarning ? ' warn' : ''}`}
-        onClick={() => toggleFacts('business')} title={zoneWarning || app.zone_name || ''}>
-        <span className="cw-fact-k">Business</span>
-        <span className="cw-fact-v">{address || 'No address'}</span>
-        {zoneWarning
-          ? <span className="cw-fact-tag warn">⚠ {app.brc_data?.zoneCheck?.status === 'po_box' ? 'PO Box' : 'Not in UEZ'}</span>
-          : app.zone_name ? <span className="cw-fact-tag good">✓ UEZ</span> : null}
-        {fromBrc && <span className="cw-fact-tag">BRC</span>}
+      <button type="button" className={`cw-fact${factsPanel === 'business' ? ' on' : ''}${zoneWarning ? ' warn' : ''}`}
+        onClick={() => toggleFacts('business')} title={zoneWarning || ''}>
+        Business
+        {zoneWarning && <span className="cw-fact-tag warn">⚠ {app.brc_data?.zoneCheck?.status === 'po_box' ? 'PO Box' : 'Not in UEZ'}</span>}
       </button>
-
       <button type="button" className={`cw-fact${factsPanel === 'owner' ? ' on' : ''}`} onClick={() => toggleFacts('owner')}>
-        <span className="cw-fact-k">{owners.length > 1 ? 'Owners' : 'Owner'}</span>
-        <span className="cw-fact-v">
-          {first ? `${first.firstName || ''} ${first.lastName || ''}`.trim() : 'None'}
-          {first?.ownershipPercent ? ` · ${first.ownershipPercent}%` : ''}
-          {owners.length > 1 ? ` +${owners.length - 1}` : ''}
-        </span>
+        {owners.length > 1 ? `Owners · ${owners.length}` : 'Owner'}
       </button>
-
       <button type="button" className={`cw-fact${factsPanel === 'docs' ? ' on' : ''}${docsReady === REQUIRED_GRANT_DOCUMENTS.length ? ' good' : ''}`} onClick={() => toggleFacts('docs')}>
-        <span className="cw-fact-k">Docs</span>
-        <span className="cw-fact-v">{docsReady}/{REQUIRED_GRANT_DOCUMENTS.length}</span>
+        Docs <span className="cw-fact-count">{docsReady}/{REQUIRED_GRANT_DOCUMENTS.length}</span>
       </button>
 
       {alerts.map((item) => <span key={item} className="cw-fact-alert">⚠ {item}</span>)}
@@ -725,15 +711,11 @@ function StepPanel({
     <div className="cw-step-panel">
       {/* Header */}
       <div className="cw-step-header">
+        {/* One row: title, step number, then the state chips (the active chip
+            is the state - no separate pill repeating it). */}
         <div className="cw-step-title-row">
           <h2 className="cw-step-title">{PROCESS_STEP_TITLES[stepKey]}</h2>
-          <span className="cw-step-pill" style={pillStyle(currentOption.state)}>
-            {currentOption.label}
-          </span>
-        </div>
-        <div className="cw-step-meta">
-          <span className="cw-mono cw-faint3">STEP {stepIdx + 1} OF 8 · </span>
-          <span className="cw-step-setby">{setByLine}</span>
+          <span className="cw-step-meta">{stepIdx + 1}/8 · <span className="cw-step-setby">{setByLine}</span></span>
         </div>
         {/* State selector chips */}
         <div className="cw-state-chips">
@@ -832,9 +814,9 @@ function StepPanel({
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Footer: actions on the left, prev/next on the right - pinned to the
+          bottom of the card so the main action is always in view. */}
       <div className="cw-actions-section">
-        <span className="cw-field-label cw-mono">ACTIONS</span>
         <div className="cw-actions-row">
           <StepActions
             stepKey={stepKey} detail={detail} busy={busy}
@@ -873,16 +855,10 @@ function StepPanel({
             saveBrcNotFound={saveBrcNotFound}
           />
         </div>
-      </div>
-
-      {/* Prev / Next nav */}
-      <div className="cw-step-nav">
-        {prevLabel
-          ? <button className="cw-step-nav-btn" onClick={onPrev}>← {prevLabel}</button>
-          : <span />}
-        {nextLabel
-          ? <button className="cw-step-nav-btn" onClick={onNext}>{nextLabel} →</button>
-          : <span />}
+        <div className="cw-step-nav">
+          {prevLabel && <button className="cw-step-nav-btn" onClick={onPrev}>← {prevLabel}</button>}
+          {nextLabel && <button className="cw-step-nav-btn" onClick={onNext}>{nextLabel} →</button>}
+        </div>
       </div>
     </div>
   );

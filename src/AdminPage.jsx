@@ -1308,15 +1308,20 @@ export default function AdminPage() {
         {!detail && <div className="admin-empty"><h2>Select an application</h2><p>New submissions will appear on the left.</p></div>}
 
         {detail && <>
-          <div className="admin-detail-header cockpit-header">
-            <div className="cockpit-strip">
+          {/* The header card itself (with the Business / Owner / Docs buttons
+              that expand it) is rendered by CaseDetailTabs. */}
+          <CaseDetailTabs
+            header={<>
               <div className="cockpit-identity">
-                <span className="eyebrow">UEZ APPLICATION</span>
                 <h1 title={displayBusinessName(detail.application)}>
                   {displayBusinessName(detail.application)}
                   <CopyButton value={displayBusinessName(detail.application)} label="business name" />
                 </h1>
                 <div className="cockpit-meta-grid">
+                  {detail.owners?.[0] && <div className="cockpit-meta-item">
+                    <span className="cockpit-meta-label">{detail.owners.length > 1 ? `Owner (+${detail.owners.length - 1})` : 'Owner'}</span>
+                    <div className="cockpit-meta-value">{detail.owners[0].firstName} {detail.owners[0].lastName}</div>
+                  </div>}
                   {detail.application.ein && <div className="cockpit-meta-item">
                     <span className="cockpit-meta-label">EIN</span>
                     <div className="cockpit-meta-value">{detail.application.ein}<CopyButton value={njTaxId(detail.application.ein)} label="EIN" /></div>
@@ -1357,12 +1362,7 @@ export default function AdminPage() {
                   >Open PBS</button>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Docs, payment, address and attention items live in the facts
-              header at the top of CaseDetailTabs. */}
-          <CaseDetailTabs
+            </>}
             detail={detail}
             openFreeEmail={openFreeEmail}
             busy={busy}

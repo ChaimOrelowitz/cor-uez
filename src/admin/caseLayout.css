@@ -1,0 +1,218 @@
+/* ==========================================================================
+   Case page layout (loaded after adminTheme.css, admin-only selectors).
+
+   Goals: the header card holds identity + Business / Owner / Docs and grows
+   downward when one is opened; the middle step card fits the viewport (its
+   footer with the actions is pinned, so nothing important is ever below the
+   fold); detail panels are tight label/value sheets.
+   ========================================================================== */
+
+/* Mono only for data, and a font that actually exists (JetBrains/Fira were
+   never loaded, so macOS fell back to Courier). */
+.admin-shell .cw-mono,
+.admin-shell .cw-seg-state { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ---- Header card ---------------------------------------------------------- */
+.admin-shell .cw-head-card {
+  margin: 12px 20px 0;
+  background: var(--cw-panel);
+  border: 1px solid var(--cw-panel-border);
+  border-radius: 14px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.admin-shell .cw-head-card .cw-head-top {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 12px 16px 8px;
+  gap: 16px;
+  align-items: flex-start;
+}
+.admin-shell .cw-head-card .cockpit-identity { min-width: 0; }
+.admin-shell .cw-head-card .cockpit-identity h1 { font-size: 19px; margin: 0 0 6px; line-height: 1.2; }
+/* Meta as one inline row: "EIN 424…  Phone …  Email …  Owner …" */
+.admin-shell .cw-head-card .cockpit-meta-grid { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.admin-shell .cw-head-card .cockpit-meta-item { flex-direction: row; align-items: center; gap: 6px; }
+.admin-shell .cw-head-card .cockpit-meta-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--cw-muted3);
+}
+.admin-shell .cw-head-card .cockpit-meta-value { font-size: 13px; }
+/* Status + Open PBS side by side, not stacked */
+.admin-shell .cw-head-card .cockpit-controls { flex-direction: row; align-items: center; gap: 8px; }
+.admin-shell .cw-head-card .cockpit-chips-row { margin: 0; }
+
+/* Business / Owner / Docs toggles */
+.admin-shell .cw-head-card .cw-facts { padding: 0 16px 10px; gap: 6px; }
+.admin-shell .cw-head-card .cw-fact {
+  min-height: 28px;
+  padding: 3px 12px;
+  font-weight: 600;
+  background: var(--cw-chip-bg);
+  border-color: transparent;
+}
+.admin-shell .cw-head-card .cw-fact.on {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
+  border-color: var(--admin-accent);
+  box-shadow: none;
+}
+.admin-shell .cw-head-card .cw-fact.warn { border-color: var(--admin-warn-border); }
+.admin-shell .cw-fact-count { font-weight: 500; color: var(--cw-muted2); }
+.admin-shell .cw-fact.good .cw-fact-count { color: var(--cw-ok); }
+
+/* The expanded panel is part of the card, separated by a hairline */
+.admin-shell .cw-head-card .cw-facts-panel {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--cw-line);
+  border-radius: 0;
+  max-height: 42vh;
+}
+.admin-shell .cw-head-card .cw-facts-panel-head { display: none; }
+.admin-shell .cw-head-card .cw-facts-panel-body { padding: 0; position: relative; }
+.admin-shell .cw-head-card .cw-applicant-view { gap: 0; }
+
+/* Edit: a small button floating top-right while viewing; a normal row while editing */
+.admin-shell .cw-head-card .cw-app-edit-bar {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  gap: 6px;
+}
+.admin-shell .cw-head-card .cw-app-edit-bar.editing {
+  position: static;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--cw-line);
+}
+.admin-shell .cw-head-card .cw-app-edit-bar button { margin: 0; padding: 4px 12px; min-height: 0; font-size: 12px; }
+.admin-shell .cw-head-card .cw-app-edit-bar.editing .admin-delete-button { margin-left: auto; }
+
+/* ---- Tight label/value sheets (Business, Owner) -------------------------- */
+.admin-shell .cw-kv {
+  margin: 0;
+  padding: 10px 90px 12px 16px; /* right padding clears the floating Edit */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 24px;
+}
+.admin-shell .cw-kv > div { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.admin-shell .cw-kv .cw-kv-wide { grid-column: 1 / -1; }
+.admin-shell .cw-kv dt {
+  flex: 0 0 68px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--cw-muted3);
+}
+.admin-shell .cw-kv dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cw-text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.admin-shell .cw-owner-sheets { display: flex; flex-direction: column; }
+.admin-shell .cw-owner-sheet + .cw-owner-sheet { border-top: 1px solid var(--cw-line); }
+.admin-shell .cw-owner-head { display: flex; gap: 10px; align-items: baseline; padding: 10px 90px 0 16px; }
+.admin-shell .cw-owner-head strong { font-size: 13px; color: var(--cw-text); }
+.admin-shell .cw-owner-head span { font-size: 12px; color: var(--cw-muted2); }
+.admin-shell .cw-owner-sheet .cw-kv { padding-top: 6px; }
+.admin-shell .cw-kv-empty { margin: 0; padding: 12px 16px; color: var(--cw-muted2); }
+
+/* ---- Step tabs: one line ------------------------------------------------- */
+.admin-shell .cw-process-bar { padding: 4px; gap: 2px; }
+.admin-shell .cw-seg { padding: 5px 8px; align-items: center; }
+.admin-shell .cw-seg-title { text-align: center; font-size: 12px; }
+
+/* ---- Step card ------------------------------------------------------------ */
+.admin-shell .cw-step-header { padding: 12px 16px 10px; }
+.admin-shell .cw-step-title-row { display: flex; align-items: baseline; gap: 10px; margin: 0; }
+.admin-shell .cw-step-title { font-size: 16px; }
+.admin-shell .cw-step-meta { font-size: 11px; margin: 0; color: var(--cw-muted3); }
+.admin-shell .cw-state-chips { margin-top: 8px; }
+.admin-shell .cw-state-chip { text-transform: none; letter-spacing: 0; font-size: 11px; }
+.admin-shell .cw-alert-block {
+  margin: 10px 16px 0;
+  padding: 6px 10px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.admin-shell .cw-doc-fields-grid { padding: 12px 16px; gap: 16px; }
+.admin-shell .cw-doc-col .doc-inline-img { max-height: 150px; }
+.admin-shell .cw-doc-col .doc-inline-iframe { height: 150px; }
+.admin-shell .cw-doc-col .doc-inline-empty { min-height: 0; height: 90px; }
+.admin-shell .cw-field-label.cw-mono { font-family: inherit; }
+
+/* Footer: actions left, prev/next right */
+.admin-shell .cw-actions-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--cw-line);
+  border-bottom: 0;
+  flex-shrink: 0;
+}
+.admin-shell .cw-actions-row { flex: 1; margin: 0; }
+.admin-shell .cw-actions-section .cw-step-nav { padding: 0; gap: 10px; flex-shrink: 0; }
+
+/* ---- Desktop: everything fits; the step card fills the column ------------ */
+@media (min-width: 901px) {
+  .admin-shell .admin-detail { padding-top: 0; }
+  .admin-shell .cw-step-col {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 12px;
+  }
+  .admin-shell .cw-step-col .cw-process-bar { margin: 12px 20px 0; flex-shrink: 0; box-shadow: none; position: static; }
+  .admin-shell .cw-step-col .cw-step-panel {
+    margin: 10px 20px 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .admin-shell .cw-step-header,
+  .admin-shell .cw-alert-block { flex-shrink: 0; }
+  /* If a step ever has more than fits (big inline PDF), only its middle
+     scrolls - the header and the action footer stay put. */
+  .admin-shell .cw-doc-fields-grid { flex: 1 1 auto; min-height: 0; overflow: auto; align-content: start; }
+  .admin-shell .cw-rail { margin-top: 12px; }
+}
+
+/* ---- Phone ---------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .admin-shell .cw-head-card { margin: 8px 12px 0; }
+  /* The sticky nav above already shows the business name */
+  .admin-shell .cw-head-card .cockpit-identity h1 { display: none; }
+  .admin-shell .cw-head-card .cw-head-top { flex-direction: column; gap: 10px; padding: 12px 14px 8px; }
+  .admin-shell .cw-head-card .cockpit-meta-value { overflow-wrap: anywhere; white-space: normal; }
+  .admin-shell .cw-head-card .cockpit-controls { width: 100%; }
+  .admin-shell .cw-head-card .cockpit-status-select { flex: 1; }
+  .admin-shell .cw-head-card .cw-facts { padding: 0 14px 10px; flex-wrap: wrap; overflow: visible; }
+  .admin-shell .cw-head-card .cw-fact { min-height: 40px; flex: 1 1 0; justify-content: center; }
+  .admin-shell .cw-head-card .cw-facts-panel { max-height: none; }
+  .admin-shell .cw-kv { grid-template-columns: 1fr; padding-right: 16px; padding-top: 48px; }
+  .admin-shell .cw-owner-head { padding-right: 16px; padding-top: 48px; }
+  .admin-shell .cw-owner-sheet .cw-kv { padding-top: 6px; }
+  .admin-shell .cw-actions-section { flex-direction: column; align-items: stretch; }
+  .admin-shell .cw-actions-section .cw-step-nav { justify-content: space-between; }
+  .admin-shell .cw-state-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .admin-shell .cw-state-chips::-webkit-scrollbar { display: none; }
+  .admin-shell .cw-state-chip { flex: 0 0 auto; }
+}
+
+/* Keep the header button on one line */
+.admin-shell .cw-head-card .cockpit-open-pbs-btn { white-space: nowrap; }

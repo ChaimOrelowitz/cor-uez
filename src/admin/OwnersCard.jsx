@@ -63,6 +63,29 @@ export default function OwnersCard({ owners, editMode, ownerDrafts, onChangeOwne
         </div>}
     </>
   );
+  // bare (the header's Owner panel): one tight sheet per owner when viewing.
+  if (bare && !editMode) {
+    return (
+      <div className="cw-owner-sheets">
+        {owners.map((owner) => (
+          <div className="cw-owner-sheet" key={owner.id}>
+            <div className="cw-owner-head">
+              <strong>{[owner.title, owner.firstName, owner.lastName].filter(Boolean).join(' ')}</strong>
+              <span>{owner.positionTitle || (owners.length === 1 ? 'Owner' : 'Partner')} · {owner.ownershipPercent}%</span>
+            </div>
+            <dl className="cw-kv">
+              <div><dt>Email</dt><dd>{owner.email || '—'}</dd></div>
+              <div><dt>Phone</dt><dd>{owner.phone || '—'}</dd></div>
+              <div><dt>DOB</dt><dd>{formatDob(owner.dob) || '—'}</dd></div>
+              <div><dt>SSN</dt><dd>{formatSsn(owner.ssn) || '—'}</dd></div>
+              <div className="cw-kv-wide"><dt>Home</dt><dd>{[owner.addressLine1, owner.addressLine2, owner.city, owner.state, owner.zip].filter(Boolean).join(', ') || '—'}</dd></div>
+            </dl>
+          </div>
+        ))}
+        {owners.length === 0 && <p className="cw-kv-empty">No owners on file.</p>}
+      </div>
+    );
+  }
   if (bare) return <div className="cw-bare-card">{body}</div>;
   return (
     <details className="admin-accordion" open>
