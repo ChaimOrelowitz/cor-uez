@@ -1,6 +1,8 @@
 const API_BASE = 'https://cor-uez-api.onrender.com';
 const ACTIVE_JOB_KEY = 'corUezActiveJob';
 const EXTENSION_KEY = 'cor-uez-extension-sec-2026';
+// NJ UEZ Certification Application (Oracle APEX app 405, terms page).
+const UEZ_APPLICATION_URL = 'https://portal03.nj.gov/ords_apex_oit/f?p=405:100';
 
 function isAllowedOrigin(origin) {
   if (!origin) return false;
@@ -162,9 +164,12 @@ async function startWorkflow(message, sender) {
 
   let job = { id: String(message.requestId || crypto.randomUUID()), workflow: message.workflow, applicationId: String(message.payload?.applicationId || ''), businessName: String(message.payload?.businessName || ''), ein: String(message.payload?.ein || ''), accessToken: String(message.payload?.accessToken || ''), status: 'starting', createdAt: Date.now() };
   if (!job.applicationId || !job.businessName || !job.accessToken) throw new Error('The selected UEZ application is incomplete.');
-  if (job.workflow === 'tax_clearance' || job.workflow === 'pbs_login') {
+  // These all sit behind myNJ - the workflow signs in with the case's stored
+  // MyNJ login first (the UEZ application is an Oracle APEX app on portal03
+  // that only answers "We can't identify you" without a myNJ session).
+  if (job.workflow === 'tax_clearance' || job.workflow === 'pbs_login' || job.workflow === 'uez_enrollment') {
     const result = await api(job, `/api/uez/applications/${job.applicationId}/credentials/mynj`);
-    if (!result.exists || !result.credentials) throw new Error('MyNJ / PBS login information is missing.');
+    if (!result.exists || !result.credentials) throw new Error('MyNJ / PBS login information is missing. Save the MyNJ login on the PBS step first.');
     job.credentials = result.credentials;
   }
   const incognitoAllowed = await isIncognitoAllowed();
@@ -179,7 +184,7 @@ async function startWorkflow(message, sender) {
       : job.workflow === 'pbs_signup'
         ? 'https://www-njlib.nj.gov/NJ_PREMIER_EBIZ/'
       : job.workflow === 'uez_enrollment'
-        ? 'https://portal03.nj.gov/ords_apex_oit/f?p=405:100'
+        ? `https://my.nj.gov/aui/Login?goto=${encodeURIComponent(UEZ_APPLICATION_URL)}`
       : job.workflow === 'ldc_jotform'
         ? 'https://form.jotform.com/241936732268060'
         : 'https://form.jotform.com/222748639284165';

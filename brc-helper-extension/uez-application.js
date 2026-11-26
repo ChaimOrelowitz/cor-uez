@@ -197,6 +197,65 @@
       </div>`;
   }
 
+  const UEZ_APPLICATION_URL = 'https://portal03.nj.gov/ords_apex_oit/f?p=405:100';
+  const once = (key) => {
+    try { if (sessionStorage.getItem(key)) return false; sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
+    return true;
+  };
+
+  // Returns true when this page was a login step (so the form logic waits).
+  // Same IDToken fields the PBS / tax-clearance workflows use in content.js.
+  async function handleMyNjLogin(job) {
+    const text = pageText();
+    const creds = job.credentials;
+    const user = document.querySelector('input[name="IDToken1"]');
+    const pass = document.querySelector('input[name="IDToken2"]');
+
+    if (user && pass) {
+      if (!creds) { notice('No MyNJ login is saved for this case - sign in yourself.', 0); return true; }
+      if (once(`corUezLogin:${job.id}`)) {
+        setValue(user, creds.username || '');
+        setValue(pass, creds.password || '');
+        notice('COR filled the stored MyNJ login and is signing in.', 0);
+        await send({ type: 'COR_NJ_STATUS', status: 'signing_in_to_pbs' });
+        document.querySelector('input[name="Login.Submit"], input[type="submit"], button[type="submit"]')?.click();
+      }
+      return true;
+    }
+    if (user && !pass && creds?.challengeAnswer && /challenge|security question|secret question/i.test(text)) {
+      if (once(`corUezChallenge:${job.id}`)) {
+        setValue(user, creds.challengeAnswer);
+        notice('COR filled the MyNJ challenge answer and is continuing.', 0);
+        document.querySelector('input[type="submit"], button[type="submit"]')?.click();
+      }
+      return true;
+    }
+    // portal03 turned us away - go sign in, then come back to the form.
+    if (/can.?t identify you|please log in to mynj/i.test(text)) {
+      if (once(`corUezRelogin:${job.id}`)) {
+        notice('Not signed in to myNJ yet - opening the myNJ login.', 0);
+        location.href = `https://my.nj.gov/aui/Login?goto=${encodeURIComponent(UEZ_APPLICATION_URL)}`;
+      } else {
+        notice('myNJ still does not recognize this session. Sign in to myNJ in this window, then reopen the UEZ application.', 0);
+      }
+      return true;
+    }
+    // Signed in but parked on a myNJ page (goto ignored) - open the form.
+    // Only after COR actually submitted the login, and never on the login
+    // page itself (its fields may still be loading).
+    let loggedIn = false;
+    try { loggedIn = Boolean(sessionStorage.getItem(`corUezLogin:${job.id}`)); } catch { /* ignore */ }
+    if (/(^|\.)my\.nj\.gov$/i.test(location.hostname)) {
+      if (!loggedIn || /\/aui\/Login/i.test(location.pathname)) return true;
+      if (once(`corUezGoForm:${job.id}`)) {
+        notice('Signed in to myNJ - opening the UEZ Certification Application.', 0);
+        location.href = UEZ_APPLICATION_URL;
+      }
+      return true;
+    }
+    return false;
+  }
+
   async function ensureData(jobId) {
     if (uezData) return uezData;
     const response = await send({ type: 'COR_UEZ_APP_GET_DATA', jobId });
@@ -214,6 +273,9 @@
       announced = true;
       await send({ type: 'COR_NJ_STATUS', status: 'nj_page_open' });
     }
+
+    // ---- myNJ sign-in (the UEZ form only opens with a myNJ session) -------
+    if (await handleMyNjLogin(job)) return;
 
     // Record this page's fields once (for mapping the real NJ form).
     try { recordPage(); } catch { /* recording is best-effort */ }
