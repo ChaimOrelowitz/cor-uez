@@ -1843,6 +1843,39 @@ router.post('/admin/applications/:id/grant-submission/detected', requireUezAdmin
 // document, which is what actually flips the step - see the
 // documentType === 'uez_pending_certification' branch in
 // POST /applications/:id/documents above.
+// The extension records each page of NJ's UEZ Certification Application it
+// sees (field names, types, labels, choices - not what was typed), so the
+// prefill can be mapped against the real form instead of guessed names.
+// Stored as a hidden status event on the case; one row per page per visit.
+router.post('/admin/applications/:id/uez-form-recording', requireUezAdmin, async (req, res) => {
+  try {
+    const application = await getOwnedApplication(req.params.id, req.user);
+    if (!application) return res.status(404).json({ error: 'Application not found' });
+    const page = String(req.body?.page || '').slice(0, 40);
+    const fields = Array.isArray(req.body?.fields) ? req.body.fields.slice(0, 400) : [];
+    if (!page || !fields.length) return res.status(400).json({ error: 'Nothing to record.' });
+    const { error } = await supabase.from('uez_status_events').insert({
+      application_id: application.id,
+      status: 'uez_form_recorded',
+      label: `NJ UEZ form page ${page} recorded`,
+      message: `${fields.length} fields`,
+      visible_to_applicant: false,
+      created_by: req.user.id,
+      metadata: {
+        page,
+        url: String(req.body?.url || '').slice(0, 500),
+        title: String(req.body?.title || '').slice(0, 300),
+        headings: Array.isArray(req.body?.headings) ? req.body.headings.slice(0, 30) : [],
+        fields
+      }
+    });
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/admin/applications/:id/uez-application-captured', requireUezAdmin, async (req, res) => {
   let browser;
   try {

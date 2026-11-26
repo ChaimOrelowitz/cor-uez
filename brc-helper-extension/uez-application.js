@@ -98,9 +98,108 @@
     }
   }
 
-  async function ensureData() {
+  // ---- Page recorder -------------------------------------------------------
+  // Saves each page's form structure (names, types, labels, choices - never
+  // what was typed) to the case once per page, so the prefill can be mapped
+  // to the real NJ field names instead of guessed ones.
+  const labelFor = (el) => {
+    const byFor = el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+    if (byFor) return byFor.innerText.trim();
+    const wrapped = el.closest('label');
+    if (wrapped) return wrapped.innerText.trim();
+    if (el.getAttribute('aria-label')) return el.getAttribute('aria-label').trim();
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const text = labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' ').trim();
+      if (text) return text;
+    }
+    // APEX often puts the label in the previous table cell / sibling container
+    const container = el.closest('.t-Form-fieldContainer, .t-Form-inputContainer, td, tr, div');
+    const label = container?.querySelector('label, .t-Form-label');
+    return label ? label.innerText.trim() : '';
+  };
+
+  function recordPage() {
+    const pageMatch = location.href.match(/[?&]p=\d+:(\d+)/) || location.href.match(/:(\d+):/);
+    const page = pageMatch ? pageMatch[1] : (document.querySelector('input[name="p_flow_step_id"]')?.value || 'unknown');
+    const seen = new Set();
+    const fields = [];
+    document.querySelectorAll('input, select, textarea').forEach((el) => {
+      const type = (el.getAttribute('type') || el.tagName).toLowerCase();
+      if (['hidden', 'submit', 'button', 'image', 'reset', 'password'].includes(type)) return;
+      const name = el.name || el.id || '';
+      if (!name) return;
+      const key = `${name}|${type === 'radio' || type === 'checkbox' ? el.value : ''}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const entry = { name, id: el.id || '', tag: el.tagName.toLowerCase(), type, label: labelFor(el).slice(0, 200), required: el.required || el.getAttribute('aria-required') === 'true', prefilled: type === 'radio' || type === 'checkbox' ? el.checked : Boolean(String(el.value || '').trim()) };
+      if (type === 'radio' || type === 'checkbox') entry.value = el.value;
+      if (el.tagName === 'SELECT') entry.options = [...el.options].slice(0, 80).map((o) => ({ value: o.value, text: o.textContent.trim().slice(0, 120) }));
+      fields.push(entry);
+    });
+    if (!fields.length) return;
+    const marker = `cor-uez-recorded-${page}-${fields.length}`;
+    try { if (sessionStorage.getItem(marker)) return; sessionStorage.setItem(marker, '1'); } catch { /* ignore */ }
+    const headings = [...document.querySelectorAll('h1, h2, h3, .t-Region-title')].map((h) => h.innerText.trim()).filter(Boolean).slice(0, 20);
+    send({ type: 'COR_UEZ_APP_RECORD', recording: { page, url: location.href, title: document.title, headings, fields } });
+  }
+
+  // Answers a yes/no question found by its label text (radio group or select),
+  // only if it hasn't been answered yet. Used for "minority-owned".
+  function answerYesByLabel(pattern) {
+    const radios = [...document.querySelectorAll('input[type="radio"]')];
+    const groups = new Map();
+    radios.forEach((r) => { if (!groups.has(r.name)) groups.set(r.name, []); groups.get(r.name).push(r); });
+    for (const group of groups.values()) {
+      const question = group[0].closest('fieldset, .t-Form-fieldContainer, tr, div')?.innerText || '';
+      if (!pattern.test(question) || /women/i.test(labelFor(group[0]) || '')) continue;
+      if (group.some((r) => r.checked)) return false;
+      const yes = group.find((r) => /^(y|yes)$/i.test(r.value) || /^yes$/i.test(labelFor(r)));
+      if (yes) { yes.checked = true; yes.dispatchEvent(new Event('change', { bubbles: true })); yes.dispatchEvent(new Event('click', { bubbles: true })); return true; }
+    }
+    for (const select of document.querySelectorAll('select')) {
+      if (!pattern.test(labelFor(select)) || select.value) continue;
+      const yes = [...select.options].find((o) => /^(y|yes)$/i.test(o.value) || /^yes$/i.test(o.textContent.trim()));
+      if (yes) { select.value = yes.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+    }
+    return false;
+  }
+
+  // Shows what the client said the business does, with lookups, so the NAICS
+  // and SIC codes can be picked (or the SIC found from an existing NAICS).
+  function industryHelper(description) {
+    let box = document.getElementById('cor-uez-industry');
+    if (!box) {
+      const panel = document.getElementById('cor-uez-app-panel');
+      if (!panel) return;
+      box = document.createElement('div');
+      box.id = 'cor-uez-industry';
+      Object.assign(box.style, { background: '#24304f', borderRadius: '8px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' });
+      panel.insertBefore(box, panel.lastChild);
+    }
+    const naicsInput = [...document.querySelectorAll('input, select')].find((el) => /naics/i.test(el.name || '') || /naics/i.test(labelFor(el)));
+    const naics = String(naicsInput?.value || '').trim();
+    const link = (href, text) => `<a href="${href}" target="_blank" rel="noreferrer" style="color:#9cc3ff">${text}</a>`;
+    const desc = description ? description.replace(/[<>&]/g, (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[ch])) : '<i>No description on file.</i>';
+    const query = encodeURIComponent(description || '');
+    // The page loop runs every 800ms - only redraw when something changed,
+    // so a link isn't replaced under your click.
+    const stateKey = `${naics}|${description}`;
+    if (box.dataset.state === stateKey) return;
+    box.dataset.state = stateKey;
+    box.innerHTML = `
+      <div style="font-weight:700">What the business does</div>
+      <div style="max-height:90px;overflow:auto;line-height:1.35">${desc}</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        ${naics
+          ? link(`https://www.google.com/search?q=${encodeURIComponent(`NAICS ${naics} equivalent SIC code`)}`, `SIC for NAICS ${naics} ↗`)
+          : `${link(`https://www.census.gov/naics/?input=${query}&year=2022`, 'Find NAICS ↗')} ${link(`https://www.google.com/search?q=${encodeURIComponent(`SIC code for ${description || ''}`)}`, 'Find SIC ↗')}`}
+      </div>`;
+  }
+
+  async function ensureData(jobId) {
     if (uezData) return uezData;
-    const response = await send({ type: 'COR_UEZ_APP_GET_DATA' });
+    const response = await send({ type: 'COR_UEZ_APP_GET_DATA', jobId });
     if (!response?.ok) throw new Error(response?.error || 'COR could not load this application\'s data.');
     uezData = response.data;
     return uezData;
@@ -116,9 +215,12 @@
       await send({ type: 'COR_NJ_STATUS', status: 'nj_page_open' });
     }
 
+    // Record this page's fields once (for mapping the real NJ form).
+    try { recordPage(); } catch { /* recording is best-effort */ }
+
     let data;
     try {
-      data = await ensureData();
+      data = await ensureData(job.id);
     } catch (error) {
       notice(`COR could not load this case's data: ${error.message}`, 0);
       return;
@@ -168,7 +270,10 @@
         P2_PHONE: c.phone, P2_EMAIL: c.email, P2_VERIFY_EMAIL: c.email,
       };
       for (const [name, value] of Object.entries(fields)) { if (fillField(name, value)) filled++; }
-      notice('NJ UEZ Certification Application — business & contact details. Fill in NAICS/SIC, minority/women-owned, business type, and start date yourself, then Save.', filled);
+      // COR's applicants are minority-owned; women-owned stays manual.
+      if (answerYesByLabel(/minority/i)) filled++;
+      notice('NJ UEZ Certification Application — business & contact details. Pick NAICS/SIC (description below) and women-owned yourself, then Save.', filled);
+      industryHelper(b.description);
       return;
     }
 

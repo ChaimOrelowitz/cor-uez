@@ -133,6 +133,8 @@ function buildStream(detail) {
     // A send that's already on the timeline as the email itself doesn't also
     // need its "Email sent" log line.
     .filter((e) => !(e.status === 'admin_email_sent' && e.metadata?.gmailMessageId && messageIds.has(e.metadata.gmailMessageId)))
+    // Technical recordings of NJ form pages (for mapping the UEZ form) aren't activity.
+    .filter((e) => e.status !== 'uez_form_recorded')
     .map((e) => ({
     id: `evt-${e.id}`,
     kind: 'event',

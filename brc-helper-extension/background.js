@@ -290,6 +290,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       };
     }
+    if (message?.type === 'COR_UEZ_APP_RECORD') {
+      if (job.workflow !== 'uez_enrollment') return { ok: false, error: 'No matching UEZ application workflow is active.' };
+      await api(job, `/api/uez/admin/applications/${job.applicationId}/uez-form-recording`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(message.recording || {})
+      });
+      return { ok: true };
+    }
     if (message?.type === 'COR_UEZ_APP_GET_DATA') {
       if (job.workflow !== 'uez_enrollment' || String(message.jobId || '') !== job.id) return { ok: false, error: 'No matching UEZ application workflow is active.' };
       const detail = await api(job, `/api/uez/admin/applications/${job.applicationId}`);
@@ -314,7 +323,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             phone: application.contact_phone || owner.phone || '',
             email: application.contact_email || owner.email || '',
             fullTimeEmployees: application.full_time_employees ?? '',
-            partTimeEmployees: application.part_time_employees ?? ''
+            partTimeEmployees: application.part_time_employees ?? '',
+            // What the client wrote about the business - used to work out
+            // NAICS / SIC on the business page.
+            description: application.business_description || ''
           },
           contact: {
             salutation: owner.title || '',
