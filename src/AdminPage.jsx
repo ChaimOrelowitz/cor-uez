@@ -1058,8 +1058,10 @@ export default function AdminPage() {
       await saveAdminPayment(detail.application.id, { ...paymentDraft, status: 'paid' });
       await refreshList(detail.application.id);
       setMessage('Client payment recorded.');
-    } catch (err) { showError(err.message); }
+    } catch (err) { showError(err.message); return; }
     finally { setBusy(false); }
+    // Nothing is emailed automatically - preview the receipt and click Send.
+    openEmailComposer('payment_received');
   }
 
   // Payment is penultimate now - the client sees no payment ask in their

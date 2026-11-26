@@ -1386,11 +1386,8 @@ router.put('/admin/applications/:id/payment', requireUezAdmin, async (req, res) 
     await clearExplicitProcessStep(application.id, 'payment');
     if (status === 'paid') {
       await addStatusEvent(application.id, 'payment_recorded', 'Client payment recorded', 'COR confirmed that your payment was received.', req.user.id, true);
-      if (existing?.status !== 'paid') {
-        await safeSendApplicationEmail(application, 'payment_received', {
-          dedupeKey: `payment_received:${application.id}`
-        });
-      }
+      // Email is NOT sent here - like every other email, the frontend opens
+      // the composer so the admin previews it and clicks Send.
     }
     res.json(result);
   } catch (err) { res.status(400).json({ error: err.message }); }
